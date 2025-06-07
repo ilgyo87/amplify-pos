@@ -5,8 +5,16 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuthenticator } from '@aws-amplify/ui-react-native';
 import type { RootStackParamList } from './types';
-import Dashboard from '../screens/Dashboard';
 import { Authenticator } from '@aws-amplify/ui-react-native';
+
+// Screens
+import Dashboard from '../screens/Dashboard';
+import CustomersScreen from '../screens/Customers/CustomersScreen';
+import ProductsScreen from '../screens/Products/ProductsScreen';
+import OrdersScreen from '../screens/Orders/OrdersScreen';
+import EmployeesScreen from '../screens/Employees/EmployeesScreen';
+import SettingsScreen from '../screens/Settings/SettingsScreen';
+import ReportsScreen from '../screens/Reports/ReportsScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -74,7 +82,36 @@ const AppNavigator = () => {
               headerRight: () => <SignOutButton />
             }} 
           />
-          {/* Additional screens can be added here */}
+          <Stack.Screen 
+            name="Customers" 
+            component={CustomersScreen}
+            options={{ headerRight: () => <SignOutButton /> }}
+          />
+          <Stack.Screen 
+            name="Products" 
+            component={ProductsScreen}
+            options={{ headerRight: () => <SignOutButton /> }}
+          />
+          <Stack.Screen 
+            name="Orders" 
+            component={OrdersScreen}
+            options={{ headerRight: () => <SignOutButton /> }}
+          />
+          <Stack.Screen 
+            name="Employees" 
+            component={EmployeesScreen}
+            options={{ headerRight: () => <SignOutButton /> }}
+          />
+          <Stack.Screen 
+            name="Settings" 
+            component={SettingsScreen}
+            options={{ headerRight: () => <SignOutButton /> }}
+          />
+          <Stack.Screen 
+            name="Reports" 
+            component={ReportsScreen}
+            options={{ headerRight: () => <SignOutButton /> }}
+          />
         </>
       )}
     </Stack.Navigator>
