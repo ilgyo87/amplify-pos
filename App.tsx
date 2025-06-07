@@ -1,47 +1,33 @@
-import React from "react";
-import { Button, View, StyleSheet } from "react-native";
-import { StatusBar } from "expo-status-bar";
-import { Amplify } from "aws-amplify";
-import { Authenticator, useAuthenticator } from "@aws-amplify/ui-react-native";
-import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
-import outputs from "./amplify_outputs.json";
+import React from 'react';
+import { StatusBar } from 'expo-status-bar';
+import { Amplify } from 'aws-amplify';
+import { Authenticator } from '@aws-amplify/ui-react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { NavigationContainer } from '@react-navigation/native';
+import { LogBox } from 'react-native';
 
+import outputs from './amplify_outputs.json';
+import AppNavigator from './src/navigation/AppNavigator';
+
+// Configure Amplify
 Amplify.configure(outputs);
 
-const SignOutButton = () => {
-  const { signOut } = useAuthenticator();
-
-  return (
-    <View style={styles.signOutButton}>
-      <Button title="Sign Out" onPress={signOut} />
-    </View>
-  );
-};
+// Ignore specific warnings
+LogBox.ignoreLogs([
+  'Non-serializable values were found in the navigation state',
+]);
 
 const App = () => {
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={styles.container}>
-        <StatusBar style="auto" />
+      <StatusBar style="auto" />
+      <NavigationContainer>
         <Authenticator.Provider>
-          <Authenticator>
-            <SignOutButton />
-          </Authenticator>
+          <AppNavigator />
         </Authenticator.Provider>
-      </SafeAreaView>
+      </NavigationContainer>
     </SafeAreaProvider>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  signOutButton: {
-    alignSelf: "flex-end",
-    margin: 20,
-  },
-});
 
 export default App;
