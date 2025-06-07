@@ -1,17 +1,109 @@
-import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
+import { a, defineData, type ClientSchema } from "@aws-amplify/backend";
 
-/*== STEP 1 ===============================================================
-The section below creates a Todo database table with a "content" field. Try
-adding a new "isDone" field as a boolean. The authorization rule below
-specifies that any unauthenticated user can "create", "read", "update", 
-and "delete" any "Todo" records.
-=========================================================================*/
 const schema = a.schema({
-  Todo: a
+
+  // Custom Types
+  Location: a.customType({
+    lat: a.float(),
+    long: a.float(),
+  }),
+  // Core Business Entity
+  Business: a
     .model({
-      content: a.string(),
+      businessName: a.string().required(),
+      firstName: a.string(),
+      lastName: a.string(),
+      address: a.string(),
+      city: a.string(),
+      state: a.string(),
+      zipCode: a.string(),
+      phone: a.phone().required(),
+      coordinates: a.ref('Location'),
+      email: a.email().required(),
+      website: a.url(),
+      hours: a.string().array(),
+      logoUrl: a.url(),
+      logoSource: a.string(),
+      userId: a.string(),
+      orders: a.hasMany('Order', 'businessId'),
     })
-    .authorization((allow) => [allow.guest()]),
+    .authorization((allow) => [
+      allow.authenticated().to(['read']),
+      allow.owner(),
+    ]),
+  Customer: a
+    .model({
+      firstName: a.string().required(),
+      lastName: a.string().required(),
+      address: a.string(),
+      city: a.string(),
+      state: a.string(),
+      zipCode: a.string(),
+      phone: a.phone().required(),
+      coordinates: a.ref('Location'),
+      email: a.email(),
+      businessId: a.string(),
+      cognitoId: a.string(),
+    })
+    .authorization((allow) => [
+      allow.authenticated().to(['read']),
+      allow.owner(),
+    ]),
+  Order: a
+    .model({
+      businessId: a.string().required(),
+      business: a.belongsTo('Business', 'businessId'),
+      customerId: a.string().required(),
+      employeeId: a.string().required(),
+      items: a.hasMany('OrderItem', 'orderId'),
+      paymentMethod: a.string().required(),
+      total: a.float().required(),
+      status: a.string().required(),
+    })
+    .authorization((allow) => [
+      allow.authenticated().to(['read']),
+      allow.owner(),
+    ]),
+  OrderItem: a
+    .model({
+      name: a.string().required(),
+      description: a.string(),
+      price: a.float(),
+      discount: a.float(),
+      category: a.string(),
+      businessId: a.string(),
+      customerId: a.string(),
+      employeeId: a.string(),
+      orderId: a.string(),
+      orderIdHistory: a.string().array(),
+      starch: a.enum(['none', 'light', 'medium', 'heavy']),
+      pressOnly: a.boolean(),
+      notes: a.string().array(), // <-- Added this line for notes
+      order: a.belongsTo('Order', 'orderId'),
+    })
+    .authorization((allow) => [
+      allow.authenticated().to(['read']),
+      allow.owner(),
+    ]),
+  Employee: a
+    .model({
+      firstName: a.string().required(),
+      lastName: a.string().required(),
+      address: a.string(),
+      city: a.string(),
+      state: a.string(),
+      zipCode: a.string(),
+      phone: a.phone().required(),
+      coordinates: a.ref('Location'),
+      email: a.email(),
+      businessId: a.string(),
+      cognitoId: a.string(),
+      pin: a.string(),
+    })
+    .authorization((allow) => [
+      allow.authenticated().to(['read']),
+      allow.owner(),
+    ])
 });
 
 export type Schema = ClientSchema<typeof schema>;
@@ -19,35 +111,6 @@ export type Schema = ClientSchema<typeof schema>;
 export const data = defineData({
   schema,
   authorizationModes: {
-    defaultAuthorizationMode: 'identityPool',
-  },
+    defaultAuthorizationMode: "userPool"
+  }
 });
-
-/*== STEP 2 ===============================================================
-Go to your frontend source code. From your client-side code, generate a
-Data client to make CRUDL requests to your table. (THIS SNIPPET WILL ONLY
-WORK IN THE FRONTEND CODE FILE.)
-
-Using JavaScript or Next.js React Server Components, Middleware, Server 
-Actions or Pages Router? Review how to generate Data clients for those use
-cases: https://docs.amplify.aws/gen2/build-a-backend/data/connect-to-API/
-=========================================================================*/
-
-/*
-"use client"
-import { generateClient } from "aws-amplify/data";
-import type { Schema } from "@/amplify/data/resource";
-
-const client = generateClient<Schema>() // use this Data client for CRUDL requests
-*/
-
-/*== STEP 3 ===============================================================
-Fetch records from the database and use them in your frontend component.
-(THIS SNIPPET WILL ONLY WORK IN THE FRONTEND CODE FILE.)
-=========================================================================*/
-
-/* For example, in a React component, you can use this snippet in your
-  function's RETURN statement */
-// const { data: todos } = await client.models.Todo.list()
-
-// return <ul>{todos.map(todo => <li key={todo.id}>{todo.content}</li>)}</ul>
