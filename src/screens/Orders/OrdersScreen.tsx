@@ -1,4 +1,4 @@
-import { View, StyleSheet, SafeAreaView, Text, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import { View, StyleSheet, SafeAreaView, Text, TouchableOpacity, Alert, ScrollView, Image } from 'react-native';
 import { useState, useRef, useCallback } from 'react';
 import { captureRef } from 'react-native-view-shot';
 import { generateLabelHTML, printLabel } from '../../utils/printUtils';
@@ -7,32 +7,34 @@ import { BaseScreen } from '../BaseScreen';
 
 export default function OrdersScreen() {
   const [isPrinting, setIsPrinting] = useState(false);
+  const qrRef = useRef<View>(null);
 
   const handlePrint = async () => {
+    if (!qrRef.current) return;
+    
     setIsPrinting(true);
     try {
-      // Ensure QR code is properly encoded
-      const qrSvgEncoded = encodeURIComponent(qrSvg)
-        .replace(/'/g, '%27')
-        .replace(/"/g, '%22');
+      // Capture QR code as base64
+      const qrImageBase64 = await captureRef(qrRef, {
+        format: 'png',
+        quality: 1,
+        result: 'base64',
+      });
       
-      const qrImageBase64 = `data:image/svg+xml;charset=UTF-8,${qrSvgEncoded}`;
+      const imageUri = `data:image/png;base64,${qrImageBase64}`;
       
-      // Create order data with QR code
-      const orderDataWithQR = {
-        ...orderData,
-        qrImageBase64
-      };
+      // Generate and print label
+      const html = await generateLabelHTML({
+        orderNumber: orderData.orderNumber,
+        customerName: orderData.customerName,
+        garmentType: orderData.garmentType,
+        notes: orderData.notes,
+        qrImageBase64: imageUri
+      });
       
-      // Generate and print the label
-      const html = await generateLabelHTML(orderDataWithQR);
       await printLabel(html);
-    } catch (error: unknown) {
+    } catch (error) {
       console.error('Print error:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      if (!errorMessage.includes('cancelled') && !errorMessage.includes('dismissed')) {
-        Alert.alert('Error', 'Failed to print label');
-      }
     } finally {
       setIsPrinting(false);
     }
@@ -53,51 +55,6 @@ export default function OrdersScreen() {
     garmentType: orderData.garmentType,
     timestamp: new Date().toISOString(),
   });
-
-  const qrCodeRef = useRef<View>(null);
-  const [qrCodeBase64, setQrCodeBase64] = useState<string>('');
-
-  // Simple QR code SVG that will render in the print template
-  const qrSvg = [
-    '<?xml version="1.0" encoding="UTF-8" standalone="no"?>',
-    '<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">',
-    '  <rect width="100" height="100" fill="#FFFFFF"/>',
-    '  <!-- Position markers -->',
-    '  <rect x="10" y="10" width="20" height="20" fill="#000000"/>',
-    '  <rect x="10" y="70" width="20" height="20" fill="#000000"/>',
-    '  <rect x="70" y="10" width="20" height="20" fill="#000000"/>',
-    '  <!-- Alignment pattern -->',
-    '  <rect x="70" y="70" width="20" height="20" fill="#000000"/>',
-    '  <rect x="75" y="75" width="10" height="10" fill="#FFFFFF"/>',
-    '  <!-- Data -->',
-    '  <rect x="40" y="40" width="5" height="5" fill="#000000"/>',
-    '  <rect x="55" y="40" width="5" height="5" fill="#000000"/>',
-    '  <rect x="40" y="55" width="5" height="5" fill="#000000"/>',
-    '  <rect x="55" y="55" width="5" height="5" fill="#000000"/>',
-    '  <!-- Order number -->',
-    '  <text x="50" y="95" font-family="Arial" font-size="6" text-anchor="middle" fill="#000000">',
-    `    ${orderData.orderNumber}`,
-    '  </text>',
-    '</svg>'
-  ].join('\n');
-  
-  const qrImageBase64 = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(qrSvg);
-  
-  // Capture QR code as base64 image
-  const captureQrCode = useCallback(async () => {
-    try {
-      const uri = await captureRef(qrCodeRef, {
-        format: 'png',
-        quality: 1,
-        result: 'base64'
-      });
-      setQrCodeBase64(`data:image/png;base64,${uri}`);
-      return `data:image/png;base64,${uri}`;
-    } catch (error) {
-      console.error('Error capturing QR code:', error);
-      return qrImageBase64; // Fallback to SVG if capture fails
-    }
-  }, []);
 
   return (
     <BaseScreen title="Orders">
@@ -120,7 +77,7 @@ export default function OrdersScreen() {
               <Text style={styles.notes}>
                 Notes: {orderData.notes}
               </Text>
-              <View ref={qrCodeRef} collapsable={false}>
+              <View ref={qrRef} collapsable={false}>
                 <QRCode value={qrPayload} size={70} />
               </View>
             </View>
