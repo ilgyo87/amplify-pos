@@ -24,8 +24,8 @@ interface DashboardMenuProps {
   menuItems: MenuItem[];
 }
 
-const CONTAINER_PADDING = 16;
-const ITEM_GAP = 16;
+const CONTAINER_PADDING = 70;
+const ITEM_GAP = 50;
 
 // Custom hook to get device orientation
 const useOrientation = (): 'portrait' | 'landscape' => {
@@ -52,54 +52,46 @@ const useOrientation = (): 'portrait' | 'landscape' => {
 };
 
 export const DashboardMenu = memo(({ menuItems }: DashboardMenuProps) => {
-  const { width, height } = useWindowDimensions(); // For layout sizing
+  const { width } = useWindowDimensions();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const orientation = useOrientation(); // Get orientation from custom hook
-
-  const isLandscape = orientation === 'landscape';
-  // Fixed grid logic as per request
-  const itemsPerRow = isLandscape ? 3 : 2;
-  const maxItems = isLandscape ? 9 : 8; // 3x3 grid (up to 9 items) or 2x4 grid (up to 8 items)
   
-  const displayItems = menuItems.slice(0, maxItems);
-  // Console log removed for cleaner code
+  // Simple orientation detection
+  const isLandscape = width > 600; // Simple breakpoint for tablets
+  const itemsPerRow = isLandscape ? 3 : 2;
   
   const handlePress = (href: keyof RootStackParamList) => {
     navigation.navigate(href);
   };
 
-  // Calculate item width with proper spacing
+  // Calculate item dimensions with proper spacing
   const availableWidth = width - (CONTAINER_PADDING * 2);
-  const itemWidth = (availableWidth - ((itemsPerRow - 1) * ITEM_GAP)) / itemsPerRow;
+  const totalGapWidth = (itemsPerRow - 1) * ITEM_GAP;
+  const itemWidth = (availableWidth - totalGapWidth) / itemsPerRow;
+  const itemHeight = itemWidth * 0.8;
 
   return (
     <View style={styles.container}>
       <View style={styles.gridContainer}>
-        {displayItems.map((item, index) => (
+        {menuItems.map((item, index) => (
           <View 
             key={item.id}
-            style={[
-              styles.itemContainer,
-              { 
-                width: itemWidth,
-                height: itemWidth, // Let's try making them square first, can adjust aspect ratio later
-                marginRight: (index + 1) % itemsPerRow === 0 ? 0 : ITEM_GAP,
-                marginBottom: isLandscape 
-                  ? (index < 6 ? ITEM_GAP : 0) // 3 rows in landscape
-                  : (index < 6 ? ITEM_GAP : 0) // 4 rows in portrait (2 items per row)
-              }
-            ]}
+            style={{
+              width: itemWidth,
+              height: itemHeight,
+              marginRight: (index + 1) % itemsPerRow === 0 ? 0 : 0,
+              marginBottom: index < menuItems.length - itemsPerRow ? ITEM_GAP : 0
+            }}
           >
             <TouchableOpacity
               style={[
-                styles.menuItem, 
+                styles.menuItem,
                 { backgroundColor: item.color }
               ]}
               onPress={() => handlePress(item.href)}
               activeOpacity={0.8}
             >
               <View style={styles.iconContainer}>
-                <Icon name={item.icon} size={24} color="#fff" />
+                <Icon name={item.icon} size={28} color="#fff" />
               </View>
               <Text style={styles.menuItemText} numberOfLines={1}>
                 {item.title}
@@ -116,20 +108,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: CONTAINER_PADDING,
-    paddingBottom: 0,
   },
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     width: '100%',
-  },
-  itemContainer: {
-    // This will be set dynamically
+    justifyContent: 'space-between',
   },
   menuItem: {
     flex: 1,
     borderRadius: 12,
-    padding: 16,
+    padding: 10, // Reduced padding
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 3,
@@ -139,14 +128,14 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
   },
   iconContainer: {
-    marginBottom: 8,
+    marginBottom: 4, // Reduced space between icon and text
   },
   menuItemText: {
     color: '#fff',
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 20, // Smaller font size
+    fontWeight: '800',
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: 2, // Reduced margin
     includeFontPadding: false,
   },
 });
