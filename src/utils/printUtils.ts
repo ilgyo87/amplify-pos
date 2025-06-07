@@ -18,7 +18,7 @@ export async function generateLabelHTML({
     <!DOCTYPE html>
     <html>
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        <meta name="viewport" content="width=29mm, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
         <style>
           @page {
             size: 29mm 90mm;
@@ -26,8 +26,8 @@ export async function generateLabelHTML({
             padding: 0;
           }
           html, body {
-            width: 100%;
-            height: 100%;
+            width: 29mm;
+            height: 90mm;
             margin: 0;
             padding: 0;
             font-family: Arial, sans-serif;
@@ -36,17 +36,16 @@ export async function generateLabelHTML({
             overflow: hidden;
           }
           .label {
-            width: 27mm;
-            height: 88mm;
-            margin: 1mm;
-            padding: 0;
-            position: relative;
+            width: 29mm;
+            height: 90mm;
+            margin: 0;
+            padding: 1mm;
             box-sizing: border-box;
-            border: none;
-            overflow: hidden;
+            position: relative;
             display: flex;
-            justify-content: center;
+            flex-direction: column;
             align-items: center;
+            justify-content: space-between;
           }
           .dot {
             width: 8px;
@@ -89,24 +88,30 @@ export async function generateLabelHTML({
           .qr {
             width: 25mm;
             height: 25mm;
-            flex-shrink: 0;
+            margin: 2mm 0;
+            padding: 1mm;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: white;
           }
           .qr img {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
+            max-width: 100%;
+            max-height: 100%;
+            display: block;
           }
           .text {
             writing-mode: vertical-rl;
             text-orientation: mixed;
             transform: rotate(180deg);
-            height: 110mm;
+            height: 50mm;
             display: flex;
             flex-direction: column;
             justify-content: flex-start;
             align-items: flex-start;
-            margin: 0 0 0 5mm;
-            gap: 4mm;
+            margin: 2mm 0;
+            font-size: 10px;
+            gap: 2mm;
           }
           .label-title {
             font-size: 12px;
@@ -137,13 +142,13 @@ export async function generateLabelHTML({
           <div class="dot bottom-right"></div>
           <div class="content">
             <div class="qr">
-              <img src="${qrImageBase64}" width="90" height="90" onerror="this.onerror=null; this.src='data:image/svg+xml;charset=UTF-8,%3Csvg%20width%3D%2270%22%20height%3D%2270%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Crect%20width%3D%2270%22%20height%3D%2270%22%20fill%3D%22%23ccc%22%2F%3E%3Ctext%20x%3D%2235%22%20y%3D%2235%22%20font-family%3D%22Arial%22%20font-size%3D%228%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%3EQR%3C%2Ftext%3E%3C%2Fsvg%3E'" />
+              <img src="${qrImageBase64}" alt="QR Code" style="width: 25mm; height: 25mm;" />
             </div>
             <div class="text">
-              <span class="label-title">Order #: ${orderNumber}</span>
-              <span class="label-text"><span class="label-b">Name: ${customerName}</span></span>
-              <span class="label-text"><span class="label-b">Garment: ${garmentType}</span></span>
-              <span class="label-text"><span class="label-b">Notes: ${notes || 'None'}</span></span>
+              <span>Order #: ${orderNumber}</span>
+              <span>Name: ${customerName}</span>
+              <span>Garment: ${garmentType}</span>
+              <span>Notes: ${notes || 'None'}</span>
             </div>
           </div>
         </div>
@@ -160,11 +165,11 @@ export const printLabel = async (html: string) => {
     await Print.printAsync({
       html,
       width: widthMM * 3, // Convert mm to points
-      height: heightMM * 3.05, // Convert mm to points
+      height: heightMM * 3.02, // Convert mm to points
       margins: { left: 0, right: 0, top: 0, bottom: 0 },
       useMarkupFormatter: true
     });
   } catch (error: unknown) {
-    console.error('Error printing:', error);
+    console.log('Error printing:', error);
   }
 };
