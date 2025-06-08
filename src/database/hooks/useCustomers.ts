@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { CustomerDocument } from '../schemas/customer';
 import { customerService } from '../services/customerService';
 import { CustomerFormData, ValidationErrors } from '../../utils/customerValidation';
@@ -18,6 +18,8 @@ export const useCustomers = () => {
   const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [operationLoading, setOperationLoading] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const currentSearchQuery = useRef<string>('');
 
   // Initialize and load customers
   useEffect(() => {
@@ -35,8 +37,8 @@ export const useCustomers = () => {
           setAllCustomers(updatedCustomers);
           
           // Re-apply search if there's an active search query
-          if (searchQuery.trim()) {
-            const searchResults = await customerService.searchCustomers(searchQuery);
+          if (currentSearchQuery.current.trim()) {
+            const searchResults = await customerService.searchCustomers(currentSearchQuery.current);
             setFilteredCustomers(searchResults);
           } else {
             setFilteredCustomers(updatedCustomers);
@@ -54,30 +56,49 @@ export const useCustomers = () => {
     const unsubscribe = loadCustomers();
     
     return () => {
+      // Cleanup timeout
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
+      
+      // Cleanup subscription
       if (unsubscribe) {
         unsubscribe.then(unsub => unsub?.());
       }
     };
-  }, [searchQuery]);
+  }, []); // Remove searchQuery dependency to prevent re-initialization
 
-  // Search functionality with debouncing
-  const searchCustomers = useCallback(async (query: string) => {
+  // Search functionality with proper debouncing
+  const searchCustomers = useCallback((query: string) => {
     setSearchQuery(query);
+    currentSearchQuery.current = query;
+    
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+      searchTimeoutRef.current = null;
+    }
     
     if (!query.trim()) {
       setFilteredCustomers(allCustomers);
+      setSearchLoading(false);
       return;
     }
 
-    try {
-      setSearchLoading(true);
-      const results = await customerService.searchCustomers(query);
-      setFilteredCustomers(results);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to search customers');
-    } finally {
-      setSearchLoading(false);
-    }
+    setSearchLoading(true);
+    
+    // Set new timeout for debounced search
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const results = await customerService.searchCustomers(query);
+        setFilteredCustomers(results);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to search customers');
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300); // 300ms debounce
   }, [allCustomers]);
 
   // Create customer with validation
@@ -153,6 +174,7 @@ export const useCustomers = () => {
   // Clear search and show all customers
   const clearSearch = useCallback(() => {
     setSearchQuery('');
+    currentSearchQuery.current = '';
     setFilteredCustomers(allCustomers);
   }, [allCustomers]);
 

@@ -94,10 +94,10 @@ export default function SettingsScreen() {
     let message = '';
     
     if (result.uploadedCount > 0) {
-      message += `Uploaded: ${result.uploadedCount} customers\n`;
+      message += `Uploaded: ${result.uploadedCount} items\n`;
     }
     if (result.downloadedCount > 0) {
-      message += `Downloaded: ${result.downloadedCount} customers\n`;
+      message += `Downloaded: ${result.downloadedCount} items\n`;
     }
     if (result.errors.length > 0) {
       message += `\nErrors (${result.errors.length}):\n${result.errors.slice(0, 3).join('\n')}`;
@@ -184,12 +184,17 @@ export default function SettingsScreen() {
             </View>
             
             <View style={styles.statusRow}>
+              <Text style={styles.statusLabel}>Local Employees:</Text>
+              <Text style={styles.statusValue}>{syncStatus.totalLocalEmployees}</Text>
+            </View>
+            
+            <View style={styles.statusRow}>
               <Text style={styles.statusLabel}>Unsynced Changes:</Text>
               <Text style={[
                 styles.statusValue,
-                syncStatus.totalUnsyncedCustomers > 0 && styles.statusValueWarning
+                (syncStatus.totalUnsyncedCustomers + syncStatus.totalUnsyncedEmployees) > 0 && styles.statusValueWarning
               ]}>
-                {syncStatus.totalUnsyncedCustomers}
+                {syncStatus.totalUnsyncedCustomers + syncStatus.totalUnsyncedEmployees}
               </Text>
             </View>
             
@@ -215,10 +220,10 @@ export default function SettingsScreen() {
           
           <SyncCard
             title="Upload to Cloud"
-            description={`Upload ${syncStatus.totalUnsyncedCustomers} local changes to the cloud`}
+            description={`Upload ${syncStatus.totalUnsyncedCustomers + syncStatus.totalUnsyncedEmployees} local changes to the cloud`}
             onPress={handleUpload}
             loading={syncStatus.isUploading}
-            disabled={syncStatus.totalUnsyncedCustomers === 0}
+            disabled={(syncStatus.totalUnsyncedCustomers + syncStatus.totalUnsyncedEmployees) === 0}
             icon="cloud-upload"
             color="#007AFF"
           />
@@ -238,7 +243,7 @@ export default function SettingsScreen() {
           <View style={styles.infoCard}>
             <Ionicons name="information-circle" size={20} color="#007AFF" />
             <Text style={styles.infoText}>
-              Sync keeps your local customer data in sync with the cloud. 
+              Sync keeps your local customer and employee data in sync with the cloud. 
               Use "Full Sync" for the most reliable synchronization.
             </Text>
           </View>

@@ -9,15 +9,20 @@ import { v4 as uuidv4 } from 'uuid';
 export abstract class BaseRepository<T, C extends RxCollection = RxCollection> {
   /** The RxDB collection instance */
   protected collection: C;
+  protected idPrefix: string;
 
   constructor(collection: C) {
     this.collection = collection;
+    // Default prefix based on collection name, fallback to 'item_' if not available
+    this.idPrefix = collection.name ? `${collection.name}_` : 'item_';
   }
 
   /**
    * Generate a random ID for new documents
+   * @param customPrefix - Optional custom prefix that overrides the default collection-based prefix
    */
-  protected generateId(prefix: string = ''): string {
+  protected generateId(customPrefix?: string): string {
+    const prefix = customPrefix || this.idPrefix;
     return `${prefix}${uuidv4()}`;
   }
 
@@ -47,7 +52,7 @@ export abstract class BaseRepository<T, C extends RxCollection = RxCollection> {
     const now = new Date().toISOString();
     const doc = {
       ...data,
-      id: this.generateId('customer_'),
+      id: this.generateId(),
       createdAt: now,
       updatedAt: now,
       isLocalOnly: true, // New documents are local by default

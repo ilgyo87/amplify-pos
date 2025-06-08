@@ -1,46 +1,59 @@
 import { RxDocument } from 'rxdb';
 import { BaseRepository } from './BaseRepository';
-import { CustomerDocType, CustomerDocument, CustomerCollection } from '../schemas/customer';
+import { EmployeeDocType, EmployeeDocument, EmployeeCollection } from '../schemas/employee';
 
 /**
- * Repository for customer-related database operations
+ * Repository for employee-related database operations
  */
-export class CustomerRepository extends BaseRepository<CustomerDocType, CustomerCollection> {
-  constructor(collection: CustomerCollection) {
+export class EmployeeRepository extends BaseRepository<EmployeeDocType, EmployeeCollection> {
+  constructor(collection: EmployeeCollection) {
     super(collection);
   }
 
   /**
-   * Find a customer by phone number
+   * Find an employee by phone number
    */
-  async findByPhone(phone: string): Promise<CustomerDocument | null> {
+  async findByPhone(phone: string): Promise<EmployeeDocument | null> {
     const results = await this.collection.find({
       selector: {
         phone,
         isDeleted: { $ne: true }
       }
     }).exec();
-    return results.length > 0 ? results[0] as CustomerDocument : null;
+    return results.length > 0 ? results[0] as EmployeeDocument : null;
   }
 
   /**
-   * Find a customer by email
+   * Find an employee by email
    */
-  async findByEmail(email: string): Promise<CustomerDocument | null> {
+  async findByEmail(email: string): Promise<EmployeeDocument | null> {
     const results = await this.collection.find({
       selector: {
         email,
         isDeleted: { $ne: true }
       }
     }).exec();
-    return results.length > 0 ? results[0] as CustomerDocument : null;
+    return results.length > 0 ? results[0] as EmployeeDocument : null;
   }
 
   /**
-   * Search customers by name (first or last name)
+   * Find an employee by PIN
+   */
+  async findByPin(pin: string): Promise<EmployeeDocument | null> {
+    const results = await this.collection.find({
+      selector: {
+        pin,
+        isDeleted: { $ne: true }
+      }
+    }).exec();
+    return results.length > 0 ? results[0] as EmployeeDocument : null;
+  }
+
+  /**
+   * Search employees by name (first or last name)
    * Uses RxDB's native query capabilities with proper indexing for better performance
    */
-  async searchByName(searchTerm: string): Promise<CustomerDocument[]> {
+  async searchByName(searchTerm: string): Promise<EmployeeDocument[]> {
     if (!searchTerm || searchTerm.trim() === '') {
       return [];
     }
@@ -69,46 +82,46 @@ export class CustomerRepository extends BaseRepository<CustomerDocType, Customer
     // For full name searches (which can't easily be done in the query),
     // we'll do a second pass in memory, but only on the already filtered results
     if (searchTerm.includes(' ')) {
-      const fullNameMatches = results.filter(customer => {
-        const fullName = `${customer.firstName} ${customer.lastName}`.toLowerCase();
+      const fullNameMatches = results.filter(employee => {
+        const fullName = `${employee.firstName} ${employee.lastName}`.toLowerCase();
         return fullName.includes(searchTerm.toLowerCase());
       });
       
       // Return either the full name matches (if we found any) or the original results
-      return fullNameMatches.length > 0 ? fullNameMatches as CustomerDocument[] : results as CustomerDocument[];
+      return fullNameMatches.length > 0 ? fullNameMatches as EmployeeDocument[] : results as EmployeeDocument[];
     }
     
-    return results as CustomerDocument[];
+    return results as EmployeeDocument[];
   }
 
   /**
-   * Get all customers that are marked as local only
+   * Get all employees that are marked as local only
    */
-  async getLocalOnly(): Promise<CustomerDocument[]> {
+  async getLocalOnly(): Promise<EmployeeDocument[]> {
     const results = await this.collection.find({
       selector: {
         isLocalOnly: true,
         isDeleted: { $ne: true }
       }
     }).exec();
-    return results as CustomerDocument[];
+    return results as EmployeeDocument[];
   }
 
   /**
-   * Get all customers that are synced with the server
+   * Get all employees that are synced with the server
    */
-  async getSynced(): Promise<CustomerDocument[]> {
+  async getSynced(): Promise<EmployeeDocument[]> {
     const results = await this.collection.find({
       selector: {
         isLocalOnly: false,
         isDeleted: { $ne: true }
       }
     }).exec();
-    return results as CustomerDocument[];
+    return results as EmployeeDocument[];
   }
 
   /**
-   * Count all non-deleted customers
+   * Count all non-deleted employees
    * Uses RxDB's count feature instead of loading all records
    */
   async count(): Promise<number> {
@@ -120,23 +133,23 @@ export class CustomerRepository extends BaseRepository<CustomerDocType, Customer
   }
 
   /**
-   * Bulk upsert customers
+   * Bulk upsert employees
    */
-  async bulkUpsert(customers: Partial<CustomerDocType>[]): Promise<void> {
-    for (const customer of customers) {
-      if (customer.id) {
-        const existing = await this.findById(customer.id);
+  async bulkUpsert(employees: Partial<EmployeeDocType>[]): Promise<void> {
+    for (const employee of employees) {
+      if (employee.id) {
+        const existing = await this.findById(employee.id);
         if (existing) {
-          await existing.update({ $set: customer });
+          await existing.update({ $set: employee });
           continue;
         }
       }
-      await this.collection.insert(customer as CustomerDocType);
+      await this.collection.insert(employee as EmployeeDocType);
     }
   }
 
   /**
-   * Check if customer exists by email (excluding a specific ID)
+   * Check if employee exists by email (excluding a specific ID)
    */
   async existsByEmail(email: string, excludeId?: string): Promise<boolean> {
     const selector: any = {
@@ -153,7 +166,7 @@ export class CustomerRepository extends BaseRepository<CustomerDocType, Customer
   }
 
   /**
-   * Check if customer exists by phone (excluding a specific ID)
+   * Check if employee exists by phone (excluding a specific ID)
    */
   async existsByPhone(phone: string, excludeId?: string): Promise<boolean> {
     const selector: any = {
@@ -170,15 +183,32 @@ export class CustomerRepository extends BaseRepository<CustomerDocType, Customer
   }
 
   /**
-   * Search customers across multiple fields
+   * Check if employee exists by PIN (excluding a specific ID)
    */
-  async search(query: string, limit?: number): Promise<CustomerDocument[]> {
+  async existsByPin(pin: string, excludeId?: string): Promise<boolean> {
+    const selector: any = {
+      pin,
+      isDeleted: { $ne: true }
+    };
+    
+    if (excludeId) {
+      selector.id = { $ne: excludeId };
+    }
+    
+    const count = await this.collection.count({ selector }).exec();
+    return count > 0;
+  }
+
+  /**
+   * Search employees across multiple fields
+   */
+  async search(query: string, limit?: number): Promise<EmployeeDocument[]> {
     if (!query || query.trim() === '') {
       return this.findAll();
     }
 
-    // Get all non-deleted customers first
-    const allCustomers = await this.collection.find({
+    // Get all non-deleted employees first
+    const allEmployees = await this.collection.find({
       selector: {
         isDeleted: { $ne: true }
       }
@@ -187,18 +217,21 @@ export class CustomerRepository extends BaseRepository<CustomerDocType, Customer
     // Perform in-memory search for better compatibility and more flexible matching
     const searchTerm = query.toLowerCase().trim();
     
-    const filteredCustomers = allCustomers.filter(customer => {
+    const filteredEmployees = allEmployees.filter(employee => {
       // Search in name fields
-      const firstName = customer.firstName?.toLowerCase() || '';
-      const lastName = customer.lastName?.toLowerCase() || '';
+      const firstName = employee.firstName?.toLowerCase() || '';
+      const lastName = employee.lastName?.toLowerCase() || '';
       const fullName = `${firstName} ${lastName}`;
       
       // Search in email (only if email exists)
-      const email = customer.email?.toLowerCase() || '';
+      const email = employee.email?.toLowerCase() || '';
       
       // Search in phone (clean both stored phone and search term for phone matching)
-      const storedPhone = customer.phone?.replace(/\D/g, '') || '';
+      const storedPhone = employee.phone?.replace(/\D/g, '') || '';
       const searchPhone = searchTerm.replace(/\D/g, '');
+      
+      // Search in PIN
+      const pin = employee.pin || '';
       
       // Check various match conditions
       return (
@@ -212,20 +245,22 @@ export class CustomerRepository extends BaseRepository<CustomerDocType, Customer
         // 1. Raw numeric comparison (e.g., "555" matches "5551234567")
         (searchPhone && searchPhone.length >= 3 && storedPhone.includes(searchPhone)) ||
         // 2. Formatted phone search (e.g., "(555)" matches "(555) 123-4567")
-        (customer.phone && customer.phone.toLowerCase().includes(searchTerm)) ||
+        (employee.phone && employee.phone.toLowerCase().includes(searchTerm)) ||
         // 3. Partial formatted matches (e.g., "555-123" matches "5551234567")
-        (searchPhone && searchPhone.length >= 6 && storedPhone.includes(searchPhone))
+        (searchPhone && searchPhone.length >= 6 && storedPhone.includes(searchPhone)) ||
+        // PIN matches
+        pin.includes(searchTerm)
       );
     });
 
     // Apply limit if specified
-    const results = limit ? filteredCustomers.slice(0, limit) : filteredCustomers;
+    const results = limit ? filteredEmployees.slice(0, limit) : filteredEmployees;
     
-    return results as CustomerDocument[];
+    return results as EmployeeDocument[];
   }
 
   /**
-   * Subscribe to changes in the customers collection
+   * Subscribe to changes in the employees collection
    */
   subscribeToChanges(callback: (change: any) => void): () => void {
     const subscription = this.collection.$.subscribe(callback);
@@ -233,31 +268,31 @@ export class CustomerRepository extends BaseRepository<CustomerDocType, Customer
   }
   
   /**
-   * Find customers by business ID
+   * Find employees by business ID
    */
-  async findByBusinessId(businessId: string): Promise<CustomerDocument[]> {
+  async findByBusinessId(businessId: string): Promise<EmployeeDocument[]> {
     const results = await this.collection.find({
       selector: {
         businessId,
         isDeleted: { $ne: true }
       }
     }).exec();
-    return results as CustomerDocument[];
+    return results as EmployeeDocument[];
   }
 
   /**
-   * Mark a customer as synced with the server
-   * @param localId Local customer ID
+   * Mark an employee as synced with the server
+   * @param localId Local employee ID
    * @param amplifyId Amplify ID from the server
-   * @returns The updated customer document or null if not found
+   * @returns The updated employee document or null if not found
    */
-  async markAsSynced(localId: string, amplifyId: string): Promise<CustomerDocument | null> {
-    const customer = await this.findById(localId);
-    if (!customer) {
+  async markAsSynced(localId: string, amplifyId: string): Promise<EmployeeDocument | null> {
+    const employee = await this.findById(localId);
+    if (!employee) {
       return null;
     }
     
-    const updates: Partial<CustomerDocType> = {
+    const updates: Partial<EmployeeDocType> = {
       isLocalOnly: false,
       lastSyncedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -267,6 +302,6 @@ export class CustomerRepository extends BaseRepository<CustomerDocType, Customer
       updates.amplifyId = amplifyId;
     }
     
-    return this.update(localId, updates) as Promise<CustomerDocument | null>;
+    return this.update(localId, updates) as Promise<EmployeeDocument | null>;
   }
 }

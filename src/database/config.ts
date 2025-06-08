@@ -19,9 +19,15 @@ if (__DEV__) {
 }
 
 import { customerSchema, CustomerCollection, CustomerDocType, CustomerDocument } from './schemas/customer';
+import { employeeSchema, EmployeeCollection, EmployeeDocType, EmployeeDocument } from './schemas/employee';
+import { categorySchema, CategoryCollection, CategoryDocType, CategoryDocument } from './schemas/category';
+import { productSchema, ProductCollection, ProductDocType, ProductDocument } from './schemas/product';
 
 export interface DatabaseCollections {
   customers: CustomerCollection;
+  employees: EmployeeCollection;
+  categories: CategoryCollection;
+  products: ProductCollection;
 }
 
 // Extend the RxDatabase type with our collections
@@ -47,7 +53,7 @@ const createDatabase = async (): Promise<AppDatabase> => {
 
   try {
     const database = await createRxDatabase<DatabaseCollections>({
-      name: 'amplifyposdb_v3',
+      name: 'amplifyposdb_v5',
       storage,
       multiInstance: false, // Set to false in React Native
       ignoreDuplicate: true,
@@ -66,6 +72,15 @@ const createDatabase = async (): Promise<AppDatabase> => {
       await database.addCollections({
         customers: {
           schema: customerSchema
+        },
+        employees: {
+          schema: employeeSchema
+        },
+        categories: {
+          schema: categorySchema
+        },
+        products: {
+          schema: productSchema
         }
       });
       return database;
