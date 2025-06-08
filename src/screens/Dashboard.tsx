@@ -1,16 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, SafeAreaView, Text, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { InputBox } from '../components/ui/InputBox';
 import { DashboardMenu, MenuItem } from '../components/ui/DashboardMenu';
+import { BusinessForm } from '../components/forms/BusinessForm';
 import { customerService } from '../database/services/customerService';
 import { CustomerDocument } from '../database/schemas/customer';
+import { BusinessFormData, BusinessValidationErrors } from '../utils/businessValidation';
 import { useDebouncedCallback } from '../utils/hooks';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 
 export default function Dashboard() {
-  const [businessName] = useState('No Business');
+  const [businessName, setBusinessName] = useState('No Business');
+  const [showBusinessForm, setShowBusinessForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [customers, setCustomers] = useState<CustomerDocument[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -84,6 +88,26 @@ export default function Dashboard() {
     
     navigation.navigate('Checkout', { customer: serializableCustomer });
   };
+
+  const handleCreateBusiness = async (data: BusinessFormData): Promise<{ business?: any; errors?: BusinessValidationErrors }> => {
+    try {
+      // For now, just update the business name in state
+      // In a real app, you would save this to a database
+      setBusinessName(data.name);
+      
+      // TODO: Save business data to database
+      console.log('Creating business:', data);
+      
+      return { business: data };
+    } catch (error) {
+      console.error('Error creating business:', error);
+      return { errors: { name: 'Failed to create business' } };
+    }
+  };
+
+  const handleCreateBusinessPress = () => {
+    setShowBusinessForm(true);
+  };
   
   const menuItems: MenuItem[] = [
     { id: '1', title: 'Customers', icon: 'people', href: 'Customers', color: '#4CAF50' },
@@ -97,7 +121,18 @@ export default function Dashboard() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerText}>{businessName}</Text>
+        <View style={styles.headerContent}>
+          <Text style={styles.headerText}>{businessName}</Text>
+          {businessName === 'No Business' && (
+            <TouchableOpacity 
+              style={styles.createBusinessButton}
+              onPress={handleCreateBusinessPress}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="add" size={20} color="#007AFF" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <View style={styles.content}>
@@ -144,6 +179,13 @@ export default function Dashboard() {
 
         <DashboardMenu menuItems={menuItems} />
       </View>
+
+      <BusinessForm
+        visible={showBusinessForm}
+        onSubmit={handleCreateBusiness}
+        onCancel={() => setShowBusinessForm(false)}
+        title="Create Business"
+      />
     </SafeAreaView>
   );
 }
@@ -158,15 +200,27 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: 16,
-    alignItems: 'center',
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerText: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
+  },
+  createBusinessButton: {
+    marginLeft: 12,
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#f0f8ff',
+    borderWidth: 1,
+    borderColor: '#007AFF',
   },
   searchContainer: {
     paddingHorizontal: 16,

@@ -25,7 +25,8 @@ interface ProductGridProps {
 
 const { width } = Dimensions.get('window');
 const COLUMN_COUNT = width > 768 ? 4 : 3;
-const ITEM_WIDTH = (width - 80) / COLUMN_COUNT;
+// Reduce item width by 15%
+const ITEM_WIDTH = ((width - 80) / COLUMN_COUNT) * 0.85;
 
 export const ProductGrid: React.FC<ProductGridProps> = (props) => {
   const {
@@ -224,14 +225,14 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     width: '100%',
-    height: ITEM_WIDTH * 0.6,
+    height: ITEM_WIDTH * 0.55,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 7,
   },
   productImage: {
-    width: '80%',
-    height: '80%',
+    width: '75%',
+    height: '75%',
   },
   placeholderImage: {
     width: '100%',
@@ -242,33 +243,33 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   productInfo: {
-    marginBottom: 8,
+    marginBottom: 7,
   },
   productName: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 4,
-    lineHeight: 16,
+    marginBottom: 3,
+    lineHeight: 14,
   },
   productPrice: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '700',
     color: '#007AFF',
   },
   discountText: {
-    fontSize: 10,
+    fontSize: 9,
     color: '#FF3B30',
     fontWeight: '600',
-    marginTop: 2,
+    marginTop: 1,
   },
   addButton: {
     position: 'absolute',
-    bottom: 8,
-    right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    bottom: 7,
+    right: 7,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',

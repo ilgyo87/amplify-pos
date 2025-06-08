@@ -51,25 +51,30 @@ export class SyncService {
   private convertToAmplifyFormat(customer: CustomerDocument): any {
     // Using type assertion to bypass type checking issues
     const doc = customer as any;
-    return {
+    const amplifyData: any = {
       firstName: doc.firstName,
       lastName: doc.lastName,
-      email: doc.email,
       phone: doc.phone,
       address: doc.address,
       notes: doc.notes,
       joinDate: doc.joinDate,
     };
+
+    // Only include email if it has a valid value
+    if (doc.email && doc.email.trim()) {
+      amplifyData.email = doc.email;
+    }
+
+    return amplifyData;
   }
 
   /**
    * Convert customer from Amplify format to local format
    */
   private convertToLocalFormat(amplifyCustomer: any): any {
-    return {
+    const localData: any = {
       firstName: amplifyCustomer.firstName,
       lastName: amplifyCustomer.lastName,
-      email: amplifyCustomer.email,
       phone: amplifyCustomer.phone,
       address: amplifyCustomer.address,
       notes: amplifyCustomer.notes,
@@ -78,6 +83,13 @@ export class SyncService {
       isLocalOnly: false,
       lastSyncedAt: new Date().toISOString()
     };
+
+    // Only include email if it exists and has a value
+    if (amplifyCustomer.email) {
+      localData.email = amplifyCustomer.email;
+    }
+
+    return localData;
   }
 
   /**
@@ -86,35 +98,81 @@ export class SyncService {
   private convertEmployeeToAmplifyFormat(employee: EmployeeDocument): any {
     // Using type assertion to bypass type checking issues
     const doc = employee as any;
-    return {
+    const amplifyData: any = {
       firstName: doc.firstName,
       lastName: doc.lastName,
-      email: doc.email,
       phone: doc.phone,
-      role: doc.role,
       pin: doc.pin,
-      hireDate: doc.hireDate,
-      isActive: doc.isActive,
     };
+
+    // Only include optional fields if they exist
+    if (doc.email && doc.email.trim()) {
+      amplifyData.email = doc.email;
+    }
+    
+    if (doc.address && doc.address.trim()) {
+      amplifyData.address = doc.address;
+    }
+    
+    if (doc.city && doc.city.trim()) {
+      amplifyData.city = doc.city;
+    }
+    
+    if (doc.state && doc.state.trim()) {
+      amplifyData.state = doc.state;
+    }
+    
+    if (doc.zipCode && doc.zipCode.trim()) {
+      amplifyData.zipCode = doc.zipCode;
+    }
+    
+    if (doc.businessId && doc.businessId.trim()) {
+      amplifyData.businessId = doc.businessId;
+    }
+
+    return amplifyData;
   }
 
   /**
    * Convert employee from Amplify format to local format
    */
   private convertEmployeeToLocalFormat(amplifyEmployee: any): any {
-    return {
+    const localData: any = {
       firstName: amplifyEmployee.firstName,
       lastName: amplifyEmployee.lastName,
-      email: amplifyEmployee.email,
       phone: amplifyEmployee.phone,
-      role: amplifyEmployee.role,
       pin: amplifyEmployee.pin,
-      hireDate: amplifyEmployee.hireDate,
-      isActive: amplifyEmployee.isActive,
       amplifyId: amplifyEmployee.id,
       isLocalOnly: false,
       lastSyncedAt: new Date().toISOString()
     };
+
+    // Only include optional fields if they exist and have values
+    if (amplifyEmployee.email) {
+      localData.email = amplifyEmployee.email;
+    }
+    
+    if (amplifyEmployee.address) {
+      localData.address = amplifyEmployee.address;
+    }
+    
+    if (amplifyEmployee.city) {
+      localData.city = amplifyEmployee.city;
+    }
+    
+    if (amplifyEmployee.state) {
+      localData.state = amplifyEmployee.state;
+    }
+    
+    if (amplifyEmployee.zipCode) {
+      localData.zipCode = amplifyEmployee.zipCode;
+    }
+    
+    if (amplifyEmployee.businessId) {
+      localData.businessId = amplifyEmployee.businessId;
+    }
+
+    return localData;
   }
 
   /**
@@ -399,6 +457,9 @@ export class SyncService {
           
           // Create employee in Amplify
           // Using 'as any' to bypass type checking issues with the client model types
+          if (!client.models || !client.models.Employee) {
+            throw new Error('Amplify Employee model not configured. Please check your Amplify setup.');
+          }
           const response = await (client.models as any).Employee.create(amplifyEmployee);
           
           if (response.data) {

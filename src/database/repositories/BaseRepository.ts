@@ -146,18 +146,29 @@ export abstract class BaseRepository<T, C extends RxCollection = RxCollection> {
    * Find all documents that haven't been synced yet
    */
   async findUnsyncedDocuments(): Promise<RxDocument<T>[]> {
-    return this.collection
+    // Get all local-only, non-deleted documents
+    const localOnlyDocs = await this.collection
       .find({
         selector: {
-          $or: [
-            { lastSyncedAt: { $exists: false } },
-            { updatedAt: { $gt: { $field: 'lastSyncedAt' } } },
-          ],
           isDeleted: { $ne: true },
           isLocalOnly: true
         }
       })
       .exec();
+
+    // Filter for documents that are truly unsynced
+    // Either no lastSyncedAt or updatedAt is newer than lastSyncedAt
+    return localOnlyDocs.filter(doc => {
+      const data = doc.toJSON();
+      if (!data.lastSyncedAt) {
+        return true; // Never synced
+      }
+      
+      // Compare dates: if updatedAt is newer than lastSyncedAt, it needs sync
+      const updatedAt = new Date(data.updatedAt);
+      const lastSyncedAt = new Date(data.lastSyncedAt);
+      return updatedAt > lastSyncedAt;
+    });
   }
 
   /**

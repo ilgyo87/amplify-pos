@@ -24,7 +24,7 @@ export const AddDefaultDataButton: React.FC<AddDefaultDataButtonProps> = ({
   const handleAddDefaultData = async () => {
     Alert.alert(
       'Add Default Data',
-      'This will add default categories and products for a dry cleaning business. This is helpful for getting started quickly.\n\nCategories to be added:\n" Dry Cleaning\n" Laundry\n" Alterations\n" Special Services\n\nEach category will include typical service products with pricing.',
+      'This will add default categories, products, and employees for a dry cleaning business. This is helpful for getting started quickly.\n\nCategories to be added:\n• Dry Cleaning\n• Laundry\n• Alterations\n• Special Services\n\nEmployees to be added:\n• Manager Demo (PIN: 1234)\n• Employee Demo (PIN: 5678)\n• Test User (PIN: 0000)\n\nEach category will include typical service products with pricing.',
       [
         {
           text: 'Cancel',

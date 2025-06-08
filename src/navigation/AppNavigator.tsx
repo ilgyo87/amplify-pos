@@ -6,6 +6,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuthenticator } from '@aws-amplify/ui-react-native';
 import type { RootStackParamList } from './types';
 import { Authenticator } from '@aws-amplify/ui-react-native';
+import { AuthenticationWrapper } from '../components/auth/AuthenticationWrapper';
 
 // Screens
 import Dashboard from '../screens/Dashboard';
@@ -74,54 +75,94 @@ const AppNavigator = () => {
           }}
         />
       ) : (
-        <>
+        <Stack.Group>
           <Stack.Screen 
             name="Dashboard" 
-            component={Dashboard} 
             options={{ 
               title: 'Amplify POS',
               headerRight: () => <SignOutButton />
-            }} 
-          />
+            }}
+          >
+            {() => (
+              <AuthenticationWrapper>
+                <Dashboard />
+              </AuthenticationWrapper>
+            )}
+          </Stack.Screen>
           <Stack.Screen 
-            name="Customers" 
-            component={CustomersScreen}
+            name="Customers"
             options={{ headerRight: () => <SignOutButton /> }}
-          />
+          >
+            {() => (
+              <AuthenticationWrapper>
+                <CustomersScreen />
+              </AuthenticationWrapper>
+            )}
+          </Stack.Screen>
           <Stack.Screen 
-            name="Products" 
-            component={ProductsScreen}
+            name="Products"
             options={{ headerRight: () => <SignOutButton /> }}
-          />
+          >
+            {() => (
+              <AuthenticationWrapper>
+                <ProductsScreen />
+              </AuthenticationWrapper>
+            )}
+          </Stack.Screen>
           <Stack.Screen 
-            name="Orders" 
-            component={OrdersScreen}
+            name="Orders"
             options={{ headerRight: () => <SignOutButton /> }}
-          />
+          >
+            {() => (
+              <AuthenticationWrapper>
+                <OrdersScreen />
+              </AuthenticationWrapper>
+            )}
+          </Stack.Screen>
           <Stack.Screen 
-            name="Employees" 
-            component={EmployeesScreen}
+            name="Employees"
             options={{ headerRight: () => <SignOutButton /> }}
-          />
+          >
+            {() => (
+              <AuthenticationWrapper>
+                <EmployeesScreen />
+              </AuthenticationWrapper>
+            )}
+          </Stack.Screen>
           <Stack.Screen 
-            name="Settings" 
-            component={SettingsScreen}
+            name="Settings"
             options={{ headerRight: () => <SignOutButton /> }}
-          />
+          >
+            {() => (
+              <AuthenticationWrapper>
+                <SettingsScreen />
+              </AuthenticationWrapper>
+            )}
+          </Stack.Screen>
           <Stack.Screen 
-            name="Reports" 
-            component={ReportsScreen}
+            name="Reports"
             options={{ headerRight: () => <SignOutButton /> }}
-          />
+          >
+            {() => (
+              <AuthenticationWrapper>
+                <ReportsScreen />
+              </AuthenticationWrapper>
+            )}
+          </Stack.Screen>
           <Stack.Screen 
-            name="Checkout" 
-            component={CheckoutScreen}
+            name="Checkout"
             options={{ 
               headerShown: false, // CheckoutScreen handles its own header
               presentation: 'fullScreenModal'
             }}
-          />
-        </>
+          >
+            {(props) => (
+              <AuthenticationWrapper>
+                <CheckoutScreen {...props} />
+              </AuthenticationWrapper>
+            )}
+          </Stack.Screen>
+        </Stack.Group>
       )}
     </Stack.Navigator>
   );

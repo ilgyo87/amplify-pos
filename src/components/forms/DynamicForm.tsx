@@ -5,9 +5,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { PhoneInput } from '../ui/PhoneInput';
 import { CustomerFormData, ValidationErrors } from '../../utils/customerValidation';
 import { EmployeeFormData, EmployeeValidationErrors } from '../../utils/employeeValidation';
+import { BusinessFormData, BusinessValidationErrors } from '../../utils/businessValidation';
 
-type FormDataType = CustomerFormData | EmployeeFormData;
-type ValidationErrorsType = ValidationErrors | EmployeeValidationErrors;
+type FormDataType = CustomerFormData | EmployeeFormData | BusinessFormData;
+type ValidationErrorsType = ValidationErrors | EmployeeValidationErrors | BusinessValidationErrors;
 
 interface FormField {
   name: string;
@@ -21,6 +22,7 @@ interface FormField {
 }
 
 interface DynamicFormProps {
+  fields?: FormField[];
   initialData?: Partial<FormDataType>;
   onSubmit: (data: FormDataType) => void;
   onCancel: () => void;
@@ -28,7 +30,9 @@ interface DynamicFormProps {
   errors?: ValidationErrorsType;
   duplicateError?: string;
   mode: 'create' | 'edit';
-  entityType: 'customer' | 'employee';
+  entityType?: 'customer' | 'employee';
+  title?: string;
+  submitButtonText?: string;
 }
 
 const getFormFields = (entityType: 'customer' | 'employee'): FormField[] => {
@@ -120,6 +124,7 @@ const getFormFields = (entityType: 'customer' | 'employee'): FormField[] => {
 };
 
 export const DynamicForm: React.FC<DynamicFormProps> = ({
+  fields,
   initialData,
   onSubmit,
   onCancel,
@@ -127,9 +132,11 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
   errors = {},
   duplicateError,
   mode,
-  entityType
+  entityType,
+  title,
+  submitButtonText
 }) => {
-  const formFields = getFormFields(entityType);
+  const formFields = fields || (entityType ? getFormFields(entityType) : []);
   
   const {
     control,
@@ -213,10 +220,10 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>
-          {mode === 'create' 
+          {title || (mode === 'create' 
             ? `Add New ${entityType === 'customer' ? 'Customer' : 'Employee'}` 
             : `Edit ${entityType === 'customer' ? 'Customer' : 'Employee'}`
-          }
+          )}
         </Text>
         <TouchableOpacity 
           onPress={onCancel}
@@ -262,10 +269,10 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
             </Text>
           ) : (
             <Text style={styles.submitButtonText}>
-              {mode === 'create' 
+              {submitButtonText || (mode === 'create' 
                 ? `Create ${entityType === 'customer' ? 'Customer' : 'Employee'}` 
                 : `Update ${entityType === 'customer' ? 'Customer' : 'Employee'}`
-              }
+              )}
             </Text>
           )}
         </TouchableOpacity>
