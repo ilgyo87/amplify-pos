@@ -40,3 +40,6 @@ export interface PaginationInfo {
   total: number;
   hasMore: boolean;
 }
+
+// Re-export order types
+export * from './order';

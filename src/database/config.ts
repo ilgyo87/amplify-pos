@@ -53,7 +53,7 @@ const createDatabase = async (): Promise<AppDatabase> => {
 
   try {
     const database = await createRxDatabase<DatabaseCollections>({
-      name: 'amplifyposdb_v8',
+      name: 'amplifyposdb_v9',
       storage,
       multiInstance: false, // Set to false in React Native
       ignoreDuplicate: true,
@@ -100,7 +100,20 @@ const createDatabase = async (): Promise<AppDatabase> => {
           schema: categorySchema
         },
         products: {
-          schema: productSchema
+          schema: productSchema,
+          migrationStrategies: {
+            // Migration from version 0 to 1 - add new sync fields
+            1: function(oldDoc: any) {
+              return {
+                ...oldDoc,
+                sku: oldDoc.sku || null,
+                cost: oldDoc.cost || null,
+                barcode: oldDoc.barcode || null,
+                quantity: oldDoc.quantity || null,
+                isActive: oldDoc.isActive !== undefined ? oldDoc.isActive : true
+              };
+            }
+          }
         }
       });
       return database;

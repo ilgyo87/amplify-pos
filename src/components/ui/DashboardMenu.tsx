@@ -16,7 +16,7 @@ export interface MenuItem {
   id: string;
   title: string;
   icon: string;
-  href: keyof RootStackParamList;
+  href: keyof Omit<RootStackParamList, 'Checkout'>; // Exclude checkout as it requires parameters
   color: string;
 }
 
@@ -61,8 +61,8 @@ export const DashboardMenu = memo(({ menuItems }: DashboardMenuProps) => {
   const isLandscape = width > 600; // Simple breakpoint for tablets
   const itemsPerRow = isLandscape ? 3 : 2;
   
-  const handlePress = (href: keyof RootStackParamList) => {
-    navigation.navigate(href);
+  const handlePress = (href: keyof Omit<RootStackParamList, 'Checkout'>) => {
+    navigation.navigate(href as any);
   };
   
 

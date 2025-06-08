@@ -15,6 +15,7 @@ import OrdersScreen from '../screens/Orders/OrdersScreen';
 import EmployeesScreen from '../screens/Employees/EmployeesScreen';
 import SettingsScreen from '../screens/Settings/SettingsScreen';
 import ReportsScreen from '../screens/Reports/ReportsScreen';
+import CheckoutScreen from '../screens/Checkout/CheckoutScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -111,6 +112,14 @@ const AppNavigator = () => {
             name="Reports" 
             component={ReportsScreen}
             options={{ headerRight: () => <SignOutButton /> }}
+          />
+          <Stack.Screen 
+            name="Checkout" 
+            component={CheckoutScreen}
+            options={{ 
+              headerShown: false, // CheckoutScreen handles its own header
+              presentation: 'fullScreenModal'
+            }}
           />
         </>
       )}

@@ -57,7 +57,32 @@ export default function Dashboard() {
   const handleSelectCustomer = (customer: CustomerDocument) => {
     setSearchTerm('');
     setShowResults(false);
-    navigation.navigate('Customers');
+    setCustomers([]);
+    
+    // Convert to serializable object for navigation
+    const serializableCustomer = {
+      id: customer.id,
+      firstName: customer.firstName,
+      lastName: customer.lastName,
+      address: customer.address,
+      city: customer.city,
+      state: customer.state,
+      zipCode: customer.zipCode,
+      phone: customer.phone,
+      email: customer.email,
+      businessId: customer.businessId,
+      cognitoId: customer.cognitoId,
+      notes: customer.notes,
+      joinDate: customer.joinDate,
+      isLocalOnly: customer.isLocalOnly,
+      isDeleted: customer.isDeleted,
+      lastSyncedAt: customer.lastSyncedAt,
+      amplifyId: customer.amplifyId,
+      createdAt: customer.createdAt,
+      updatedAt: customer.updatedAt,
+    };
+    
+    navigation.navigate('Checkout', { customer: serializableCustomer });
   };
   
   const menuItems: MenuItem[] = [
