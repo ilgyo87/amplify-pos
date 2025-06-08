@@ -14,9 +14,11 @@ addRxPlugin(RxDBJsonDumpPlugin);
 addRxPlugin(RxDBUpdatePlugin);
 
 // Add dev mode plugin in development to get better error messages
-addRxPlugin(RxDBDevModePlugin);
+if (__DEV__) {
+  addRxPlugin(RxDBDevModePlugin);
+}
 
-import { customerSchema, CustomerCollection, CustomerDocType, CustomerDocument, CustomerCollectionMethods } from './schemas/customer';
+import { customerSchema, CustomerCollection, CustomerDocType, CustomerDocument } from './schemas/customer';
 
 export interface DatabaseCollections {
   customers: CustomerCollection;
@@ -38,28 +40,17 @@ export const getDatabaseInstance = async (): Promise<AppDatabase> => {
 };
 
 const createDatabase = async (): Promise<AppDatabase> => {
-  // Get the base memory storage
-  const memoryStorage = getRxStorageMemory();
-  
-  // Wrap the memory storage with AJV validator
-  // This is required when using dev-mode plugin
-  const validatedStorage = wrappedValidateAjvStorage({
-    storage: memoryStorage
+  // Use memory storage wrapped with validation
+  const storage = wrappedValidateAjvStorage({
+    storage: getRxStorageMemory()
   });
-  
+
   try {
     const database = await createRxDatabase<DatabaseCollections>({
-      name: 'amplify_pos_db',
-      storage: validatedStorage,
-      multiInstance: false,
-      eventReduce: true,
-      ignoreDuplicate: true, // Ignore duplicate database instances
-      options: {
-        // Explicitly disable all features that might require crypto
-        disableKeyCompression: true,
-        disableHash: true,
-        disableEncryption: true
-      },
+      name: 'amplifyposdb',
+      storage,
+      multiInstance: false, // Set to false in React Native
+      ignoreDuplicate: true,
       cleanupPolicy: {
         minimumDeletedTime: 1000 * 60 * 60 * 24 * 7, // one week
         minimumCollectionAge: 1000 * 60 * 60 * 24 * 7, // one week
@@ -73,38 +64,7 @@ const createDatabase = async (): Promise<AppDatabase> => {
     try {
       await database.addCollections({
         customers: {
-          schema: customerSchema,
-          methods: {
-            // Collection methods
-            async countAll() {
-              const docs = await (this as unknown as RxCollection<CustomerDocType>).find().exec();
-              return docs.length;
-            },
-            async findByEmail(email: string) {
-              const results = await (this as unknown as RxCollection<CustomerDocType>).find({
-                selector: { email, isDeleted: { $ne: true } }
-              }).exec();
-              return results.length > 0 ? results[0] : null;
-            },
-            async findByPhone(phone: string) {
-              const results = await (this as unknown as RxCollection<CustomerDocType>).find({
-                selector: { phone, isDeleted: { $ne: true } }
-              }).exec();
-              return results.length > 0 ? results[0] : null;
-            },
-            async searchByName(searchTerm: string) {
-              const allCustomers = await (this as unknown as RxCollection<CustomerDocType>).find({
-                selector: { isDeleted: { $ne: true } }
-              }).exec();
-              
-              const searchTermLower = searchTerm.toLowerCase();
-              return allCustomers.filter((customer: CustomerDocument) => 
-                customer.firstName.toLowerCase().includes(searchTermLower) ||
-                customer.lastName.toLowerCase().includes(searchTermLower) ||
-                `${customer.firstName} ${customer.lastName}`.toLowerCase().includes(searchTermLower)
-              );
-            }
-          } as unknown as CustomerCollectionMethods
+          schema: customerSchema
         }
       });
       return database;

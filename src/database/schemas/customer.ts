@@ -129,12 +129,5 @@ export const customerSchema: RxJsonSchema<CustomerDocType> = {
 // Document type
 export type CustomerDocument = RxDocument<CustomerDocType>;
 
-// Extend the base RxCollection methods with our custom methods
-export type CustomerCollectionMethods = {
-  countAll: (this: RxCollection<CustomerDocType, CustomerCollectionMethods>) => Promise<number>;
-  findByEmail: (this: RxCollection<CustomerDocType, CustomerCollectionMethods>, email: string) => Promise<CustomerDocument | null>;
-  findByPhone: (this: RxCollection<CustomerDocType, CustomerCollectionMethods>, phone: string) => Promise<CustomerDocument | null>;
-  searchByName: (this: RxCollection<CustomerDocType, CustomerCollectionMethods>, searchTerm: string) => Promise<CustomerDocument[]>;
-};
-
-export type CustomerCollection = RxCollection<CustomerDocType, CustomerCollectionMethods>;
+// We use the repository pattern instead of collection methods
+export type CustomerCollection = RxCollection<CustomerDocType>;
