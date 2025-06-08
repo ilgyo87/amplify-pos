@@ -24,7 +24,7 @@ interface DashboardMenuProps {
   menuItems: MenuItem[];
 }
 
-const CONTAINER_PADDING = 70;
+const CONTAINER_PADDING = 40;
 const ITEM_GAP = 50;
 
 // Custom hook to get device orientation
@@ -51,6 +51,8 @@ const useOrientation = (): 'portrait' | 'landscape' => {
   return orientation;
 };
 
+
+
 export const DashboardMenu = memo(({ menuItems }: DashboardMenuProps) => {
   const { width } = useWindowDimensions();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -62,6 +64,8 @@ export const DashboardMenu = memo(({ menuItems }: DashboardMenuProps) => {
   const handlePress = (href: keyof RootStackParamList) => {
     navigation.navigate(href);
   };
+  
+
 
   // Calculate item dimensions with proper spacing
   const availableWidth = width - (CONTAINER_PADDING * 2);
@@ -70,7 +74,7 @@ export const DashboardMenu = memo(({ menuItems }: DashboardMenuProps) => {
   const itemHeight = itemWidth * 0.8;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isLandscape && styles.landscapeContainer]}>
       <View style={styles.gridContainer}>
         {menuItems.map((item, index) => (
           <View 
@@ -108,6 +112,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: CONTAINER_PADDING,
+  },
+
+  landscapeContainer: {
+    paddingBottom: CONTAINER_PADDING + 20, // Extra padding at the bottom in landscape mode
   },
   gridContainer: {
     flexDirection: 'row',
