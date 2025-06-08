@@ -18,6 +18,8 @@ export interface CustomerDocType {
   email?: string;
   businessId?: string;
   cognitoId?: string;
+  notes?: string; // Customer notes
+  joinDate?: string; // Date customer joined
   // Local-only fields for sync management
   isLocalOnly: boolean;
   isDeleted?: boolean; // For soft deletes
@@ -28,7 +30,7 @@ export interface CustomerDocType {
 }
 
 export const customerSchema: RxJsonSchema<CustomerDocType> = {
-  version: 0,
+  version: 3,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -45,19 +47,19 @@ export const customerSchema: RxJsonSchema<CustomerDocType> = {
       maxLength: 100
     },
     address: {
-      type: 'string',
+      type: ['string', 'null'],
       maxLength: 500
     },
     city: {
-      type: 'string',
+      type: ['string', 'null'],
       maxLength: 100
     },
     state: {
-      type: 'string',
+      type: ['string', 'null'],
       maxLength: 50
     },
     zipCode: {
-      type: 'string',
+      type: ['string', 'null'],
       maxLength: 20
     },
     phone: {
@@ -65,7 +67,7 @@ export const customerSchema: RxJsonSchema<CustomerDocType> = {
       maxLength: 20
     },
     coordinates: {
-      type: 'object',
+      type: ['object', 'null'],
       properties: {
         lat: {
           type: 'number'
@@ -76,16 +78,24 @@ export const customerSchema: RxJsonSchema<CustomerDocType> = {
       }
     },
     email: {
-      type: 'string',
+      type: ['string', 'null'],
       maxLength: 200
     },
     businessId: {
-      type: 'string',
+      type: ['string', 'null'],
       maxLength: 100
     },
     cognitoId: {
-      type: 'string',
+      type: ['string', 'null'],
       maxLength: 100
+    },
+    notes: {
+      type: ['string', 'null'],
+      maxLength: 1000
+    },
+    joinDate: {
+      type: ['string', 'null'],
+      maxLength: 50
     },
     isLocalOnly: {
       type: 'boolean'
@@ -95,12 +105,12 @@ export const customerSchema: RxJsonSchema<CustomerDocType> = {
       default: false
     },
     lastSyncedAt: {
-      type: 'string',
+      type: ['string', 'null'],
       // Removed format: 'date-time' as it's not supported by Hermes engine
       maxLength: 50
     },
     amplifyId: {
-      type: 'string',
+      type: ['string', 'null'],
       maxLength: 100
     },
     createdAt: {
@@ -118,11 +128,8 @@ export const customerSchema: RxJsonSchema<CustomerDocType> = {
   indexes: [
     'firstName',
     'lastName',
-    'email',
     'phone',
-    'businessId',
-    'isLocalOnly',
-    'lastSyncedAt'
+    'isLocalOnly'
   ]
 };
 

@@ -103,6 +103,37 @@ const schema = a.schema({
     .authorization((allow) => [
       allow.authenticated().to(['read']),
       allow.owner(),
+    ]),
+  Category: a
+    .model({
+      name: a.string().required(),
+      description: a.string(),
+      color: a.string(),
+      displayOrder: a.integer(),
+      isActive: a.boolean().default(true),
+      businessId: a.string(),
+      products: a.hasMany('Product', 'categoryId')
+    })
+    .authorization((allow) => [
+      allow.authenticated().to(['read']),
+      allow.owner(),
+    ]),
+  Product: a
+    .model({
+      name: a.string().required(),
+      description: a.string(),
+      price: a.float().required(),
+      sku: a.string(),
+      barcode: a.string(),
+      categoryId: a.string(),
+      category: a.belongsTo('Category', 'categoryId'),
+      imageUrl: a.url(),
+      isActive: a.boolean().default(true),
+      businessId: a.string()
+    })
+    .authorization((allow) => [
+      allow.authenticated().to(['read']),
+      allow.owner(),
     ])
 });
 

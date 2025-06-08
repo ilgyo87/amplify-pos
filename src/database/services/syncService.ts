@@ -250,6 +250,9 @@ export class SyncService {
           
           // Create customer in Amplify
           // Using 'as any' to bypass type checking issues with the client model types
+          if (!client.models || !client.models.Customer) {
+            throw new Error('Amplify Customer model not configured. Please check your Amplify setup.');
+          }
           const response = await (client.models as any).Customer.create(amplifyCustomer);
           
           if (response.data) {
@@ -300,6 +303,9 @@ export class SyncService {
       console.log('Starting download of customers from Amplify...');
 
       // Get all customers from Amplify
+      if (!client.models || !client.models.Customer) {
+        throw new Error('Amplify models not configured. Please check your Amplify setup.');
+      }
       const response = await (client.models as any).Customer.list();
       
       if (response.errors) {
@@ -560,6 +566,9 @@ export class SyncService {
       console.log('Starting download of categories from Amplify...');
 
       // Get all categories from Amplify
+      if (!client.models || !client.models.Category) {
+        throw new Error('Amplify Category model not configured. Please check your Amplify setup.');
+      }
       const response = await (client.models as any).Category.list();
       
       if (response.errors) {
@@ -646,6 +655,9 @@ export class SyncService {
       console.log('Starting download of employees from Amplify...');
 
       // Get all employees from Amplify
+      if (!client.models || !client.models.Employee) {
+        throw new Error('Amplify Employee model not configured. Please check your Amplify setup.');
+      }
       const response = await (client.models as any).Employee.list();
       
       if (response.errors) {
@@ -829,6 +841,9 @@ export class SyncService {
 
       // API call to fetch products from server would go here
       // Using 'as any' to bypass type checking issues with the client model types
+      if (!client.models || !client.models.Product) {
+        throw new Error('Amplify Product model not configured. Please check your Amplify setup.');
+      }
       const response = await (client.models as any).Product.list();
 
       if (response.errors) {
@@ -915,4 +930,8 @@ export class SyncService {
     } finally {
       this.isDownloading = false;
     }
-  }}
+  }
+}
+
+// Export singleton instance
+export const syncService = new SyncService();

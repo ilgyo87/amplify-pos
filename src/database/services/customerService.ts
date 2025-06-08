@@ -57,9 +57,9 @@ export class CustomerService {
     // Check for duplicates
     const duplicateCheck = await checkForDuplicates(
       customerData,
-      undefined,
       (email, excludeId) => repository.existsByEmail(email, excludeId),
-      (phone, excludeId) => repository.existsByPhone(cleanPhoneNumber(phone), excludeId)
+      (phone, excludeId) => repository.existsByPhone(cleanPhoneNumber(phone), excludeId),
+      undefined
     );
 
     if (duplicateCheck.isDuplicate) {
@@ -119,9 +119,9 @@ export class CustomerService {
     // Check for duplicates (excluding current customer)
     const duplicateCheck = await checkForDuplicates(
       customerData,
-      id,
-      (email, excludeId) => repository.existsByEmail(email, excludeId),
-      (phone, excludeId) => repository.existsByPhone(cleanPhoneNumber(phone), excludeId)
+      (email: string, excludeId?: string) => repository.existsByEmail(email, excludeId),
+      (phone: string, excludeId?: string) => repository.existsByPhone(cleanPhoneNumber(phone), excludeId),
+      id
     );
 
     if (duplicateCheck.isDuplicate) {
@@ -135,7 +135,7 @@ export class CustomerService {
     };
 
     const customer = await repository.update(id, updateData) as CustomerDocument | null;
-    return { customer };
+    return { customer: customer || undefined };
   }
 
   /**

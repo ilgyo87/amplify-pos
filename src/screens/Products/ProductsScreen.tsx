@@ -5,6 +5,7 @@ import { CategoryList } from '../../components/categories/CategoryList';
 import { CreateCategoryButton } from '../../components/categories/CreateCategoryButton';
 import { ProductList } from '../../components/products/ProductList';
 import { CreateProductButton } from '../../components/products/CreateProductButton';
+import { AddDefaultDataButton } from '../../components/products/AddDefaultDataButton';
 import { ProductForm } from '../../components/forms/ProductForm';
 import { CategoryForm } from '../../components/forms/CategoryForm';
 import { useCategories } from '../../database/hooks/useCategories';
@@ -140,7 +141,16 @@ export default function ProductsScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Categories</Text>
-            <CreateCategoryButton onPress={handleCreateCategory} />
+            <View style={styles.categoryActions}>
+              <AddDefaultDataButton 
+                onDataAdded={() => {
+                  // Refresh both categories and products when default data is added
+                  refreshProducts();
+                }}
+                style={styles.defaultDataButton}
+              />
+              <CreateCategoryButton onPress={handleCreateCategory} />
+            </View>
           </View>
           <View style={styles.categoryContainer}>
             <CategoryList
@@ -271,6 +281,14 @@ const styles = StyleSheet.create({
   productContainer: {
     flex: 1,
     minHeight: 400,
+  },
+  categoryActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  defaultDataButton: {
+    // Inherit styles from AddDefaultDataButton component
   },
   productActions: {
     flexDirection: 'row',

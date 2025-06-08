@@ -73,9 +73,9 @@ export interface DuplicateCheckResult {
 
 export const checkForDuplicates = async (
   data: CustomerFormData,
-  currentCustomerId?: string,
   checkDuplicateEmail: (email: string, excludeId?: string) => Promise<boolean>,
-  checkDuplicatePhone: (phone: string, excludeId?: string) => Promise<boolean>
+  checkDuplicatePhone: (phone: string, excludeId?: string) => Promise<boolean>,
+  currentCustomerId?: string
 ): Promise<DuplicateCheckResult> => {
   // Only check email duplicates if email is provided
   if (data.email && data.email.trim()) {
