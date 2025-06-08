@@ -11,6 +11,12 @@ export interface ProductDocType {
   discount?: number; // Percentage discount (0-100)
   additionalPrice?: number; // Additional price on top of base price
   notes?: string;
+  // Additional fields from sync service
+  sku?: string | null;
+  cost?: number | null;
+  barcode?: string | null;
+  quantity?: number | null;
+  isActive?: boolean;
   // Local-only fields for sync management
   isLocalOnly: boolean;
   isDeleted?: boolean; // For soft deletes
@@ -21,7 +27,7 @@ export interface ProductDocType {
 }
 
 export const productSchema: RxJsonSchema<ProductDocType> = {
-  version: 0,
+  version: 1,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -70,6 +76,30 @@ export const productSchema: RxJsonSchema<ProductDocType> = {
     notes: {
       type: 'string',
       maxLength: 1000
+    },
+    sku: {
+      type: ['string', 'null'],
+      maxLength: 100
+    },
+    cost: {
+      type: ['number', 'null'],
+      minimum: 0,
+      maximum: 999999.99,
+      multipleOf: 0.01
+    },
+    barcode: {
+      type: ['string', 'null'],
+      maxLength: 100
+    },
+    quantity: {
+      type: ['number', 'null'],
+      minimum: 0,
+      maximum: 999999,
+      multipleOf: 1
+    },
+    isActive: {
+      type: 'boolean',
+      default: true
     },
     isLocalOnly: {
       type: 'boolean'

@@ -1,3 +1,28 @@
+import { CustomerDocType } from '../database/schemas/customer';
+
+// Serializable customer data for navigation
+export interface SerializableCustomer {
+  id: string;
+  firstName: string;
+  lastName: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  phone: string;
+  email?: string;
+  businessId?: string;
+  cognitoId?: string;
+  notes?: string;
+  joinDate?: string;
+  isLocalOnly: boolean;
+  isDeleted?: boolean;
+  lastSyncedAt?: string;
+  amplifyId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type RootStackParamList = {
   Dashboard: undefined;
   Auth: undefined;
@@ -8,4 +33,8 @@ export type RootStackParamList = {
   Employees: undefined;
   Settings: undefined;
   Reports: undefined;
+  // Checkout flow
+  Checkout: {
+    customer: SerializableCustomer;
+  };
 };
