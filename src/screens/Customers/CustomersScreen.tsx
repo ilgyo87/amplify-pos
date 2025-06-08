@@ -1,118 +1,229 @@
-import React, { useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Alert, StyleSheet } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, StyleSheet, Modal, Alert, Text, TouchableOpacity } from 'react-native';
 import { BaseScreen } from '../BaseScreen';
 import { useCustomers } from '../../database/hooks/useCustomers';
-import { CustomerDocument } from '../../database';
+import { CustomerDocument } from '../../database/schemas/customer';
+import { CustomerFormData } from '../../utils/customerValidation';
+
+// Components
+import { SearchBar } from '../../components/customers/SearchBar';
+import { CustomerList } from '../../components/customers/CustomerList';
+import { CreateCustomerFAB } from '../../components/customers/CreateCustomerButton';
+import { DynamicForm } from '../../components/forms/DynamicForm';
 
 export default function CustomersScreen() {
-  const { customers, loading, error, createCustomer, deleteCustomer } = useCustomers();
-  const [refreshing, setRefreshing] = useState(false);
+  const {
+    customers,
+    totalCustomers,
+    loading,
+    operationLoading,
+    error,
+    searchQuery,
+    hasSearchResults,
+    isSearching,
+    searchCustomers,
+    clearSearch,
+    createCustomer,
+    updateCustomer,
+    deleteCustomer,
+    refreshCustomers,
+    clearError
+  } = useCustomers();
 
-  const handleAddCustomer = async () => {
-    try {
-      await createCustomer({
-        firstName: 'John',
-        lastName: 'Doe',
-        phone: '+1234567890',
-        email: 'john.doe@example.com',
-        address: '123 Main St',
-        city: 'Anytown',
-        state: 'CA',
-        zipCode: '12345'
-      });
-      Alert.alert('Success', 'Customer added successfully');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to add customer');
+  // Modal states
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<CustomerDocument | null>(null);
+
+  // Form states
+  const [formErrors, setFormErrors] = useState({});
+  const [duplicateError, setDuplicateError] = useState<string>('');
+
+  const handleSearch = useCallback((query: string) => {
+    searchCustomers(query);
+  }, [searchCustomers]);
+
+  const handleClearSearch = useCallback(() => {
+    clearSearch();
+  }, [clearSearch]);
+
+  const handleCreateCustomer = useCallback(async (data: CustomerFormData) => {
+    setFormErrors({});
+    setDuplicateError('');
+
+    const result = await createCustomer(data);
+    
+    if (result.success && result.customer) {
+      setShowCreateModal(false);
+      Alert.alert('Success', 'Customer created successfully');
+    } else {
+      if (result.errors) {
+        setFormErrors(result.errors);
+      }
+      if (result.duplicateError) {
+        setDuplicateError(result.duplicateError);
+      }
     }
-  };
+  }, [createCustomer]);
 
-  const handleDeleteCustomer = async (customer: CustomerDocument) => {
-    Alert.alert(
-      'Delete Customer',
-      `Are you sure you want to delete ${customer.firstName} ${customer.lastName}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteCustomer(customer.id);
-              Alert.alert('Success', 'Customer deleted successfully');
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete customer');
-            }
-          }
-        }
-      ]
-    );
-  };
+  const handleEditCustomer = useCallback((customer: CustomerDocument) => {
+    setEditingCustomer(customer);
+    setFormErrors({});
+    setDuplicateError('');
+    setShowEditModal(true);
+  }, []);
 
-  const renderCustomer = ({ item }: { item: CustomerDocument }) => (
-    <TouchableOpacity 
-      style={styles.customerItem}
-      onLongPress={() => handleDeleteCustomer(item)}
-    >
-      <View style={styles.customerInfo}>
-        <Text style={styles.customerName}>
-          {item.firstName} {item.lastName}
-        </Text>
-        <Text style={styles.customerDetails}>{item.phone}</Text>
-        <Text style={styles.customerDetails}>{item.email}</Text>
-        {item.isLocalOnly && (
-          <Text style={styles.localOnly}>Local Only</Text>
-        )}
-      </View>
-    </TouchableOpacity>
-  );
+  const handleUpdateCustomer = useCallback(async (data: CustomerFormData) => {
+    if (!editingCustomer) return;
 
-  if (loading) {
-    return (
-      <BaseScreen title="Customers">
-        <View style={styles.centered}>
-          <Text>Loading customers...</Text>
-        </View>
-      </BaseScreen>
-    );
-  }
+    setFormErrors({});
+    setDuplicateError('');
 
-  if (error) {
-    return (
-      <BaseScreen title="Customers">
-        <View style={styles.centered}>
-          <Text style={styles.error}>Error: {error}</Text>
-        </View>
-      </BaseScreen>
-    );
-  }
+    const result = await updateCustomer(editingCustomer.id, data);
+    
+    if (result.success && result.customer) {
+      setShowEditModal(false);
+      setEditingCustomer(null);
+      Alert.alert('Success', 'Customer updated successfully');
+    } else {
+      if (result.errors) {
+        setFormErrors(result.errors);
+      }
+      if (result.duplicateError) {
+        setDuplicateError(result.duplicateError);
+      }
+    }
+  }, [editingCustomer, updateCustomer]);
+
+  const handleDeleteCustomer = useCallback(async (customer: CustomerDocument) => {
+    const success = await deleteCustomer(customer.id);
+    if (success) {
+      Alert.alert('Success', 'Customer deleted successfully');
+    } else {
+      Alert.alert('Error', 'Failed to delete customer');
+    }
+  }, [deleteCustomer]);
+
+  const handleOpenCreateModal = useCallback(() => {
+    setFormErrors({});
+    setDuplicateError('');
+    setShowCreateModal(true);
+  }, []);
+
+  const handleCloseCreateModal = useCallback(() => {
+    setShowCreateModal(false);
+    setFormErrors({});
+    setDuplicateError('');
+  }, []);
+
+  const handleCloseEditModal = useCallback(() => {
+    setShowEditModal(false);
+    setEditingCustomer(null);
+    setFormErrors({});
+    setDuplicateError('');
+  }, []);
+
+  const handleRefresh = useCallback(async () => {
+    await refreshCustomers();
+  }, [refreshCustomers]);
+
+  // Handle errors
+  React.useEffect(() => {
+    if (error) {
+      Alert.alert('Error', error, [
+        { text: 'OK', onPress: clearError }
+      ]);
+    }
+  }, [error, clearError]);
 
   return (
     <BaseScreen title="Customers">
       <View style={styles.container}>
-        <TouchableOpacity style={styles.addButton} onPress={handleAddCustomer}>
-          <Text style={styles.addButtonText}>Add Test Customer</Text>
-        </TouchableOpacity>
-        
-        <Text style={styles.countText}>
-          Total Customers: {customers.length}
-        </Text>
+        {/* Header Section */}
+        <View style={styles.header}>
+          <SearchBar
+            value={searchQuery}
+            onChangeText={handleSearch}
+            onClear={handleClearSearch}
+            isLoading={isSearching}
+            resultsCount={customers.length}
+            showResultsCount={hasSearchResults}
+          />
+          
+          <View style={styles.statsContainer}>
+            <Text style={styles.statsText}>
+              {hasSearchResults 
+                ? `${customers.length} of ${totalCustomers} customers`
+                : `${totalCustomers} total customers`
+              }
+            </Text>
+          </View>
+        </View>
 
-        <FlatList
-          data={customers}
-          renderItem={renderCustomer}
-          keyExtractor={(item) => item.id}
-          refreshing={refreshing}
-          onRefresh={() => {
-            setRefreshing(true);
-            setTimeout(() => setRefreshing(false), 1000);
-          }}
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Text>No customers found</Text>
-              <Text>Tap "Add Test Customer" to get started</Text>
-            </View>
-          }
+        {/* Customer List */}
+        <View style={styles.listContainer}>
+          <CustomerList
+            customers={customers}
+            onEdit={handleEditCustomer}
+            onDelete={handleDeleteCustomer}
+            loading={loading}
+            refreshing={false}
+            onRefresh={handleRefresh}
+            emptyMessage={
+              hasSearchResults 
+                ? 'No customers match your search'
+                : 'No customers found'
+            }
+          />
+        </View>
+
+        {/* Create Customer FAB */}
+        <CreateCustomerFAB
+          onPress={handleOpenCreateModal}
+          disabled={operationLoading}
         />
+
+        {/* Create Customer Modal */}
+        <Modal
+          visible={showCreateModal}
+          animationType="slide"
+          presentationStyle="pageSheet"
+        >
+          <DynamicForm
+            mode="create"
+            onSubmit={handleCreateCustomer}
+            onCancel={handleCloseCreateModal}
+            isLoading={operationLoading}
+            errors={formErrors}
+            duplicateError={duplicateError}
+          />
+        </Modal>
+
+        {/* Edit Customer Modal */}
+        <Modal
+          visible={showEditModal}
+          animationType="slide"
+          presentationStyle="pageSheet"
+        >
+          <DynamicForm
+            mode="edit"
+            initialData={editingCustomer ? {
+              firstName: editingCustomer.firstName,
+              lastName: editingCustomer.lastName,
+              email: editingCustomer.email || '',
+              phone: editingCustomer.phone,
+              address: editingCustomer.address || '',
+              city: editingCustomer.city || '',
+              state: editingCustomer.state || '',
+              zipCode: editingCustomer.zipCode || ''
+            } : undefined}
+            onSubmit={handleUpdateCustomer}
+            onCancel={handleCloseEditModal}
+            isLoading={operationLoading}
+            errors={formErrors}
+            duplicateError={duplicateError}
+          />
+        </Modal>
       </View>
     </BaseScreen>
   );
@@ -121,65 +232,24 @@ export default function CustomersScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
+    backgroundColor: '#f5f5f5',
   },
-  addButton: {
-    backgroundColor: '#007AFF',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 16,
+  header: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e5e5',
   },
-  addButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
+  statsContainer: {
+    paddingTop: 8,
   },
-  countText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 16,
-  },
-  customerItem: {
-    backgroundColor: 'white',
-    padding: 16,
-    marginBottom: 8,
-    borderRadius: 8,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-  },
-  customerInfo: {
-    flex: 1,
-  },
-  customerName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  customerDetails: {
+  statsText: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 2,
-  },
-  localOnly: {
-    fontSize: 12,
-    color: '#FF6B00',
-    fontWeight: 'bold',
-    marginTop: 4,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  error: {
-    color: 'red',
     textAlign: 'center',
   },
-  emptyState: {
-    alignItems: 'center',
-    marginTop: 50,
+  listContainer: {
+    flex: 1,
   },
 });

@@ -1442,6 +1442,30 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
+  - react-native-quick-sqlite (8.2.7):
+    - DoubleConversion
+    - glog
+    - hermes-engine
+    - RCT-Folly (= 2024.11.18.00)
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-hermes
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - Yoga
   - react-native-random-values-jsi-helper (2.0.1):
     - React-Core
   - react-native-safe-area-context (5.4.0):
@@ -2070,6 +2094,7 @@ DEPENDENCIES:
   - react-native-get-random-values (from `../node_modules/react-native-get-random-values`)
   - "react-native-netinfo (from `../node_modules/@react-native-community/netinfo`)"
   - react-native-quick-crypto (from `../node_modules/react-native-quick-crypto`)
+  - react-native-quick-sqlite (from `../node_modules/react-native-quick-sqlite`)
   - react-native-random-values-jsi-helper (from `../node_modules/react-native-random-values-jsi-helper`)
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
   - react-native-view-shot (from `../node_modules/react-native-view-shot`)
@@ -2220,6 +2245,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/@react-native-community/netinfo"
   react-native-quick-crypto:
     :path: "../node_modules/react-native-quick-crypto"
+  react-native-quick-sqlite:
+    :path: "../node_modules/react-native-quick-sqlite"
   react-native-random-values-jsi-helper:
     :path: "../node_modules/react-native-random-values-jsi-helper"
   react-native-safe-area-context:
@@ -2353,6 +2380,7 @@ SPEC CHECKSUMS:
   react-native-get-random-values: 21325b2244dfa6b58878f51f9aa42821e7ba3d06
   react-native-netinfo: f0a9899081c185db1de5bb2fdc1c88c202a059ac
   react-native-quick-crypto: 1ff753d175f2c5f0a8a132637102c49e0fcbe12c
+  react-native-quick-sqlite: fd424ed239504520e31514b244e42e58f66436db
   react-native-random-values-jsi-helper: b179e1f9060f2239fa5e540f07eb6f2d3b987ccb
   react-native-safe-area-context: 00d03dc688ba86664be66f9e3f203fc7d747d899
   react-native-view-shot: 41c5c50c809f1fd61f91c99400b2222c9b80d13f

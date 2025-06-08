@@ -2,6 +2,8 @@ import { RxDatabase } from 'rxdb';
 import { CustomerDocument, CustomerDocType } from '../schemas/customer';
 import { getDatabaseInstance, DatabaseCollections } from '../config';
 import { CustomerRepository } from '../repositories/CustomerRepository';
+import { validateCustomerForm, checkForDuplicates, CustomerFormData, ValidationErrors } from '../../utils/customerValidation';
+import { cleanPhoneNumber } from '../../utils/phoneUtils';
 
 /**
  * Service for handling customer-related business logic
@@ -37,23 +39,44 @@ export class CustomerService {
   }
 
   /**
-   * Create a new customer
-   * @param customerData Customer data without system fields
-   * @returns The created customer document
+   * Create a new customer with validation
+   * @param customerData Customer data
+   * @returns Object with customer document and validation errors
    */
   async createCustomer(
-    customerData: Omit<CustomerDocType, 'id' | 'createdAt' | 'updatedAt' | 'isLocalOnly' | 'isDeleted'>
-  ): Promise<CustomerDocument> {
+    customerData: CustomerFormData
+  ): Promise<{ customer?: CustomerDocument; errors?: ValidationErrors; duplicateError?: string }> {
     const repository = this.getRepository();
     
+    // Validate form data
+    const validationErrors = validateCustomerForm(customerData);
+    if (Object.keys(validationErrors).length > 0) {
+      return { errors: validationErrors };
+    }
+
+    // Check for duplicates
+    const duplicateCheck = await checkForDuplicates(
+      customerData,
+      undefined,
+      (email, excludeId) => repository.existsByEmail(email, excludeId),
+      (phone, excludeId) => repository.existsByPhone(cleanPhoneNumber(phone), excludeId)
+    );
+
+    if (duplicateCheck.isDuplicate) {
+      const field = duplicateCheck.field === 'email' ? 'email address' : 'phone number';
+      return { duplicateError: `A customer with this ${field} already exists` };
+    }
+
     // Set default values for new customers
     const customerWithDefaults = {
       ...customerData,
-      isLocalOnly: true,  // New customers are local by default
-      isDeleted: false    // Ensure not deleted
+      phone: cleanPhoneNumber(customerData.phone),
+      isLocalOnly: true,
+      isDeleted: false
     };
     
-    return repository.create(customerWithDefaults) as Promise<CustomerDocument>;
+    const customer = await repository.create(customerWithDefaults) as CustomerDocument;
+    return { customer };
   }
 
   /**
@@ -76,17 +99,43 @@ export class CustomerService {
   }
 
   /**
-   * Update an existing customer
+   * Update an existing customer with validation
    * @param id Customer ID
    * @param customerData Data to update
-   * @returns The updated customer document or null if not found
+   * @returns Object with updated customer document and validation errors
    */
   async updateCustomer(
     id: string, 
-    customerData: Partial<Omit<CustomerDocType, 'id' | 'createdAt' | 'updatedAt'>>
-  ): Promise<CustomerDocument | null> {
+    customerData: CustomerFormData
+  ): Promise<{ customer?: CustomerDocument; errors?: ValidationErrors; duplicateError?: string }> {
     const repository = this.getRepository();
-    return repository.update(id, customerData) as Promise<CustomerDocument | null>;
+    
+    // Validate form data
+    const validationErrors = validateCustomerForm(customerData);
+    if (Object.keys(validationErrors).length > 0) {
+      return { errors: validationErrors };
+    }
+
+    // Check for duplicates (excluding current customer)
+    const duplicateCheck = await checkForDuplicates(
+      customerData,
+      id,
+      (email, excludeId) => repository.existsByEmail(email, excludeId),
+      (phone, excludeId) => repository.existsByPhone(cleanPhoneNumber(phone), excludeId)
+    );
+
+    if (duplicateCheck.isDuplicate) {
+      const field = duplicateCheck.field === 'email' ? 'email address' : 'phone number';
+      return { duplicateError: `A customer with this ${field} already exists` };
+    }
+
+    const updateData = {
+      ...customerData,
+      phone: cleanPhoneNumber(customerData.phone)
+    };
+
+    const customer = await repository.update(id, updateData) as CustomerDocument | null;
+    return { customer };
   }
 
   /**
@@ -100,11 +149,22 @@ export class CustomerService {
   }
 
   /**
-   * Search for customers by name
+   * Search for customers across multiple fields
+   * @param searchTerm Search term to match against name, email, phone
+   * @param limit Optional limit for results
+   * @returns Array of matching customer documents
+   */
+  async searchCustomers(searchTerm: string, limit?: number): Promise<CustomerDocument[]> {
+    const repository = this.getRepository();
+    return repository.search(searchTerm, limit);
+  }
+
+  /**
+   * Search for customers by name only
    * @param searchTerm Search term to match against first/last names
    * @returns Array of matching customer documents
    */
-  async searchCustomers(searchTerm: string): Promise<CustomerDocument[]> {
+  async searchCustomersByName(searchTerm: string): Promise<CustomerDocument[]> {
     const repository = this.getRepository();
     return repository.searchByName(searchTerm);
   }
