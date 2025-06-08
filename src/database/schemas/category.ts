@@ -6,6 +6,8 @@ export interface CategoryDocType {
   color: string;
   businessId?: string;
   description?: string;
+  displayOrder?: number;
+  isActive?: boolean;
   // Local-only fields for sync management
   isLocalOnly: boolean;
   isDeleted?: boolean; // For soft deletes
@@ -39,6 +41,13 @@ export const categorySchema: RxJsonSchema<CategoryDocType> = {
     description: {
       type: 'string',
       maxLength: 500
+    },
+    displayOrder: {
+      type: 'integer'
+    },
+    isActive: {
+      type: 'boolean',
+      default: true
     },
     isLocalOnly: {
       type: 'boolean'

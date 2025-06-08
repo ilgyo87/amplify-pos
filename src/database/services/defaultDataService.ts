@@ -7,6 +7,7 @@ export interface DefaultCategory {
   name: string;
   description: string;
   color: string;
+  displayOrder: number;
 }
 
 export interface DefaultProduct {
@@ -20,248 +21,200 @@ export interface DefaultProduct {
   notes?: string;
 }
 
-// Default categories for a clothing/garment POS system
+// Default categories for dry cleaning business
 const DEFAULT_CATEGORIES: DefaultCategory[] = [
   {
-    name: 'T-Shirts',
-    description: 'Casual t-shirts and tops',
-    color: '#FF5733'
+    name: 'Dry Cleaning',
+    description: 'Professional dry cleaning services',
+    color: '#007AFF',
+    displayOrder: 1
   },
   {
-    name: 'Shirts',
-    description: 'Dress shirts and formal shirts',
-    color: '#33FF57'
+    name: 'Laundry',
+    description: 'Wash and fold laundry services',
+    color: '#34C759',
+    displayOrder: 2
   },
   {
-    name: 'Jackets',
-    description: 'Jackets, blazers, and outerwear',
-    color: '#3357FF'
+    name: 'Alterations',
+    description: 'Clothing alterations and repairs',
+    color: '#FF9500',
+    displayOrder: 3
   },
   {
-    name: 'Dresses',
-    description: 'Dresses and gowns',
-    color: '#FF33F1'
-  },
-  {
-    name: 'Pants',
-    description: 'Trousers and dress pants',
-    color: '#F1FF33'
-  },
-  {
-    name: 'Jeans',
-    description: 'Denim jeans and casual pants',
-    color: '#33FFF1'
-  },
-  {
-    name: 'Shoes',
-    description: 'Footwear and accessories',
-    color: '#FF8C33'
-  },
-  {
-    name: 'Accessories',
-    description: 'Buttons, zippers, and hardware',
-    color: '#8C33FF'
-  },
-  {
-    name: 'Kids Clothing',
-    description: 'Children and youth clothing',
-    color: '#33FF8C'
-  },
-  {
-    name: 'Home & Bedding',
-    description: 'Curtains, blankets, and home items',
-    color: '#FF3333'
+    name: 'Special Services',
+    description: 'Specialty cleaning and treatments',
+    color: '#AF52DE',
+    displayOrder: 4
   }
 ];
 
-// Default products for each category
+// Default products mapped to garment images for dry cleaning services
 const DEFAULT_PRODUCTS: DefaultProduct[] = [
-  // T-Shirts
+  // Dry Cleaning Products
   {
-    name: 'Basic Cotton T-Shirt',
-    description: 'Comfortable cotton t-shirt in various colors',
-    price: 19.99,
-    categoryName: 'T-Shirts',
-    imageName: 't-shirt'
+    name: 'Dress Shirt',
+    description: 'Professional dry cleaning for dress shirts',
+    price: 3.50,
+    categoryName: 'Dry Cleaning',
+    imageName: 'shirt-cut'
   },
   {
-    name: 'Premium Polo Shirt',
-    description: 'High-quality polo shirt with collar',
-    price: 34.99,
-    categoryName: 'T-Shirts',
-    imageName: 'polo'
-  },
-  
-  // Shirts
-  {
-    name: 'Dress Shirt White',
-    description: 'Classic white dress shirt for formal occasions',
-    price: 49.99,
-    categoryName: 'Shirts',
-    imageName: 'dress-shirt'
+    name: 'Suit Jacket',
+    description: 'Dry cleaning for suit jackets and blazers',
+    price: 8.00,
+    categoryName: 'Dry Cleaning',
+    imageName: 'suit'
   },
   {
-    name: 'Business Casual Shirt',
-    description: 'Professional shirt for office wear',
-    price: 39.99,
-    categoryName: 'Shirts',
-    imageName: 'shirt'
-  },
-  
-  // Jackets
-  {
-    name: 'Leather Jacket',
-    description: 'Genuine leather jacket, black',
-    price: 199.99,
-    categoryName: 'Jackets',
-    imageName: 'leather-jacket'
-  },
-  {
-    name: 'Business Blazer',
-    description: 'Professional blazer for business wear',
-    price: 129.99,
-    categoryName: 'Jackets',
-    imageName: 'blazer'
-  },
-  {
-    name: 'Winter Coat',
-    description: 'Warm winter coat with hood',
-    price: 89.99,
-    categoryName: 'Jackets',
-    imageName: 'winter-coat'
-  },
-  
-  // Dresses
-  {
-    name: 'Little Black Dress',
-    description: 'Classic black dress for any occasion',
-    price: 79.99,
-    categoryName: 'Dresses',
+    name: 'Dress',
+    description: 'Dry cleaning for dresses',
+    price: 12.00,
+    categoryName: 'Dry Cleaning',
     imageName: 'dress'
   },
   {
-    name: 'Wedding Dress',
-    description: 'Elegant white wedding dress',
-    price: 499.99,
-    categoryName: 'Dresses',
-    imageName: 'wedding-dress'
-  },
-  
-  // Pants
-  {
-    name: 'Dress Pants',
-    description: 'Formal dress pants in charcoal',
-    price: 59.99,
-    categoryName: 'Pants',
+    name: 'Pants/Trousers',
+    description: 'Dry cleaning for dress pants and trousers',
+    price: 6.00,
+    categoryName: 'Dry Cleaning',
     imageName: 'pants'
   },
   {
-    name: 'Chino Trousers',
-    description: 'Casual chino pants, khaki color',
-    price: 44.99,
-    categoryName: 'Pants',
-    imageName: 'trousers'
+    name: 'Winter Coat',
+    description: 'Dry cleaning for winter coats and heavy jackets',
+    price: 15.00,
+    categoryName: 'Dry Cleaning',
+    imageName: 'winter-coat'
   },
-  
-  // Jeans
   {
-    name: 'Classic Blue Jeans',
-    description: 'Traditional blue denim jeans',
-    price: 69.99,
-    categoryName: 'Jeans',
+    name: 'Polo Shirt',
+    description: 'Dry cleaning for polo shirts',
+    price: 4.00,
+    categoryName: 'Dry Cleaning',
+    imageName: 'polo'
+  },
+
+  // Laundry Products  
+  {
+    name: 'T-Shirt',
+    description: 'Wash and fold service for t-shirts',
+    price: 2.50,
+    categoryName: 'Laundry',
+    imageName: 't-shirt'
+  },
+  {
+    name: 'Jeans',
+    description: 'Wash and fold service for jeans',
+    price: 4.00,
+    categoryName: 'Laundry',
     imageName: 'jeans'
   },
   {
-    name: 'Skinny Fit Jeans',
-    description: 'Modern skinny fit denim',
-    price: 79.99,
-    categoryName: 'Jeans',
-    imageName: 'denim-jeans'
-  },
-  
-  // Shoes
-  {
-    name: 'Leather Dress Shoes',
-    description: 'Black leather formal shoes',
-    price: 119.99,
-    categoryName: 'Shoes',
-    imageName: 'shoes'
+    name: 'Casual Shirt',
+    description: 'Wash and fold for casual shirts',
+    price: 3.00,
+    categoryName: 'Laundry',
+    imageName: 'clothes-cut'
   },
   {
-    name: 'Casual Sneakers',
-    description: 'Comfortable white sneakers',
-    price: 89.99,
-    categoryName: 'Shoes',
-    imageName: 'sneakers'
-  },
-  {
-    name: 'Winter Boots',
-    description: 'Waterproof winter boots',
-    price: 149.99,
-    categoryName: 'Shoes',
-    imageName: 'boots'
-  },
-  
-  // Accessories
-  {
-    name: 'Premium Buttons Set',
-    description: 'High-quality replacement buttons',
-    price: 12.99,
-    categoryName: 'Accessories',
-    imageName: 'buttons'
-  },
-  {
-    name: 'Heavy Duty Zipper',
-    description: 'Durable zipper for jackets',
-    price: 8.99,
-    categoryName: 'Accessories',
-    imageName: 'zipper'
-  },
-  {
-    name: 'Fabric Patch Kit',
-    description: 'Repair patches for clothing',
-    price: 15.99,
-    categoryName: 'Accessories',
-    imageName: 'patch'
-  },
-  
-  // Kids Clothing
-  {
-    name: 'Kids T-Shirt Pack',
-    description: 'Colorful t-shirts for children',
-    price: 29.99,
-    categoryName: 'Kids Clothing',
+    name: 'Kids Clothes',
+    description: 'Wash and fold for children\'s clothing',
+    price: 2.00,
+    categoryName: 'Laundry',
     imageName: 'kids-clothes'
   },
+
+  // Alterations Products
   {
-    name: 'Children Winter Wear',
-    description: 'Warm clothes for kids',
-    price: 49.99,
-    categoryName: 'Kids Clothing',
-    imageName: 'children-wear'
-  },
-  
-  // Home & Bedding
-  {
-    name: 'Luxury Blanket',
-    description: 'Soft and warm blanket',
-    price: 79.99,
-    categoryName: 'Home & Bedding',
-    imageName: 'blanket'
+    name: 'Hem Pants',
+    description: 'Hemming service for pants and trousers',
+    price: 12.00,
+    categoryName: 'Alterations',
+    imageName: 'pants',
+    notes: 'Basic hem, no rush service'
   },
   {
-    name: 'Window Curtains',
-    description: 'Elegant curtains for home decor',
-    price: 39.99,
-    categoryName: 'Home & Bedding',
-    imageName: 'curtain'
+    name: 'Jacket Alterations',
+    description: 'Tailoring services for jackets',
+    price: 25.00,
+    categoryName: 'Alterations',
+    imageName: 'jacket',
+    notes: 'Includes sleeve shortening and body adjustments'
   },
   {
-    name: 'Memory Foam Pillow',
-    description: 'Comfortable memory foam pillow',
-    price: 29.99,
-    categoryName: 'Home & Bedding',
-    imageName: 'pillow'
+    name: 'Dress Alterations',
+    description: 'Professional dress alterations',
+    price: 20.00,
+    categoryName: 'Alterations',
+    imageName: 'dress',
+    notes: 'Taking in, letting out, and length adjustments'
+  },
+  {
+    name: 'Button Replacement',
+    description: 'Replace missing or damaged buttons',
+    price: 3.00,
+    categoryName: 'Alterations',
+    imageName: 'buttons',
+    notes: 'Price per button, matching buttons when possible'
+  },
+  {
+    name: 'Zipper Repair',
+    description: 'Fix or replace broken zippers',
+    price: 15.00,
+    categoryName: 'Alterations',
+    imageName: 'jacket',
+    notes: 'Includes zipper replacement if needed'
+  },
+
+  // Special Services Products
+  {
+    name: 'Wedding Dress',
+    description: 'Specialized cleaning for wedding dresses',
+    price: 150.00,
+    categoryName: 'Special Services',
+    imageName: 'dress',
+    notes: 'Includes preservation boxing'
+  },
+  {
+    name: 'Leather Jacket',
+    description: 'Specialized leather cleaning',
+    price: 35.00,
+    categoryName: 'Special Services',
+    imageName: 'jacket',
+    notes: 'Professional leather treatment'
+  },
+  {
+    name: 'Formal Suit',
+    description: 'Premium cleaning for formal wear',
+    price: 25.00,
+    categoryName: 'Special Services',
+    imageName: 'suit',
+    notes: 'White glove service with hand pressing'
+  },
+  {
+    name: 'Curtains',
+    description: 'Cleaning service for curtains and drapes',
+    price: 20.00,
+    categoryName: 'Special Services',
+    imageName: 'curtain',
+    notes: 'Price per panel, pickup and delivery available'
+  },
+  {
+    name: 'Comforter/Blanket',
+    description: 'Cleaning for bedding and comforters',
+    price: 25.00,
+    categoryName: 'Special Services',
+    imageName: 'blankets',
+    notes: 'Large item cleaning with special care'
+  },
+  {
+    name: 'Shoe Cleaning',
+    description: 'Professional shoe cleaning and polishing',
+    price: 15.00,
+    categoryName: 'Special Services',
+    imageName: 'shoes',
+    notes: 'Includes conditioning and waterproofing'
   }
 ];
 
@@ -295,7 +248,14 @@ export class DefaultDataService {
       
       for (const categoryData of DEFAULT_CATEGORIES) {
         try {
-          const result = await categoryService.createCategory(categoryData);
+          const categoryFormData: CategoryFormData = {
+            name: categoryData.name,
+            description: categoryData.description,
+            color: categoryData.color,
+            displayOrder: categoryData.displayOrder,
+            isActive: true
+          };
+          const result = await categoryService.createCategory(categoryFormData);
           if (result.category) {
             createdCategories[categoryData.name] = result.category.id;
             console.log(`Created category: ${categoryData.name}`);
@@ -323,10 +283,10 @@ export class DefaultDataService {
             description: productData.description,
             price: productData.price,
             categoryId: categoryId,
-            imageName: productData.imageName,
-            discount: productData.discount,
-            additionalPrice: productData.additionalPrice,
-            notes: productData.notes
+            imageName: productData.imageName || '',
+            discount: productData.discount || 0,
+            additionalPrice: productData.additionalPrice || 0,
+            notes: productData.notes || ''
           };
 
           const result = await productService.createProduct(productFormData);

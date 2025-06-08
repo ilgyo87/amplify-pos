@@ -14,6 +14,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { ProductDocument } from '../../database/schemas/product';
 import { ImageDisplay } from '../ui/ImagePicker';
 
+// Safe text formatter to avoid direct string rendering
+const SafeText = ({ children }: { children: React.ReactNode }) => {
+  return <Text>{children}</Text>;
+};
+
+// Safe price formatter component
+const PriceText = ({ price }: { price?: number }) => {
+  if (price === undefined || price === null) return <Text>$0.00</Text>;
+  return <Text>${price.toFixed(2)}</Text>;
+};
+
 const { width } = Dimensions.get('window');
 const ITEM_WIDTH = (width - 80) / 4; // 4 columns with padding
 
@@ -43,20 +54,45 @@ interface ProductItemProps {
   calculateFinalPrice?: (product: ProductDocument) => number;
 }
 
-const ProductItem: React.FC<ProductItemProps> = ({ 
-  product, 
-  onEdit, 
-  onDelete, 
+interface ProductItemContentProps {
+  id: string;
+  name: string;
+  description?: string;
+  price: number;
+  discount?: number;
+  additionalPrice?: number;
+  imageName?: string;
+  isLocalOnly?: boolean;
+  onEdit?: (id: string) => void;
+  onDelete?: (id: string) => void;
+  onSelect?: (id: string) => void;
+  showActions?: boolean;
+  viewMode: 'grid' | 'list';
+  isSelected?: boolean;
+  calculateFinalPrice?: (price: number, discount?: number) => number;
+}
+
+function ProductItemContent({  
+  id,
+  name,
+  description,
+  price,
+  discount,
+  additionalPrice,
+  imageName,
+  isLocalOnly,
+  onEdit,
+  onDelete,
   onSelect,
   showActions,
   viewMode,
   isSelected,
   calculateFinalPrice
-}) => {
+}: ProductItemContentProps) {
   const handleDelete = () => {
     Alert.alert(
       'Delete Product',
-      `Are you sure you want to delete "${product.name}"? This action cannot be undone.`,
+      'Are you sure you want to delete this product? This action cannot be undone.',
       [
         {
           text: 'Cancel',
@@ -65,23 +101,33 @@ const ProductItem: React.FC<ProductItemProps> = ({
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => onDelete(product),
+          onPress: () => {
+            if (onDelete) {
+              onDelete(id);
+            }
+          },
         },
       ]
     );
   };
 
+  // Handle prices safely
+  const safePrice = typeof price === 'number' ? price : 0;
+  const safeDiscount = typeof discount === 'number' ? discount : 0;
+  const safeAdditionalPrice = typeof additionalPrice === 'number' ? additionalPrice : 0;
+  
+  const finalPrice = calculateFinalPrice ? 
+    calculateFinalPrice(safePrice, safeDiscount) : 
+    safePrice;
+    
+  const hasDiscount = safeDiscount > 0;
+  const hasAdditionalPrice = safeAdditionalPrice > 0;
+  
   const handlePress = () => {
     if (onSelect) {
-      onSelect(product);
+      onSelect(id);
     }
   };
-
-  const finalPrice = calculateFinalPrice ? calculateFinalPrice(product) : product.price;
-  const hasDiscount = product.discount && product.discount > 0;
-  const hasAdditionalPrice = product.additionalPrice && product.additionalPrice > 0;
-
-  const formatPrice = (price: number) => `$${price.toFixed(2)}`;
 
   if (viewMode === 'grid') {
     return (
@@ -92,16 +138,18 @@ const ProductItem: React.FC<ProductItemProps> = ({
         ]}
         onPress={handlePress}
         activeOpacity={0.7}
+        accessibilityRole="button" 
+        accessibilityHint="Selects this product"
       >
         <View style={styles.imageContainer}>
           <ImageDisplay 
-            imageKey={product.imageName}
+            imageKey={imageName}
             size={80}
             style={styles.productImage}
             showPlaceholder={true}
           />
           
-          {product.isLocalOnly && (
+          {isLocalOnly && (
             <View style={styles.localBadgeGrid}>
               <Text style={styles.localBadgeText}>Local</Text>
             </View>
@@ -110,17 +158,23 @@ const ProductItem: React.FC<ProductItemProps> = ({
           {showActions && (
             <View style={styles.gridActions}>
               <TouchableOpacity
-                onPress={() => onEdit(product)}
-                style={[styles.gridActionButton, styles.editButton]}
+                style={styles.actionButton}
+                onPress={() => onEdit && onEdit(id)}
+                accessibilityRole="button"
+                accessibilityHint="Edit this product"
               >
-                <Ionicons name="pencil" size={12} color="#007AFF" />
+                <Text>
+                  <Ionicons name="pencil" size={12} color="#007AFF" />
+                </Text>
               </TouchableOpacity>
               
               <TouchableOpacity
                 onPress={handleDelete}
-                style={[styles.gridActionButton, styles.deleteButton]}
+                style={[styles.actionButton, styles.deleteButton]}
               >
-                <Ionicons name="trash" size={12} color="#e74c3c" />
+                <Text>
+                  <Ionicons name="trash" size={12} color="#e74c3c" />
+                </Text>
               </TouchableOpacity>
             </View>
           )}
@@ -131,31 +185,31 @@ const ProductItem: React.FC<ProductItemProps> = ({
             styles.gridProductName,
             isSelected && styles.productNameSelected
           ]} numberOfLines={2}>
-            {product.name}
+            {name}
           </Text>
           
           <View style={styles.priceContainer}>
             {hasDiscount && (
               <Text style={styles.originalPrice}>
-                {formatPrice(product.price)}
+                <PriceText price={safePrice} />
               </Text>
             )}
             <Text style={[
               styles.finalPrice,
               isSelected && styles.finalPriceSelected
             ]}>
-              {formatPrice(finalPrice)}
+              <PriceText price={finalPrice} />
             </Text>
             {hasDiscount && (
               <Text style={styles.discountBadge}>
-                -{product.discount}%
+                -{safeDiscount}%
               </Text>
             )}
           </View>
 
           {hasAdditionalPrice && (
             <Text style={styles.additionalPriceText}>
-              +{formatPrice(product.additionalPrice!)} extra
+              +<PriceText price={safeAdditionalPrice} /> extra
             </Text>
           )}
         </View>
@@ -172,10 +226,12 @@ const ProductItem: React.FC<ProductItemProps> = ({
       ]}
       onPress={handlePress}
       activeOpacity={0.7}
+      accessibilityRole="button" 
+      accessibilityHint="Select this product"
     >
       <View style={styles.listImageContainer}>
         <ImageDisplay 
-          imageKey={product.imageName}
+          imageKey={imageName}
           size={60}
           style={styles.listProductImage}
           showPlaceholder={true}
@@ -188,44 +244,40 @@ const ProductItem: React.FC<ProductItemProps> = ({
             styles.listProductName,
             isSelected && styles.productNameSelected
           ]}>
-            {product.name}
+            {name}
           </Text>
-          {product.isLocalOnly && (
+          {isLocalOnly && (
             <View style={styles.localBadge}>
               <Text style={styles.localBadgeText}>Local</Text>
             </View>
           )}
         </View>
 
-        {product.description && (
+        {description && (
           <Text style={styles.productDescription} numberOfLines={2}>
-            {product.description}
+            {description}
           </Text>
         )}
 
         <View style={styles.priceRow}>
           <View style={styles.priceContainer}>
-            {hasDiscount && (
-              <Text style={styles.originalPrice}>
-                {formatPrice(product.price)}
+            <Text style={{fontWeight: '500', fontSize: 12}}>Price:</Text>
+            <View style={styles.priceRow}>
+              <Text style={[styles.originalPrice, hasDiscount ? {textDecorationLine: 'line-through'} : null]}>
+                <PriceText price={safePrice} />
               </Text>
-            )}
-            <Text style={[
-              styles.finalPrice,
-              isSelected && styles.finalPriceSelected
-            ]}>
-              {formatPrice(finalPrice)}
-            </Text>
-            {hasDiscount && (
-              <Text style={styles.discountBadge}>
-                -{product.discount}%
-              </Text>
-            )}
+              
+              {hasDiscount && (
+                <Text style={styles.discountBadge}>
+                  -{safeDiscount}%
+                </Text>
+              )}
+            </View>
           </View>
 
           {hasAdditionalPrice && (
             <Text style={styles.additionalPriceText}>
-              +{formatPrice(product.additionalPrice!)} extra
+              +<PriceText price={safeAdditionalPrice} /> extra
             </Text>
           )}
         </View>
@@ -234,17 +286,23 @@ const ProductItem: React.FC<ProductItemProps> = ({
       {showActions && (
         <View style={styles.listActions}>
           <TouchableOpacity
-            onPress={() => onEdit(product)}
+            onPress={() => onEdit && onEdit(id)}
             style={[styles.actionButton, styles.editButton]}
+            accessibilityRole="button"
+            accessibilityHint="Edit this product"
           >
-            <Ionicons name="pencil" size={18} color="#007AFF" />
+            <Text>
+              <Ionicons name="pencil" size={18} color="#007AFF" />
+            </Text>
           </TouchableOpacity>
           
           <TouchableOpacity
             onPress={handleDelete}
             style={[styles.actionButton, styles.deleteButton]}
           >
-            <Ionicons name="trash" size={18} color="#e74c3c" />
+            <Text>
+              <Ionicons name="trash" size={18} color="#e74c3c" />
+            </Text>
           </TouchableOpacity>
         </View>
       )}
@@ -252,7 +310,37 @@ const ProductItem: React.FC<ProductItemProps> = ({
   );
 };
 
-export const ProductList: React.FC<ProductListProps> = ({
+// Convert from ProductDocument to individual props to avoid text rendering issues
+// This wrapper extracts all properties from product object to avoid React Native warning
+function ProductItem({ product, onEdit, onDelete, onSelect, showActions = false, viewMode = 'grid', isSelected = false, calculateFinalPrice }: ProductItemProps) {
+  if (!product) return null;
+  
+  // Extract all product properties to avoid any direct product object usage
+  return (
+    <ProductItemContent
+      id={product.id}
+      name={product.name || ''}
+      description={product.description}
+      price={product.price || 0}
+      discount={product.discount}
+      additionalPrice={product.additionalPrice}
+      imageName={product.imageName}
+      isLocalOnly={product.isLocalOnly}
+      onEdit={onEdit ? (id) => onEdit(product) : undefined}
+      onDelete={onDelete ? (id) => onDelete(product) : undefined}
+      onSelect={onSelect ? (id) => onSelect(product) : undefined}
+      showActions={showActions}
+      viewMode={viewMode}
+      isSelected={isSelected}
+      calculateFinalPrice={calculateFinalPrice ? 
+        (price, discount) => calculateFinalPrice({ ...product, price, discount } as any) : 
+        undefined
+      }
+    />
+  );
+}
+
+export function ProductList({
   products,
   onEdit,
   onDelete,
@@ -265,7 +353,7 @@ export const ProductList: React.FC<ProductListProps> = ({
   viewMode = 'grid',
   selectedProductId,
   calculateFinalPrice
-}) => {
+}: ProductListProps) {
   const renderProduct = ({ item }: { item: ProductDocument }) => (
     <ProductItem
       product={item}
@@ -281,7 +369,9 @@ export const ProductList: React.FC<ProductListProps> = ({
 
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
-      <Ionicons name="cube-outline" size={64} color="#ccc" />
+      <Text>
+        <Ionicons name="cube-outline" size={64} color="#ccc" />
+      </Text>
       <Text style={styles.emptyText}>{emptyMessage}</Text>
       <Text style={styles.emptySubtext}>
         {products.length === 0 

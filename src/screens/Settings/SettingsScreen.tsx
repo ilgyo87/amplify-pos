@@ -10,14 +10,26 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BaseScreen } from '../BaseScreen';
-import { syncService, SyncStatus, SyncResult } from '../../database/services/syncService';
+import { syncService, SyncStatus, SyncResult } from '../../database/services';
 
 export default function SettingsScreen() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     isUploading: false,
     isDownloading: false,
     totalLocalCustomers: 0,
-    totalUnsyncedCustomers: 0
+    totalUnsyncedCustomers: 0,
+    totalLocalEmployees: 0,
+    totalUnsyncedEmployees: 0,
+    customersUploaded: 0,
+    customersDownloaded: 0,
+    employeesUploaded: 0,
+    employeesDownloaded: 0,
+    categoriesUploaded: 0,
+    categoriesDownloaded: 0,
+    productsUploaded: 0,
+    productsDownloaded: 0,
+    startTime: new Date(),
+    success: false
   });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -89,20 +101,41 @@ export default function SettingsScreen() {
     );
   };
 
-  const showSyncResult = (operation: string, result: SyncResult) => {
+  const showSyncResult = (operation: string, result: SyncResult | SyncStatus) => {
     const title = `${operation} Complete`;
     let message = '';
     
-    if (result.uploadedCount > 0) {
-      message += `Uploaded: ${result.uploadedCount} items\n`;
+    // Handle SyncResult format
+    if ('uploadedCount' in result && 'downloadedCount' in result) {
+      if (result.uploadedCount > 0) {
+        message += `Uploaded: ${result.uploadedCount} items\n`;
+      }
+      if (result.downloadedCount > 0) {
+        message += `Downloaded: ${result.downloadedCount} items\n`;
+      }
+      if (result.errors && result.errors.length > 0) {
+        message += `\nErrors (${result.errors.length}):\n${result.errors.slice(0, 3).join('\n')}`;
+        if (result.errors.length > 3) {
+          message += `\n... and ${result.errors.length - 3} more`;
+        }
+      }
     }
-    if (result.downloadedCount > 0) {
-      message += `Downloaded: ${result.downloadedCount} items\n`;
-    }
-    if (result.errors.length > 0) {
-      message += `\nErrors (${result.errors.length}):\n${result.errors.slice(0, 3).join('\n')}`;
-      if (result.errors.length > 3) {
-        message += `\n... and ${result.errors.length - 3} more`;
+    // Handle SyncStatus format  
+    else {
+      const syncStatus = result as SyncStatus;
+      const totalUploaded = syncStatus.customersUploaded + syncStatus.employeesUploaded + 
+                           syncStatus.categoriesUploaded + syncStatus.productsUploaded;
+      const totalDownloaded = syncStatus.customersDownloaded + syncStatus.employeesDownloaded + 
+                             syncStatus.categoriesDownloaded + syncStatus.productsDownloaded;
+      
+      if (totalUploaded > 0) {
+        message += `Uploaded: ${totalUploaded} items\n`;
+      }
+      if (totalDownloaded > 0) {
+        message += `Downloaded: ${totalDownloaded} items\n`;
+      }
+      if (syncStatus.error) {
+        message += `\nError: ${syncStatus.error}`;
       }
     }
     if (!message) {

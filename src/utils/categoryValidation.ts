@@ -2,12 +2,16 @@ export interface CategoryFormData {
   name: string;
   color: string;
   description?: string;
+  displayOrder?: number;
+  isActive?: boolean;
 }
 
 export interface CategoryValidationErrors {
   name?: string;
   color?: string;
   description?: string;
+  displayOrder?: string;
+  isActive?: string;
 }
 
 export const validateCategoryName = (name: string): boolean => {

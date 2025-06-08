@@ -1,12 +1,24 @@
 import { useState, useEffect, useCallback } from 'react';
-import { syncService, SyncStatus, SyncResult } from '../services/syncService';
+import { syncService, SyncStatus, SyncResult } from '../services';
 
 export const useSync = () => {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     isUploading: false,
     isDownloading: false,
     totalLocalCustomers: 0,
-    totalUnsyncedCustomers: 0
+    totalUnsyncedCustomers: 0,
+    totalLocalEmployees: 0,
+    totalUnsyncedEmployees: 0,
+    customersUploaded: 0,
+    customersDownloaded: 0,
+    employeesUploaded: 0,
+    employeesDownloaded: 0,
+    categoriesUploaded: 0,
+    categoriesDownloaded: 0,
+    productsUploaded: 0,
+    productsDownloaded: 0,
+    startTime: new Date(),
+    success: false
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +66,7 @@ export const useSync = () => {
     }
   }, [refreshStatus]);
 
-  const fullSync = useCallback(async (): Promise<SyncResult | null> => {
+  const fullSync = useCallback(async (): Promise<SyncStatus | null> => {
     try {
       setError(null);
       setSyncStatus(prev => ({ ...prev, isUploading: true, isDownloading: true }));

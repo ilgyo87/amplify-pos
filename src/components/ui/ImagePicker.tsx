@@ -72,7 +72,9 @@ export const ImagePicker: React.FC<ImagePickerProps> = ({
                 </Text>
                 {image.key === selectedImageKey && (
                   <View style={styles.checkmark}>
-                    <Ionicons name="checkmark" size={16} color="white" />
+                    <Text>
+                      <Ionicons name="checkmark" size={16} color="white" />
+                    </Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -155,7 +157,9 @@ export const ImageField: React.FC<ImageFieldProps> = ({
           <Text style={styles.fieldText}>{getImageName()}</Text>
           <Text style={styles.fieldSubtext}>Tap to change image</Text>
         </View>
-        <Ionicons name="chevron-forward" size={20} color="#666" />
+        <Text>
+          <Ionicons name="chevron-forward" size={20} color="#666" />
+        </Text>
       </TouchableOpacity>
       {error && <Text style={styles.errorText}>{error}</Text>}
     </View>

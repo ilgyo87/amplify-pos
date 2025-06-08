@@ -53,7 +53,7 @@ const createDatabase = async (): Promise<AppDatabase> => {
 
   try {
     const database = await createRxDatabase<DatabaseCollections>({
-      name: 'amplifyposdb_v5',
+      name: 'amplifyposdb_v8',
       storage,
       multiInstance: false, // Set to false in React Native
       ignoreDuplicate: true,
@@ -71,7 +71,27 @@ const createDatabase = async (): Promise<AppDatabase> => {
     try {
       await database.addCollections({
         customers: {
-          schema: customerSchema
+          schema: customerSchema,
+          migrationStrategies: {
+            // Migration from version 0 to 1 - add notes and joinDate fields
+            1: function(oldDoc: any) {
+              return {
+                ...oldDoc,
+                notes: oldDoc.notes || null,
+                joinDate: oldDoc.joinDate || null
+              };
+            },
+            // Migration from version 1 to 2 - allow null values for optional fields
+            2: function(oldDoc: any) {
+              // No data transformation needed, just schema validation change
+              return oldDoc;
+            },
+            // Migration from version 2 to 3 - remove problematic indexes
+            3: function(oldDoc: any) {
+              // No data transformation needed, just index change
+              return oldDoc;
+            }
+          }
         },
         employees: {
           schema: employeeSchema
