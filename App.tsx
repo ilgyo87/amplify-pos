@@ -34,6 +34,7 @@ import outputs from './amplify_outputs.json';
 import AppNavigator from './src/navigation/AppNavigator';
 import { getDatabaseInstance } from './src/database';
 import { customerService } from './src/database/services/customerService';
+import { EmployeeAuthProvider } from './src/context/EmployeeAuthContext';
 
 // Configure Amplify
 Amplify.configure(outputs);
@@ -68,7 +69,9 @@ const App = () => {
       <StatusBar style="auto" />
       <NavigationContainer>
         <Authenticator.Provider>
-          <AppNavigator />
+          <EmployeeAuthProvider>
+            <AppNavigator />
+          </EmployeeAuthProvider>
         </Authenticator.Provider>
       </NavigationContainer>
     </SafeAreaProvider>

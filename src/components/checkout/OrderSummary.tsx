@@ -146,12 +146,7 @@ export const OrderSummary: React.FC<OrderSummaryProps> = ({
           </View>
         </View>
 
-        {/* Notes on separate line only if they exist */}
-        {(item.options?.notes || item.notes) && (
-          <Text style={styles.itemNotes}>
-            {item.options?.notes || item.notes}
-          </Text>
-        )}
+        {/* Notes removed as per requirements */}
       </View>
     );
   };
@@ -249,6 +244,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    paddingBottom: 16,  // Add bottom padding to prevent cutoff
   },
   emptyContainer: {
     flex: 1,
@@ -269,44 +265,50 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   listContent: {
-    paddingVertical: 8,
+    paddingVertical: 12,  // Increased vertical padding
+    paddingBottom: 24,  // Extra bottom padding for better scrolling
   },
+  // Item styles
   orderItem: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 12,  // Increased vertical padding
   },
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    minHeight: 48,  // Ensure minimum height for touch targets
   },
   itemNameContainer: {
     flex: 1,
-    marginRight: 8,
+    marginRight: 12,  // Increased right margin
   },
   itemName: {
-    fontSize: 14,
+    fontSize: 15,  // Slightly larger font
     fontWeight: '600',
     color: '#333',
-    marginBottom: 2,
+    marginBottom: 4,  // Increased bottom margin
   },
   optionText: {
     color: '#666',
     fontWeight: '400',
+    fontSize: 13,  // Slightly smaller for options
   },
   unitPrice: {
-    fontSize: 11,
+    fontSize: 13,  // Slightly larger
     color: '#666',
+    marginTop: 2,  // Add some space between name and price
   },
   quantityContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 8,
+    marginHorizontal: 12,  // Increased horizontal margin
   },
+  // Quantity controls
   quantityButton: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 28,  // Slightly larger buttons
+    height: 28,
+    borderRadius: 14,  // Match new height/2
     backgroundColor: '#f0f7ff',
     justifyContent: 'center',
     alignItems: 'center',
@@ -314,22 +316,15 @@ const styles = StyleSheet.create({
     borderColor: '#007AFF',
   },
   quantity: {
-    fontSize: 14,
+    fontSize: 15,  // Slightly larger
     fontWeight: '600',
     color: '#333',
-    marginHorizontal: 8,
-    minWidth: 16,
+    marginHorizontal: 10,  // Increased horizontal margin
+    minWidth: 20,  // Ensure consistent width
     textAlign: 'center',
   },
-  itemActions: {
-    alignItems: 'flex-end',
-  },
-  itemTotal: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#007AFF',
-    marginBottom: 4,
-  },
+  
+  // Item actions
   actionButtons: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -340,6 +335,16 @@ const styles = StyleSheet.create({
   },
   removeButton: {
     padding: 4,
+  },
+  itemActions: {
+    alignItems: 'flex-end',
+    marginLeft: 8,  // Add some left margin
+  },
+  itemTotal: {
+    fontSize: 15,  // Slightly larger
+    fontWeight: '700',
+    color: '#007AFF',
+    marginBottom: 4,  // Add some bottom margin
   },
   itemNotes: {
     fontSize: 11,
@@ -353,6 +358,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
     marginHorizontal: 16,
   },
+  
+  // Summary section
   summaryContainer: {
     padding: 16,
     borderTopWidth: 1,
@@ -389,13 +396,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#007AFF',
   },
+  
+  // Checkout button
   checkoutButton: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#007AFF',
     margin: 16,
-    paddingVertical: 16,
+    marginTop: 8,  // Reduced top margin
+    paddingVertical: 14,  // Slightly reduced padding
     borderRadius: 8,
   },
   checkoutButtonText: {
