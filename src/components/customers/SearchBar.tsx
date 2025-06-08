@@ -16,7 +16,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   value,
   onChangeText,
   onClear,
-  placeholder = 'Search customers by name, email, or phone...',
+  placeholder = 'Search by name, email, or phone number...',
   isLoading = false,
   resultsCount,
   showResultsCount = true
@@ -76,7 +76,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           <Text style={styles.resultsText}>
             {resultsCount === 0 
               ? 'No customers found' 
-              : `${resultsCount} customer${resultsCount === 1 ? '' : 's'} found`
+              : `Showing ${resultsCount} customer${resultsCount === 1 ? '' : 's'}`
             }
           </Text>
           

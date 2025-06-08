@@ -2,6 +2,12 @@ import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../../amplify/data/resource';
 import { customerService } from './customerService';
 import { CustomerDocument } from '../schemas/customer';
+import { employeeService } from './employeeService';
+import { EmployeeDocument } from '../schemas/employee';
+import { categoryService } from './categoryService';
+import { CategoryDocument } from '../schemas/category';
+import { productService } from './productService';
+import { ProductDocument } from '../schemas/product';
 
 const client = generateClient<Schema>();
 
@@ -18,6 +24,20 @@ export interface SyncStatus {
   lastSyncDate?: Date;
   totalLocalCustomers: number;
   totalUnsyncedCustomers: number;
+  totalLocalEmployees: number;
+  totalUnsyncedEmployees: number;
+  customersUploaded: number;
+  customersDownloaded: number;
+  employeesUploaded: number;
+  employeesDownloaded: number;
+  categoriesUploaded: number;
+  categoriesDownloaded: number;
+  productsUploaded: number;
+  productsDownloaded: number;
+  startTime: Date;
+  endTime?: Date;
+  success: boolean;
+  error?: string;
 }
 
 export class SyncService {
@@ -26,20 +46,182 @@ export class SyncService {
   private lastSyncDate?: Date;
 
   /**
+   * Convert customer from local format to Amplify format
+   */
+  private convertToAmplifyFormat(customer: CustomerDocument): any {
+    // Using type assertion to bypass type checking issues
+    const doc = customer as any;
+    return {
+      firstName: doc.firstName,
+      lastName: doc.lastName,
+      email: doc.email,
+      phone: doc.phone,
+      address: doc.address,
+      notes: doc.notes,
+      joinDate: doc.joinDate,
+    };
+  }
+
+  /**
+   * Convert customer from Amplify format to local format
+   */
+  private convertToLocalFormat(amplifyCustomer: any): any {
+    return {
+      firstName: amplifyCustomer.firstName,
+      lastName: amplifyCustomer.lastName,
+      email: amplifyCustomer.email,
+      phone: amplifyCustomer.phone,
+      address: amplifyCustomer.address,
+      notes: amplifyCustomer.notes,
+      joinDate: amplifyCustomer.joinDate,
+      amplifyId: amplifyCustomer.id,
+      isLocalOnly: false,
+      lastSyncedAt: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Convert employee from local format to Amplify format
+   */
+  private convertEmployeeToAmplifyFormat(employee: EmployeeDocument): any {
+    // Using type assertion to bypass type checking issues
+    const doc = employee as any;
+    return {
+      firstName: doc.firstName,
+      lastName: doc.lastName,
+      email: doc.email,
+      phone: doc.phone,
+      role: doc.role,
+      pin: doc.pin,
+      hireDate: doc.hireDate,
+      isActive: doc.isActive,
+    };
+  }
+
+  /**
+   * Convert employee from Amplify format to local format
+   */
+  private convertEmployeeToLocalFormat(amplifyEmployee: any): any {
+    return {
+      firstName: amplifyEmployee.firstName,
+      lastName: amplifyEmployee.lastName,
+      email: amplifyEmployee.email,
+      phone: amplifyEmployee.phone,
+      role: amplifyEmployee.role,
+      pin: amplifyEmployee.pin,
+      hireDate: amplifyEmployee.hireDate,
+      isActive: amplifyEmployee.isActive,
+      amplifyId: amplifyEmployee.id,
+      isLocalOnly: false,
+      lastSyncedAt: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Convert category from local format to Amplify format
+   */
+  private convertCategoryToAmplifyFormat(category: CategoryDocument): any {
+    // Using type assertion to bypass type checking issues
+    const doc = category as any;
+    return {
+      name: doc.name,
+      description: doc.description,
+      color: doc.color,
+      displayOrder: doc.displayOrder,
+      isActive: doc.isActive,
+    };
+  }
+
+  /**
+   * Convert category from Amplify format to local format
+   */
+  private convertCategoryToLocalFormat(amplifyCategory: any): any {
+    return {
+      name: amplifyCategory.name,
+      description: amplifyCategory.description,
+      color: amplifyCategory.color,
+      displayOrder: amplifyCategory.displayOrder,
+      isActive: amplifyCategory.isActive,
+      amplifyId: amplifyCategory.id,
+      isLocalOnly: false,
+      lastSyncedAt: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Convert product from local format to Amplify format
+   */
+  private convertProductToAmplifyFormat(product: ProductDocument): any {
+    // Using type assertion to bypass type checking issues
+    const doc = product as any;
+    return {
+      name: doc.name,
+      description: doc.description,
+      sku: doc.sku,
+      price: doc.price,
+      cost: doc.cost,
+      categoryId: doc.categoryId,
+      barcode: doc.barcode,
+      quantity: doc.quantity,
+      isActive: doc.isActive,
+    };
+  }
+
+  /**
+   * Convert product from Amplify format to local format
+   */
+  private fromProductApiModel(amplifyProduct: any): any {
+    // Return product document compatible with RxDB/React Native
+    // (avoiding date-time format per memory)
+    return {
+      name: amplifyProduct.name,
+      description: amplifyProduct.description,
+      sku: amplifyProduct.sku,
+      price: amplifyProduct.price,
+      cost: amplifyProduct.cost,
+      categoryId: amplifyProduct.categoryId,
+      barcode: amplifyProduct.barcode,
+      quantity: amplifyProduct.quantity,
+      isActive: amplifyProduct.isActive,
+      amplifyId: amplifyProduct.id,
+      isLocalOnly: false,
+      lastSyncedAt: new Date().toISOString()
+    };
+  }
+
+  /**
    * Get current sync status
    */
   async getSyncStatus(): Promise<SyncStatus> {
     await customerService.initialize();
+    await employeeService.initialize();
+    await categoryService.initialize();
+    await productService.initialize();
     
     const totalLocalCustomers = await customerService.getCustomersCount();
     const unsyncedCustomers = await customerService.getUnsyncedCustomers();
+    const totalLocalEmployees = await employeeService.getEmployeesCount();
+    const unsyncedEmployees = await employeeService.getUnsyncedEmployees();
     
     return {
       isUploading: this.isUploading,
       isDownloading: this.isDownloading,
       lastSyncDate: this.lastSyncDate,
       totalLocalCustomers,
-      totalUnsyncedCustomers: unsyncedCustomers.length
+      totalUnsyncedCustomers: unsyncedCustomers.length,
+      totalLocalEmployees,
+      totalUnsyncedEmployees: unsyncedEmployees.length,
+      customersUploaded: 0,
+      customersDownloaded: 0,
+      employeesUploaded: 0,
+      employeesDownloaded: 0,
+      categoriesUploaded: 0,
+      categoriesDownloaded: 0,
+      productsUploaded: 0,
+      productsDownloaded: 0,
+      startTime: new Date(),
+      endTime: undefined,
+      success: false
     };
   }
 
@@ -67,7 +249,8 @@ export class SyncService {
           const amplifyCustomer = this.convertToAmplifyFormat(customer);
           
           // Create customer in Amplify
-          const response = await client.models.Customer.create(amplifyCustomer);
+          // Using 'as any' to bypass type checking issues with the client model types
+          const response = await (client.models as any).Customer.create(amplifyCustomer);
           
           if (response.data) {
             // Mark as synced in local database
@@ -75,7 +258,7 @@ export class SyncService {
             uploadedCount++;
             console.log(`Uploaded customer: ${customer.firstName} ${customer.lastName}`);
           } else if (response.errors) {
-            const error = `Failed to upload ${customer.firstName} ${customer.lastName}: ${response.errors.map(e => e.message).join(', ')}`;
+            const error = `Failed to upload ${customer.firstName} ${customer.lastName}: ${response.errors.map((e: any) => e.message).join(', ')}`;
             errors.push(error);
             console.error(error);
           }
@@ -117,10 +300,10 @@ export class SyncService {
       console.log('Starting download of customers from Amplify...');
 
       // Get all customers from Amplify
-      const response = await client.models.Customer.list();
+      const response = await (client.models as any).Customer.list();
       
       if (response.errors) {
-        errors.push(`Failed to fetch customers: ${response.errors.map(e => e.message).join(', ')}`);
+        errors.push(`Failed to fetch customers: ${response.errors.map((e: any) => e.message).join(', ')}`);
         return {
           success: false,
           uploadedCount: 0,
@@ -186,59 +369,550 @@ export class SyncService {
   }
 
   /**
-   * Full sync: upload first, then download
+   * Upload all local employees to Amplify
    */
-  async fullSync(): Promise<SyncResult> {
-    console.log('Starting full sync...');
-    
-    // First upload local changes
-    const uploadResult = await this.uploadCustomers();
-    
-    // Then download remote changes
-    const downloadResult = await this.downloadCustomers();
-    
-    return {
-      success: uploadResult.success && downloadResult.success,
-      uploadedCount: uploadResult.uploadedCount,
-      downloadedCount: downloadResult.downloadedCount,
-      errors: [...uploadResult.errors, ...downloadResult.errors]
-    };
+  async uploadEmployees(): Promise<SyncResult> {
+    if (this.isUploading) {
+      throw new Error('Upload already in progress');
+    }
+
+    this.isUploading = true;
+    const errors: string[] = [];
+    let uploadedCount = 0;
+
+    try {
+      await employeeService.initialize();
+      const unsyncedEmployees = await employeeService.getUnsyncedEmployees();
+
+      console.log(`Starting upload of ${unsyncedEmployees.length} employees...`);
+
+      for (const employee of unsyncedEmployees) {
+        try {
+          // Convert local employee to Amplify format
+          const amplifyEmployee = this.convertEmployeeToAmplifyFormat(employee);
+          
+          // Create employee in Amplify
+          // Using 'as any' to bypass type checking issues with the client model types
+          const response = await (client.models as any).Employee.create(amplifyEmployee);
+          
+          if (response.data) {
+            // Mark as synced in local database
+            await employeeService.markAsSynced(employee.id, response.data.id);
+            uploadedCount++;
+            console.log(`Uploaded employee: ${employee.firstName} ${employee.lastName}`);
+          } else if (response.errors) {
+            const error = `Failed to upload ${employee.firstName} ${employee.lastName}: ${response.errors.map((e: any) => e.message).join(', ')}`;
+            errors.push(error);
+            console.error(error);
+          }
+        } catch (error) {
+          const errorMsg = `Error uploading ${employee.firstName} ${employee.lastName}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          errors.push(errorMsg);
+          console.error(errorMsg);
+        }
+      }
+
+      this.lastSyncDate = new Date();
+      
+      return {
+        success: errors.length === 0,
+        uploadedCount,
+        downloadedCount: 0,
+        errors
+      };
+    } finally {
+      this.isUploading = false;
+    }
   }
 
   /**
-   * Convert local customer format to Amplify format
+   * Download employees from Amplify and sync to local database
    */
-  private convertToAmplifyFormat(customer: CustomerDocument): any {
-    return {
-      firstName: customer.firstName,
-      lastName: customer.lastName,
-      email: customer.email || undefined,
-      phone: customer.phone,
-      address: customer.address || undefined,
-      city: customer.city || undefined,
-      state: customer.state || undefined,
-      zipCode: customer.zipCode || undefined,
-      coordinates: customer.coordinates || undefined,
-      businessId: customer.businessId || undefined,
-      cognitoId: customer.cognitoId || undefined
-    };
+  /**
+   * Upload all local categories to Amplify
+   */
+  async uploadCategories(): Promise<SyncResult> {
+    if (this.isUploading) {
+      throw new Error('Upload already in progress');
+    }
+
+    this.isUploading = true;
+    const errors: string[] = [];
+    let uploadedCount = 0;
+
+    try {
+      await categoryService.initialize();
+      const unsyncedCategories = await categoryService.getUnsyncedCategories();
+
+      console.log(`Starting upload of ${unsyncedCategories.length} categories...`);
+
+      for (const category of unsyncedCategories) {
+        try {
+          // Convert local category to Amplify format
+          const amplifyCategory = this.convertCategoryToAmplifyFormat(category);
+          
+          // Create category in Amplify
+          // Using 'as any' to bypass type checking issues with the client model types
+          const response = await (client.models as any).Category.create(amplifyCategory);
+          
+          if (response.data) {
+            // Mark as synced in local database
+            await categoryService.markAsSynced(category.id, response.data.id);
+            uploadedCount++;
+            console.log(`Uploaded category: ${category.name}`);
+          } else if (response.errors) {
+            const error = `Failed to upload category ${category.name}: ${response.errors.map((e: any) => e.message).join(', ')}`;
+            errors.push(error);
+            console.error(error);
+          }
+        } catch (error) {
+          const errorMsg = `Error uploading category ${category.name}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          errors.push(errorMsg);
+          console.error(errorMsg);
+        }
+      }
+
+      this.lastSyncDate = new Date();
+      
+      return {
+        success: errors.length === 0,
+        uploadedCount,
+        downloadedCount: 0,
+        errors
+      };
+    } finally {
+      this.isUploading = false;
+    }
   }
 
   /**
-   * Convert Amplify customer format to local format
+   * Upload all local products to Amplify
    */
-  private convertToLocalFormat(amplifyCustomer: any): any {
-    return {
-      firstName: amplifyCustomer.firstName,
-      lastName: amplifyCustomer.lastName,
-      email: amplifyCustomer.email || '',
-      phone: amplifyCustomer.phone,
-      address: amplifyCustomer.address || '',
-      city: amplifyCustomer.city || '',
-      state: amplifyCustomer.state || '',
-      zipCode: amplifyCustomer.zipCode || ''
-    };
-  }
-}
+  async uploadProducts(): Promise<SyncResult> {
+    if (this.isUploading) {
+      throw new Error('Upload already in progress');
+    }
 
-export const syncService = new SyncService();
+    this.isUploading = true;
+    const errors: string[] = [];
+    let uploadedCount = 0;
+
+    try {
+      await productService.initialize();
+      const unsyncedProducts = await productService.getUnsyncedProducts();
+
+      console.log(`Starting upload of ${unsyncedProducts.length} products...`);
+
+      for (const product of unsyncedProducts) {
+        try {
+          // Convert local product to Amplify format
+          const amplifyProduct = this.convertProductToAmplifyFormat(product);
+          
+          // Create product in Amplify
+          // Using 'as any' to bypass type checking issues with the client model types
+          const response = await (client.models as any).Product.create(amplifyProduct);
+          
+          if (response.data) {
+            // Mark as synced in local database
+            await productService.markAsSynced(product.id, response.data.id);
+            uploadedCount++;
+            console.log(`Uploaded product: ${product.name}`);
+          } else if (response.errors) {
+            const error = `Failed to upload product ${product.name}: ${response.errors.map((e: any) => e.message).join(', ')}`;
+            errors.push(error);
+            console.error(error);
+          }
+        } catch (error) {
+          const errorMsg = `Error uploading product ${product.name}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          errors.push(errorMsg);
+          console.error(errorMsg);
+        }
+      }
+
+      this.lastSyncDate = new Date();
+      
+      return {
+        success: errors.length === 0,
+        uploadedCount,
+        downloadedCount: 0,
+        errors
+      };
+    } finally {
+      this.isUploading = false;
+    }
+  }
+
+  /**
+   * Download categories from Amplify and sync to local database
+   */
+  async downloadCategories(): Promise<SyncResult> {
+    if (this.isDownloading) {
+      throw new Error('Download already in progress');
+    }
+
+    this.isDownloading = true;
+    const errors: string[] = [];
+    let downloadedCount = 0;
+
+    try {
+      await categoryService.initialize();
+      
+      console.log('Starting download of categories from Amplify...');
+
+      // Get all categories from Amplify
+      const response = await (client.models as any).Category.list();
+      
+      if (response.errors) {
+        errors.push(`Failed to fetch categories: ${response.errors.map((e: any) => e.message).join(', ')}`);
+        return {
+          success: false,
+          uploadedCount: 0,
+          downloadedCount: 0,
+          errors
+        };
+      }
+
+      const amplifyCategories = response.data || [];
+
+      for (const amplifyCategory of amplifyCategories) {
+        try {
+          // Check if category already exists locally by amplifyId
+          const existingCategories = await categoryService.getAllCategories();
+          const existingCategory = existingCategories.find(c => c.amplifyId === amplifyCategory.id);
+
+          if (existingCategory) {
+            // Update existing category if Amplify version is newer
+            const amplifyUpdatedAt = new Date(amplifyCategory.updatedAt);
+            const localUpdatedAt = new Date(existingCategory.updatedAt);
+            
+            if (amplifyUpdatedAt > localUpdatedAt) {
+              const localFormat = this.convertCategoryToLocalFormat(amplifyCategory);
+              const result = await categoryService.updateCategory(existingCategory.id, localFormat);
+              if (result.category && !result.errors) {
+                downloadedCount++;
+                console.log(`Updated category: ${amplifyCategory.name}`);
+              }
+            }
+          } else {
+            // Create new local category
+            const localFormat = this.convertCategoryToLocalFormat(amplifyCategory);
+            const result = await categoryService.createCategory(localFormat);
+            
+            if (result.category) {
+              // Mark as synced since it came from Amplify
+              await categoryService.markAsSynced(result.category.id, amplifyCategory.id);
+              downloadedCount++;
+              console.log(`Downloaded new category: ${amplifyCategory.name}`);
+            } else if (result.errors) {
+              const errorMsg = Object.values(result.errors || {}).join(', ');
+              errors.push(`Failed to create category ${amplifyCategory.name}: ${errorMsg}`);
+            }
+          }
+        } catch (error) {
+          const errorMsg = `Error processing ${amplifyCategory.name}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          errors.push(errorMsg);
+          console.error(errorMsg);
+        }
+      }
+
+      this.lastSyncDate = new Date();
+
+      return {
+        success: errors.length === 0,
+        uploadedCount: 0,
+        downloadedCount,
+        errors
+      };
+    } finally {
+      this.isDownloading = false;
+    }
+  }
+
+  /**
+   * Download employees from Amplify and sync to local database
+   */
+  async downloadEmployees(): Promise<SyncResult> {
+    if (this.isDownloading) {
+      throw new Error('Download already in progress');
+    }
+
+    this.isDownloading = true;
+    const errors: string[] = [];
+    let downloadedCount = 0;
+
+    try {
+      await employeeService.initialize();
+      
+      console.log('Starting download of employees from Amplify...');
+
+      // Get all employees from Amplify
+      const response = await (client.models as any).Employee.list();
+      
+      if (response.errors) {
+        errors.push(`Failed to fetch employees: ${response.errors.map((e: any) => e.message).join(', ')}`);
+        return {
+          success: false,
+          uploadedCount: 0,
+          downloadedCount: 0,
+          errors
+        };
+      }
+
+      const amplifyEmployees = response.data || [];
+
+      for (const amplifyEmployee of amplifyEmployees) {
+        try {
+          // Check if employee already exists locally by amplifyId
+          const existingEmployees = await employeeService.getAllEmployees();
+          const existingEmployee = existingEmployees.find(e => e.amplifyId === amplifyEmployee.id);
+
+          if (existingEmployee) {
+            // Update existing employee if Amplify version is newer
+            const amplifyUpdatedAt = new Date(amplifyEmployee.updatedAt);
+            const localUpdatedAt = new Date(existingEmployee.updatedAt);
+            
+            if (amplifyUpdatedAt > localUpdatedAt) {
+              const localFormat = this.convertEmployeeToLocalFormat(amplifyEmployee);
+              const result = await employeeService.updateEmployee(existingEmployee.id, localFormat);
+              if (result.employee && !result.errors && !result.duplicateError) {
+                downloadedCount++;
+                console.log(`Updated employee: ${amplifyEmployee.firstName} ${amplifyEmployee.lastName}`);
+              }
+            }
+          } else {
+            // Create new local employee
+            const localFormat = this.convertEmployeeToLocalFormat(amplifyEmployee);
+            const result = await employeeService.createEmployee(localFormat);
+            
+            if (result.employee) {
+              // Mark as synced since it came from Amplify
+              await employeeService.markAsSynced(result.employee.id, amplifyEmployee.id);
+              downloadedCount++;
+              console.log(`Downloaded new employee: ${amplifyEmployee.firstName} ${amplifyEmployee.lastName}`);
+            } else if (result.errors || result.duplicateError) {
+              const errorMsg = result.duplicateError || Object.values(result.errors || {}).join(', ');
+              errors.push(`Failed to create ${amplifyEmployee.firstName} ${amplifyEmployee.lastName}: ${errorMsg}`);
+            }
+          }
+        } catch (error) {
+          const errorMsg = `Error processing ${amplifyEmployee.firstName} ${amplifyEmployee.lastName}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          errors.push(errorMsg);
+          console.error(errorMsg);
+        }
+      }
+
+      this.lastSyncDate = new Date();
+
+      return {
+        success: errors.length === 0,
+        uploadedCount: 0,
+        downloadedCount,
+        errors
+      };
+    } finally {
+      this.isDownloading = false;
+    }
+  }
+
+  /**
+   * Full sync: upload first, then download (all entity types)
+   */
+  async fullSync(): Promise<SyncStatus> {
+    const syncStatus: SyncStatus = {
+      totalLocalCustomers: 0,
+      totalUnsyncedCustomers: 0,
+      totalLocalEmployees: 0,
+      totalUnsyncedEmployees: 0,
+      customersUploaded: 0,
+      customersDownloaded: 0,
+      employeesUploaded: 0,
+      employeesDownloaded: 0,
+      categoriesUploaded: 0,
+      categoriesDownloaded: 0,
+      productsUploaded: 0,
+      productsDownloaded: 0,
+      startTime: new Date(),
+      success: false,
+      isUploading: false,
+      isDownloading: false
+    };
+
+    try {
+      // Initialize all services
+      await customerService.initialize();
+      await employeeService.initialize();
+      await categoryService.initialize();
+      await productService.initialize();
+      
+      // Get the initial status
+      const initialStatus = await this.getSyncStatus();
+      syncStatus.totalLocalCustomers = initialStatus.totalLocalCustomers;
+      syncStatus.totalUnsyncedCustomers = initialStatus.totalUnsyncedCustomers;
+      syncStatus.totalLocalEmployees = initialStatus.totalLocalEmployees;
+      syncStatus.totalUnsyncedEmployees = initialStatus.totalUnsyncedEmployees;
+
+      // Upload phase
+      console.log('Starting full sync - Upload phase');
+      syncStatus.isUploading = true;
+      
+      // Upload customers
+      const uploadCustomersResult = await this.uploadCustomers();
+      syncStatus.customersUploaded = uploadCustomersResult.uploadedCount;
+      
+      // Upload employees
+      const uploadEmployeesResult = await this.uploadEmployees();
+      syncStatus.employeesUploaded = uploadEmployeesResult.uploadedCount;
+      
+      // Upload categories
+      const uploadCategoriesResult = await this.uploadCategories();
+      syncStatus.categoriesUploaded = uploadCategoriesResult.uploadedCount;
+      
+      // Upload products
+      const uploadProductsResult = await this.uploadProducts();
+      syncStatus.productsUploaded = uploadProductsResult.uploadedCount;
+      
+      // Download phase
+      console.log('Starting download phase');
+      syncStatus.isUploading = false;
+      syncStatus.isDownloading = true;
+      
+      // Download customers
+      const downloadCustomersResult = await this.downloadCustomers();
+      syncStatus.customersDownloaded = downloadCustomersResult.downloadedCount;
+      
+      // Download employees
+      const downloadEmployeesResult = await this.downloadEmployees();
+      syncStatus.employeesDownloaded = downloadEmployeesResult.downloadedCount;
+      
+      // Download categories
+      const downloadCategoriesResult = await this.downloadCategories();
+      syncStatus.categoriesDownloaded = downloadCategoriesResult.downloadedCount;
+      
+      // Download products
+      const downloadProductsResult = await this.downloadProducts();
+      syncStatus.productsDownloaded = downloadProductsResult.downloadedCount;
+      
+      // Mark sync as complete
+      this.lastSyncDate = new Date();
+      syncStatus.endTime = new Date();
+      syncStatus.success = true;
+      
+      return syncStatus;
+    } catch (error) {
+      console.error('Full sync failed:', error);
+      syncStatus.endTime = new Date();
+      syncStatus.success = false;
+      syncStatus.error = error instanceof Error ? error.message : 'Unknown error during sync';
+      return syncStatus;
+    } finally {
+      syncStatus.isUploading = false;
+      syncStatus.isDownloading = false;
+    }
+  }
+  
+  /**
+   * Download products from the server
+   */
+  async downloadProducts(): Promise<SyncResult> {
+    if (this.isDownloading) {
+      throw new Error('Download already in progress');
+    }
+
+    this.isDownloading = true;
+    const errors: string[] = [];
+    let downloadedCount = 0;
+    
+    try {
+      await productService.initialize();
+      
+      console.log('Starting download of products from Amplify...');
+
+      // API call to fetch products from server would go here
+      // Using 'as any' to bypass type checking issues with the client model types
+      const response = await (client.models as any).Product.list();
+
+      if (response.errors) {
+        errors.push(`Failed to fetch products: ${response.errors.map((e: any) => e.message).join(', ')}`);
+        return {
+          success: false,
+          uploadedCount: 0,
+          downloadedCount: 0,
+          errors
+        };
+      }
+
+      // Get products from response
+      const serverProducts = response.data || [];
+      
+      console.log(`Processing ${serverProducts.length} products from server`);
+
+      for (const serverProduct of serverProducts) {
+        try {
+          // Convert server model to local model
+          const productData = this.fromProductApiModel(serverProduct);
+
+          // Check if we already have this product locally
+          let localProduct = null;
+          if (serverProduct.id) {
+            const existingProducts = await productService.getAllProductsSorted();
+            localProduct = existingProducts.find(p => p.amplifyId === serverProduct.id);
+          }
+
+          if (localProduct) {
+            // Update existing product
+            const result = await productService.updateProduct(localProduct.id, {
+              ...productData,
+              isLocalOnly: false,
+              lastSyncedAt: new Date().toISOString()
+            });
+
+            if (result.product) {
+              downloadedCount++;
+            } else if (result.errors) {
+              const errorMsg = `Error updating product from server: ${JSON.stringify(result.errors)}`;
+              errors.push(errorMsg);
+              console.error(errorMsg);
+            }
+          } else {
+            // Create new product
+            const result = await productService.createProduct({
+              ...productData,
+              isLocalOnly: false,
+              lastSyncedAt: new Date().toISOString()
+            });
+
+            if (result.product) {
+              // Mark as synced
+              await productService.markAsSynced(result.product.id, serverProduct.id);
+              downloadedCount++;
+            } else if (result.errors) {
+              const errorMsg = `Error creating product from server: ${JSON.stringify(result.errors)}`;
+              errors.push(errorMsg);
+              console.error(errorMsg);
+            }
+          }
+        } catch (error) {
+          const errorMsg = `Failed to process server product ${serverProduct.id}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          console.error(errorMsg);
+          errors.push(errorMsg);
+        }
+      }
+
+      return {
+        success: true,
+        uploadedCount: 0,
+        downloadedCount,
+        errors
+      };
+    } catch (error) {
+      console.error('Error during product download:', error);
+      return {
+        success: false,
+        downloadedCount: 0,
+        uploadedCount: 0,
+        errors: [error instanceof Error ? error.message : 'Unknown error during product download']
+      };
+    } finally {
+      this.isDownloading = false;
+    }
+  }}

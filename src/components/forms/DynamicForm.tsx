@@ -4,93 +4,120 @@ import { useForm, Controller } from 'react-hook-form';
 import { Ionicons } from '@expo/vector-icons';
 import { PhoneInput } from '../ui/PhoneInput';
 import { CustomerFormData, ValidationErrors } from '../../utils/customerValidation';
+import { EmployeeFormData, EmployeeValidationErrors } from '../../utils/employeeValidation';
+
+type FormDataType = CustomerFormData | EmployeeFormData;
+type ValidationErrorsType = ValidationErrors | EmployeeValidationErrors;
 
 interface FormField {
-  name: keyof CustomerFormData;
+  name: string;
   label: string;
   placeholder: string;
   required: boolean;
-  type: 'text' | 'email' | 'phone';
+  type: 'text' | 'email' | 'phone' | 'pin';
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   keyboardType?: 'default' | 'email-address' | 'numeric' | 'phone-pad';
+  secureTextEntry?: boolean;
 }
 
 interface DynamicFormProps {
-  initialData?: Partial<CustomerFormData>;
-  onSubmit: (data: CustomerFormData) => void;
+  initialData?: Partial<FormDataType>;
+  onSubmit: (data: FormDataType) => void;
   onCancel: () => void;
   isLoading?: boolean;
-  errors?: ValidationErrors;
+  errors?: ValidationErrorsType;
   duplicateError?: string;
   mode: 'create' | 'edit';
+  entityType: 'customer' | 'employee';
 }
 
-const formFields: FormField[] = [
-  {
-    name: 'firstName',
-    label: 'First Name',
-    placeholder: 'Enter first name',
-    required: true,
-    type: 'text',
-    autoCapitalize: 'words'
-  },
-  {
-    name: 'lastName',
-    label: 'Last Name',
-    placeholder: 'Enter last name',
-    required: true,
-    type: 'text',
-    autoCapitalize: 'words'
-  },
-  {
-    name: 'email',
-    label: 'Email',
-    placeholder: 'Enter email address (optional)',
-    required: false,
-    type: 'email',
-    autoCapitalize: 'none',
-    keyboardType: 'email-address'
-  },
-  {
-    name: 'phone',
-    label: 'Phone',
-    placeholder: '(555) 123-4567',
-    required: true,
-    type: 'phone'
-  },
-  {
-    name: 'address',
-    label: 'Address',
-    placeholder: 'Enter street address (optional)',
-    required: false,
-    type: 'text',
-    autoCapitalize: 'words'
-  },
-  {
-    name: 'city',
-    label: 'City',
-    placeholder: 'Enter city (optional)',
-    required: false,
-    type: 'text',
-    autoCapitalize: 'words'
-  },
-  {
-    name: 'state',
-    label: 'State',
-    placeholder: 'Enter state (optional)',
-    required: false,
-    type: 'text',
-    autoCapitalize: 'characters'
-  },
-  {
-    name: 'zipCode',
-    label: 'ZIP Code',
-    placeholder: 'Enter ZIP code (optional)',
-    required: false,
-    type: 'text',
-    keyboardType: 'numeric'
+const getFormFields = (entityType: 'customer' | 'employee'): FormField[] => {
+  const fields: FormField[] = [
+    {
+      name: 'firstName',
+      label: 'First Name',
+      placeholder: 'Enter first name',
+      required: true,
+      type: 'text',
+      autoCapitalize: 'words'
+    },
+    {
+      name: 'lastName',
+      label: 'Last Name',
+      placeholder: 'Enter last name',
+      required: true,
+      type: 'text',
+      autoCapitalize: 'words'
+    },
+    {
+      name: 'phone',
+      label: 'Phone',
+      placeholder: '(555) 123-4567',
+      required: true,
+      type: 'phone'
+    },
+    {
+      name: 'email',
+      label: 'Email',
+      placeholder: 'Enter email address (optional)',
+      required: false,
+      type: 'email',
+      autoCapitalize: 'none',
+      keyboardType: 'email-address'
+    }
+  ];
+
+  // Add PIN field right after email for employees (required)
+  if (entityType === 'employee') {
+    fields.push({
+      name: 'pin',
+      label: 'PIN',
+      placeholder: 'Enter 4-6 digit PIN',
+      required: true,
+      type: 'pin',
+      keyboardType: 'numeric',
+      secureTextEntry: true
+    });
   }
-];
+
+  // Add address fields
+  fields.push(
+    {
+      name: 'address',
+      label: 'Address',
+      placeholder: 'Enter street address (optional)',
+      required: false,
+      type: 'text',
+      autoCapitalize: 'words'
+    },
+    {
+      name: 'city',
+      label: 'City',
+      placeholder: 'Enter city (optional)',
+      required: false,
+      type: 'text',
+      autoCapitalize: 'words'
+    },
+    {
+      name: 'state',
+      label: 'State',
+      placeholder: 'Enter state (optional)',
+      required: false,
+      type: 'text',
+      autoCapitalize: 'characters'
+    },
+    {
+      name: 'zipCode',
+      label: 'ZIP Code',
+      placeholder: 'Enter ZIP code (optional)',
+      required: false,
+      type: 'text',
+      keyboardType: 'numeric'
+    }
+  );
+
+  return fields;
+};
 
 export const DynamicForm: React.FC<DynamicFormProps> = ({
   initialData,
@@ -99,36 +126,41 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
   isLoading = false,
   errors = {},
   duplicateError,
-  mode
+  mode,
+  entityType
 }) => {
+  const formFields = getFormFields(entityType);
+  
   const {
     control,
     handleSubmit,
-    formState: { isValid, isDirty },
-    reset
-  } = useForm<CustomerFormData>({
+    formState: { isValid }
+  } = useForm<FormDataType>({
     defaultValues: {
       firstName: initialData?.firstName || '',
       lastName: initialData?.lastName || '',
-      email: initialData?.email || '',
       phone: initialData?.phone || '',
+      email: initialData?.email || '',
       address: initialData?.address || '',
       city: initialData?.city || '',
       state: initialData?.state || '',
-      zipCode: initialData?.zipCode || ''
+      zipCode: initialData?.zipCode || '',
+      ...(entityType === 'employee' && { 
+        pin: (initialData as EmployeeFormData)?.pin || '' 
+      })
     },
     mode: 'onChange'
   });
 
   const renderField = (field: FormField) => {
-    const fieldError = errors[field.name];
+    const fieldError = (errors as any)[field.name];
 
     if (field.type === 'phone') {
       return (
         <Controller
           key={field.name}
           control={control}
-          name={field.name}
+          name={field.name as any}
           rules={{ required: field.required }}
           render={({ field: { onChange, value } }) => (
             <PhoneInput
@@ -149,7 +181,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
       <Controller
         key={field.name}
         control={control}
-        name={field.name}
+        name={field.name as any}
         rules={{ required: field.required }}
         render={({ field: { onChange, value } }) => (
           <View style={styles.fieldContainer}>
@@ -168,6 +200,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
               editable={!isLoading}
               autoCorrect={false}
               autoComplete={field.type === 'email' ? 'email' : 'off'}
+              secureTextEntry={field.secureTextEntry || false}
             />
             {fieldError && <Text style={styles.errorText}>{fieldError}</Text>}
           </View>
@@ -180,7 +213,10 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>
-          {mode === 'create' ? 'Add New Customer' : 'Edit Customer'}
+          {mode === 'create' 
+            ? `Add New ${entityType === 'customer' ? 'Customer' : 'Employee'}` 
+            : `Edit ${entityType === 'customer' ? 'Customer' : 'Employee'}`
+          }
         </Text>
         <TouchableOpacity 
           onPress={onCancel}
@@ -226,7 +262,10 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
             </Text>
           ) : (
             <Text style={styles.submitButtonText}>
-              {mode === 'create' ? 'Create Customer' : 'Update Customer'}
+              {mode === 'create' 
+                ? `Create ${entityType === 'customer' ? 'Customer' : 'Employee'}` 
+                : `Update ${entityType === 'customer' ? 'Customer' : 'Employee'}`
+              }
             </Text>
           )}
         </TouchableOpacity>

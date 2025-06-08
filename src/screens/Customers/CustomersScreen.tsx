@@ -191,6 +191,7 @@ export default function CustomersScreen() {
         >
           <DynamicForm
             mode="create"
+            entityType="customer"
             onSubmit={handleCreateCustomer}
             onCancel={handleCloseCreateModal}
             isLoading={operationLoading}
@@ -207,6 +208,7 @@ export default function CustomersScreen() {
         >
           <DynamicForm
             mode="edit"
+            entityType="customer"
             initialData={editingCustomer ? {
               firstName: editingCustomer.firstName,
               lastName: editingCustomer.lastName,
