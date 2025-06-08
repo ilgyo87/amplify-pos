@@ -38,20 +38,47 @@ export class CustomerRepository extends BaseRepository<CustomerDocType, Customer
 
   /**
    * Search customers by name (first or last name)
+   * Uses RxDB's native query capabilities with proper indexing for better performance
    */
   async searchByName(searchTerm: string): Promise<CustomerDocument[]> {
-    const allCustomers = await this.collection.find({
+    if (!searchTerm || searchTerm.trim() === '') {
+      return [];
+    }
+    
+    // For RxDB, we need to use string pattern rather than RegExp object
+    // We'll use PouchDB/Mango style regex which needs the pattern without slashes
+    const searchPattern = searchTerm.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'); // Escape regex special chars
+    
+    // Using mangoQuery with $or to search across multiple fields
+    // This leverages the indexes on firstName and lastName
+    const results = await this.collection.find({
       selector: {
-        isDeleted: { $ne: true }
+        $and: [
+          { isDeleted: { $ne: true } },
+          {
+            $or: [
+              // Use case insensitive pattern - RxDB will translate this appropriately
+              { firstName: { $regex: `(?i)${searchPattern}` } },  
+              { lastName: { $regex: `(?i)${searchPattern}` } }
+            ]
+          }
+        ]
       }
     }).exec();
     
-    const searchTermLower = searchTerm.toLowerCase();
-    return allCustomers.filter(customer => 
-      customer.firstName.toLowerCase().includes(searchTermLower) ||
-      customer.lastName.toLowerCase().includes(searchTermLower) ||
-      `${customer.firstName} ${customer.lastName}`.toLowerCase().includes(searchTermLower)
-    ) as CustomerDocument[];
+    // For full name searches (which can't easily be done in the query),
+    // we'll do a second pass in memory, but only on the already filtered results
+    if (searchTerm.includes(' ')) {
+      const fullNameMatches = results.filter(customer => {
+        const fullName = `${customer.firstName} ${customer.lastName}`.toLowerCase();
+        return fullName.includes(searchTerm.toLowerCase());
+      });
+      
+      // Return either the full name matches (if we found any) or the original results
+      return fullNameMatches.length > 0 ? fullNameMatches as CustomerDocument[] : results as CustomerDocument[];
+    }
+    
+    return results as CustomerDocument[];
   }
 
   /**
@@ -82,14 +109,14 @@ export class CustomerRepository extends BaseRepository<CustomerDocType, Customer
 
   /**
    * Count all non-deleted customers
+   * Uses RxDB's count feature instead of loading all records
    */
   async count(): Promise<number> {
-    const results = await this.collection.find({
+    return await this.collection.count({
       selector: {
         isDeleted: { $ne: true }
       }
     }).exec();
-    return results.length;
   }
 
   /**

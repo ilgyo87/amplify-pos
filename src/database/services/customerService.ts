@@ -44,7 +44,6 @@ export class CustomerService {
   async createCustomer(
     customerData: Omit<CustomerDocType, 'id' | 'createdAt' | 'updatedAt' | 'isLocalOnly' | 'isDeleted'>
   ): Promise<CustomerDocument> {
-    await this.initialize();
     const repository = this.getRepository();
     
     // Set default values for new customers
@@ -63,7 +62,6 @@ export class CustomerService {
    * @returns The customer document or null if not found
    */
   async getCustomerById(id: string): Promise<CustomerDocument | null> {
-    await this.initialize();
     const repository = this.getRepository();
     return repository.findById(id) as Promise<CustomerDocument | null>;
   }
@@ -73,7 +71,6 @@ export class CustomerService {
    * @returns Array of customer documents
    */
   async getAllCustomers(): Promise<CustomerDocument[]> {
-    await this.initialize();
     const repository = this.getRepository();
     return repository.findAll() as Promise<CustomerDocument[]>;
   }
@@ -88,7 +85,6 @@ export class CustomerService {
     id: string, 
     customerData: Partial<Omit<CustomerDocType, 'id' | 'createdAt' | 'updatedAt'>>
   ): Promise<CustomerDocument | null> {
-    await this.initialize();
     const repository = this.getRepository();
     return repository.update(id, customerData) as Promise<CustomerDocument | null>;
   }
@@ -99,7 +95,6 @@ export class CustomerService {
    * @returns True if deleted, false otherwise
    */
   async deleteCustomer(id: string): Promise<boolean> {
-    await this.initialize();
     const repository = this.getRepository();
     return repository.softDelete(id);
   }
@@ -110,7 +105,6 @@ export class CustomerService {
    * @returns Array of matching customer documents
    */
   async searchCustomers(searchTerm: string): Promise<CustomerDocument[]> {
-    await this.initialize();
     const repository = this.getRepository();
     return repository.searchByName(searchTerm);
   }
@@ -120,7 +114,6 @@ export class CustomerService {
    * @returns Array of local only customer documents
    */
   async getLocalOnlyCustomers(): Promise<CustomerDocument[]> {
-    await this.initialize();
     const repository = this.getRepository();
     return repository.getLocalOnly();
   }
@@ -130,7 +123,6 @@ export class CustomerService {
    * @returns Array of synced customer documents
    */
   async getSyncedCustomers(): Promise<CustomerDocument[]> {
-    await this.initialize();
     const repository = this.getRepository();
     return repository.getSynced();
   }
@@ -141,7 +133,6 @@ export class CustomerService {
    * @returns The customer document or null if not found
    */
   async findByPhone(phone: string): Promise<CustomerDocument | null> {
-    await this.initialize();
     const repository = this.getRepository();
     return repository.findByPhone(phone);
   }
@@ -152,7 +143,6 @@ export class CustomerService {
    * @returns The customer document or null if not found
    */
   async findByEmail(email: string): Promise<CustomerDocument | null> {
-    await this.initialize();
     const repository = this.getRepository();
     return repository.findByEmail(email);
   }
@@ -162,7 +152,6 @@ export class CustomerService {
    * @returns Array of unsynced customer documents
    */
   async getUnsyncedCustomers(): Promise<CustomerDocument[]> {
-    await this.initialize();
     const repository = this.getRepository();
     return repository.findUnsyncedDocuments() as Promise<CustomerDocument[]>;
   }
@@ -183,7 +172,6 @@ export class CustomerService {
    * @returns The updated customer document or null if not found
    */
   async markAsSynced(localId: string, amplifyId: string): Promise<CustomerDocument | null> {
-    await this.initialize();
     const repository = this.getRepository();
     return repository.markAsSynced(localId, amplifyId) as Promise<CustomerDocument | null>;
   }
@@ -193,7 +181,6 @@ export class CustomerService {
    * @returns Number of customers
    */
   async getCustomersCount(): Promise<number> {
-    await this.initialize();
     const repository = this.getRepository();
     return repository.count();
   }
@@ -206,9 +193,8 @@ export class CustomerService {
    */
   subscribeToChanges(callback: (change: any) => void): () => void {
     if (!this.customerRepository) {
-      // Initialize without waiting to allow subscription to be set up immediately
-      this.initialize().catch(console.error);
-      // Return a no-op unsubscribe function for now
+      console.error('Customer repository not initialized');
+      // Return a no-op unsubscribe function since we can't subscribe yet
       return () => {};
     }
     return this.customerRepository.subscribeToChanges(callback);
@@ -222,7 +208,6 @@ export class CustomerService {
   async bulkUpsert(customers: Array<Partial<CustomerDocType> & { id: string }>): Promise<void> {
     if (!customers.length) return;
     
-    await this.initialize();
     const repository = this.getRepository();
     
     // Process in chunks to avoid overloading the database
