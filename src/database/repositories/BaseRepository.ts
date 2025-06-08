@@ -30,9 +30,14 @@ export abstract class BaseRepository<T, C extends RxCollection = RxCollection> {
 
   /**
    * Find all documents in the collection
+   * Excludes soft-deleted documents by default
    */
   async findAll(): Promise<RxDocument<T>[]> {
-    return this.collection.find().exec();
+    return this.collection.find({
+      selector: {
+        isDeleted: { $ne: true }
+      }
+    }).exec();
   }
 
   /**
@@ -48,7 +53,13 @@ export abstract class BaseRepository<T, C extends RxCollection = RxCollection> {
       isLocalOnly: true, // New documents are local by default
       isDeleted: false   // Ensure soft delete flag is set
     } as unknown as T;
-    return this.collection.insert(doc);
+    const result = await this.collection.insert(doc);
+    
+    // Log the creation
+    const collectionName = this.collection.name;
+    console.log(`[${new Date().toLocaleString()}] CREATED: ${collectionName} - ID: ${result.id}`);
+    
+    return result;
   }
 
   /**
@@ -65,6 +76,10 @@ export abstract class BaseRepository<T, C extends RxCollection = RxCollection> {
       }
     });
     
+    // Log the update
+    const collectionName = this.collection.name;
+    console.log(`[${new Date().toLocaleString()}] UPDATED: ${collectionName} - ID: ${id}`);
+    
     return this.findById(id);
   }
 
@@ -76,6 +91,11 @@ export abstract class BaseRepository<T, C extends RxCollection = RxCollection> {
     if (!doc) return false;
     
     await doc.remove();
+    
+    // Log the hard delete
+    const collectionName = this.collection.name;
+    console.log(`[${new Date().toLocaleString()}] HARD DELETED: ${collectionName} - ID: ${id}`);
+    
     return true;
   }
 
@@ -92,6 +112,10 @@ export abstract class BaseRepository<T, C extends RxCollection = RxCollection> {
         updatedAt: new Date().toISOString()
       }
     });
+    
+    // Log the soft delete
+    const collectionName = this.collection.name;
+    console.log(`[${new Date().toLocaleString()}] DELETED: ${collectionName} - ID: ${id}`);
     
     return true;
   }

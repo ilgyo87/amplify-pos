@@ -136,6 +136,74 @@ export class CustomerRepository extends BaseRepository<CustomerDocType, Customer
   }
 
   /**
+   * Check if customer exists by email (excluding a specific ID)
+   */
+  async existsByEmail(email: string, excludeId?: string): Promise<boolean> {
+    const selector: any = {
+      email,
+      isDeleted: { $ne: true }
+    };
+    
+    if (excludeId) {
+      selector.id = { $ne: excludeId };
+    }
+    
+    const count = await this.collection.count({ selector }).exec();
+    return count > 0;
+  }
+
+  /**
+   * Check if customer exists by phone (excluding a specific ID)
+   */
+  async existsByPhone(phone: string, excludeId?: string): Promise<boolean> {
+    const selector: any = {
+      phone,
+      isDeleted: { $ne: true }
+    };
+    
+    if (excludeId) {
+      selector.id = { $ne: excludeId };
+    }
+    
+    const count = await this.collection.count({ selector }).exec();
+    return count > 0;
+  }
+
+  /**
+   * Search customers across multiple fields
+   */
+  async search(query: string, limit?: number): Promise<CustomerDocument[]> {
+    if (!query || query.trim() === '') {
+      return this.findAll();
+    }
+
+    const searchPattern = query.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+    
+    const selector = {
+      $and: [
+        { isDeleted: { $ne: true } },
+        {
+          $or: [
+            { firstName: { $regex: `(?i)${searchPattern}` } },
+            { lastName: { $regex: `(?i)${searchPattern}` } },
+            { email: { $regex: `(?i)${searchPattern}` } },
+            { phone: { $regex: searchPattern } }
+          ]
+        }
+      ]
+    };
+
+    const queryBuilder = this.collection.find({ selector });
+    
+    if (limit) {
+      queryBuilder.limit(limit);
+    }
+    
+    const results = await queryBuilder.exec();
+    return results as CustomerDocument[];
+  }
+
+  /**
    * Subscribe to changes in the customers collection
    */
   subscribeToChanges(callback: (change: any) => void): () => void {

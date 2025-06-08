@@ -2,13 +2,16 @@
 import 'react-native-get-random-values'; // Provides crypto.getRandomValues() implementation
 import 'react-native-url-polyfill/auto';
 
-// Make sure crypto object exists on global
+// Import react-native-quick-crypto for crypto.subtle support
+import { install } from 'react-native-quick-crypto';
+install();
+
+// Additional crypto polyfill for RxDB compatibility
 if (typeof global.crypto === 'undefined') {
   (global as any).crypto = {};
 }
 
-// RxDB primarily relies on getRandomValues which is provided by react-native-get-random-values
-// This simple fallback is only used if react-native-get-random-values failed to install properly
+// Ensure getRandomValues is available
 if (!(global.crypto as any).getRandomValues) {
   console.warn('crypto.getRandomValues not found, using simple fallback');
   (global.crypto as any).getRandomValues = (array: Uint8Array) => {

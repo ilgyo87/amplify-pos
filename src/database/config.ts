@@ -4,8 +4,8 @@ import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 import { RxDBJsonDumpPlugin } from 'rxdb/plugins/json-dump';
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
-import { wrappedValidateAjvStorage } from 'rxdb/plugins/validate-ajv';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
+import { wrappedValidateAjvStorage } from 'rxdb/plugins/validate-ajv';
 
 // Add RxDB plugins
 addRxPlugin(RxDBQueryBuilderPlugin);
@@ -40,17 +40,18 @@ export const getDatabaseInstance = async (): Promise<AppDatabase> => {
 };
 
 const createDatabase = async (): Promise<AppDatabase> => {
-  // Use memory storage wrapped with validation
+  // Use memory storage with validation wrapper for dev-mode
   const storage = wrappedValidateAjvStorage({
     storage: getRxStorageMemory()
   });
 
   try {
     const database = await createRxDatabase<DatabaseCollections>({
-      name: 'amplifyposdb',
+      name: 'amplifyposdb_v3',
       storage,
       multiInstance: false, // Set to false in React Native
       ignoreDuplicate: true,
+      allowSlowCount: true, // Allow count() queries in slow mode
       cleanupPolicy: {
         minimumDeletedTime: 1000 * 60 * 60 * 24 * 7, // one week
         minimumCollectionAge: 1000 * 60 * 60 * 24 * 7, // one week
