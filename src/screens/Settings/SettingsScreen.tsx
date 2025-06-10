@@ -9,7 +9,9 @@ import {
   ActivityIndicator,
   Modal,
   TextInput,
-  SafeAreaView 
+  SafeAreaView,
+  KeyboardAvoidingView,
+  Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BaseScreen } from '../BaseScreen';
@@ -856,18 +858,23 @@ export default function SettingsScreen() {
 
         {/* Printer Settings Modal */}
         <Modal visible={showPrinterModal} animationType="slide" presentationStyle="pageSheet">
-          <SafeAreaView style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={() => setShowPrinterModal(false)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <Text style={styles.modalTitle}>Printer Settings</Text>
-              <TouchableOpacity onPress={savePrinterSettings}>
-                <Text style={styles.modalSaveText}>Save</Text>
-              </TouchableOpacity>
-            </View>
+          <KeyboardAvoidingView 
+            style={styles.modalContainer} 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+          >
+            <SafeAreaView style={styles.modalContainer}>
+              <View style={styles.modalHeader}>
+                <TouchableOpacity onPress={() => setShowPrinterModal(false)}>
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <Text style={styles.modalTitle}>Printer Settings</Text>
+                <TouchableOpacity onPress={savePrinterSettings}>
+                  <Text style={styles.modalSaveText}>Save</Text>
+                </TouchableOpacity>
+              </View>
 
-            <ScrollView style={styles.modalContent}>
+              <ScrollView style={styles.modalContent}>
               <View style={styles.printerInfoSection}>
                 <View style={styles.printerIconContainer}>
                   <Ionicons name="print" size={48} color="#007AFF" />
@@ -942,8 +949,9 @@ export default function SettingsScreen() {
                 <Text style={styles.instructionText}>5. Receipts will automatically print to your configured printer</Text>
                 <Text style={styles.instructionText}>6. No system dialogs or additional setup required after configuration</Text>
               </View>
-            </ScrollView>
-          </SafeAreaView>
+              </ScrollView>
+            </SafeAreaView>
+          </KeyboardAvoidingView>
         </Modal>
       </ScrollView>
     </BaseScreen>

@@ -17,14 +17,11 @@ interface ProductGridProps {
   products: ProductDocument[] | any[];
   onSelectProduct: (product: ProductDocument) => void;
   isLoading?: boolean;
-  currentPage?: number;
-  onChangePage?: (page: number) => void;
-  itemsPerPage?: number;
   style?: any;
 }
 
 const { width } = Dimensions.get('window');
-const COLUMN_COUNT = width > 768 ? 4 : 3;
+const COLUMN_COUNT = 4; // Fixed 4x4 grid
 // Reduce item width by 15%
 const ITEM_WIDTH = ((width - 80) / COLUMN_COUNT) * 0.85;
 
@@ -33,21 +30,11 @@ export function ProductGrid(props: ProductGridProps) {
     products = [],
     onSelectProduct,
     isLoading = false,
-    currentPage = 0,
-    onChangePage,
-    itemsPerPage = 12,
     style
   } = props;
   
   // Safety checks for undefined/null values
   const safeProducts = Array.isArray(products) ? products : [];
-  const safeCurrentPage = Number(currentPage) || 0;
-  const safeItemsPerPage = Number(itemsPerPage) || 12;
-  
-  const totalPages = Math.ceil(safeProducts.length / safeItemsPerPage);
-  const startIndex = safeCurrentPage * safeItemsPerPage;
-  const endIndex = startIndex + safeItemsPerPage;
-  const displayedProducts = safeProducts.slice(startIndex, endIndex);
 
   // Use the existing image utility function
 
@@ -106,38 +93,6 @@ export function ProductGrid(props: ProductGridProps) {
     }
   };
 
-  const renderPagination = () => {
-    if (totalPages <= 1) return null;
-
-    return (
-      <View style={styles.pagination}>
-        <TouchableOpacity
-          style={[styles.pageButton, safeCurrentPage === 0 && styles.disabledButton]}
-          onPress={() => onChangePage && onChangePage(safeCurrentPage - 1)}
-          disabled={safeCurrentPage === 0}
-        >
-          <Ionicons name="chevron-back" size={20} color={safeCurrentPage === 0 ? '#ccc' : '#007AFF'} />
-        </TouchableOpacity>
-        
-        <View style={styles.pageInfo}>
-          <Text style={styles.pageText}>
-            Page {(safeCurrentPage + 1)} of {totalPages || 1}
-          </Text>
-          <Text style={styles.itemCountText}>
-            {safeProducts.length} items
-          </Text>
-        </View>
-        
-        <TouchableOpacity
-          style={[styles.pageButton, safeCurrentPage === totalPages - 1 && styles.disabledButton]}
-          onPress={() => onChangePage && onChangePage(safeCurrentPage + 1)}
-          disabled={safeCurrentPage === totalPages - 1}
-        >
-          <Ionicons name="chevron-forward" size={20} color={safeCurrentPage === totalPages - 1 ? '#ccc' : '#007AFF'} />
-        </TouchableOpacity>
-      </View>
-    );
-  };
 
   if (isLoading) {
     return (
@@ -161,16 +116,15 @@ export function ProductGrid(props: ProductGridProps) {
   return (
     <View style={[styles.container, style]}>
       <FlatList
-        data={displayedProducts}
+        data={safeProducts}
         renderItem={renderProductItem}
         keyExtractor={(item, index) => item?.id || `product-${index}`}
         numColumns={COLUMN_COUNT}
         key={COLUMN_COUNT}
         contentContainerStyle={styles.gridContent}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
       />
-      {renderPagination()}
     </View>
   );
 }
@@ -276,37 +230,5 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: 8,
-  },
-  pagination: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-  },
-  pageButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-  },
-  disabledButton: {
-    backgroundColor: '#f0f0f0',
-  },
-  pageInfo: {
-    alignItems: 'center',
-  },
-  pageText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-  },
-  itemCountText: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
   },
 });

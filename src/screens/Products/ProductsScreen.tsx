@@ -25,10 +25,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
-  section: {
+  // Top navigation styles
+  topNavContainer: {
+    flexDirection: 'row',
     backgroundColor: 'white',
     marginHorizontal: 16,
-    marginVertical: 8,
+    marginTop: 16,
+    marginBottom: 8,
     borderRadius: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -36,37 +39,108 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  navButton: {
+    flex: 1,
+    padding: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderBottomWidth: 3,
+    borderBottomColor: 'transparent',
+  },
+  navButtonActive: {
+    borderBottomColor: '#007AFF',
+  },
+  navButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#666',
+  },
+  navButtonTextActive: {
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  
+  // Category tab styles
+  categoryTabsContainer: {
+    backgroundColor: 'white',
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  categoryTabs: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  categoryTab: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginHorizontal: 4,
+    marginVertical: 4,
+  },
+  categoryTabActive: {
+    backgroundColor: '#007AFF',
+  },
+  categoryTabText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  categoryTabTextActive: {
+    color: 'white',
+    fontWeight: '500',
+  },
+  categoryActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    gap: 8,
+  },
+  
+  // Content container
+  contentContainer: {
+    flex: 1,
+    backgroundColor: 'white',
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    padding: 16,
+  },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
   },
-  categoryContainer: {
-    maxHeight: 200,
-  },
   productContainer: {
     flex: 1,
     minHeight: 400,
   },
-  categoryActions: {
+  
+  // View mode controls
+  viewModeContainer: {
     flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
-  },
-  defaultDataButton: {
-    // Inherit styles from AddDefaultDataButton component
-  },
-  productActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    padding: 8,
+    marginBottom: 8,
     gap: 8,
   },
   viewModeButton: {
@@ -75,6 +149,10 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 1,
     borderColor: '#007AFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
   },
   viewModeButtonActive: {
     backgroundColor: '#007AFF',
@@ -279,7 +357,6 @@ export default function ProductsScreen() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   
   // Rack label states
-  const [showRackLabelForm, setShowRackLabelForm] = useState(false);
   const [rackPrefix, setRackPrefix] = useState('R');
   const [numberOfLabels, setNumberOfLabels] = useState('10');
   const [startingNumber, setStartingNumber] = useState('1');
@@ -573,22 +650,15 @@ export default function ProductsScreen() {
       `;
       
       // Print using direct expo print
-      const printOptions = {
+      const Print = await import('expo-print');
+      const result = await Print.printAsync({
         html: rackPrintHTML,
         width: 29 * 2.83465, // 29mm in points
         height: 90 * 2.83465, // 90mm in points
-        margins: { left: 0, right: 0, top: 0, bottom: 0 },
-        printerUrl: undefined
-      };
-      
-      const Print = await import('expo-print');
-      const result = await Print.printAsync(printOptions);
+      });
       
       console.log(`✅ Successfully printed ${labels.length} rack labels`);
       Alert.alert('Success', `${labels.length} rack label${labels.length > 1 ? 's' : ''} printed successfully.`);
-      
-      // Close the form after successful printing
-      setShowRackLabelForm(false);
       
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -608,86 +678,229 @@ export default function ProductsScreen() {
     }
   };
 
-  return (
-    <BaseScreen title="Products & Categories">
-      <View style={styles.container}>
-        {/* Categories Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Categories</Text>
-            <View style={styles.categoryActions}>
-              <AddDefaultDataButton 
-                onDataAdded={() => {
-                  // Refresh both categories and products when default data is added
-                  refreshProducts();
-                }}
-                style={styles.defaultDataButton}
-              />
+  // State for top navigation
+  const [activeSection, setActiveSection] = useState('products');
+
+  // Render the top navigation
+  const renderTopNav = () => (
+    <View style={styles.topNavContainer}>
+      <TouchableOpacity 
+        style={[styles.navButton, activeSection === 'categories' && styles.navButtonActive]}
+        onPress={() => setActiveSection('categories')}
+      >
+        <Text style={[styles.navButtonText, activeSection === 'categories' && styles.navButtonTextActive]}>Categories</Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity 
+        style={[styles.navButton, activeSection === 'products' && styles.navButtonActive]}
+        onPress={() => setActiveSection('products')}
+      >
+        <Text style={[styles.navButtonText, activeSection === 'products' && styles.navButtonTextActive]}>Products</Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity 
+        style={[styles.navButton, activeSection === 'racks' && styles.navButtonActive]}
+        onPress={() => setActiveSection('racks')}
+      >
+        <Text style={[styles.navButtonText, activeSection === 'racks' && styles.navButtonTextActive]}>Rack Labels</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  // Render category tabs
+  const renderCategoryTabs = () => (
+    <View style={styles.categoryTabsContainer}>
+      <View style={styles.categoryTabs}>
+        {/* All categories option */}
+        <TouchableOpacity 
+          style={[styles.categoryTab, selectedCategory === null && styles.categoryTabActive]}
+          onPress={() => setSelectedCategory(null)}
+        >
+          <Text style={[styles.categoryTabText, selectedCategory === null && styles.categoryTabTextActive]}>All</Text>
+        </TouchableOpacity>
+        
+        {/* Category tabs */}
+        {categories.map(category => (
+          <TouchableOpacity 
+            key={category.id}
+            style={[styles.categoryTab, selectedCategory?.id === category.id && styles.categoryTabActive]}
+            onPress={() => handleCategoryClick(category)}
+          >
+            <Text style={[styles.categoryTabText, selectedCategory?.id === category.id && styles.categoryTabTextActive]}>
+              {category.name}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      
+      {(categories.length === 0 || products.length === 0) && (
+        <View style={styles.categoryActions}>
+          <AddDefaultDataButton 
+            onDataAdded={() => {
+              refreshProducts();
+            }}
+          />
+        </View>
+      )}
+    </View>
+  );
+
+  // View mode controls 
+  const renderViewModeControls = () => (
+    <View style={styles.viewModeContainer}>
+      <TouchableOpacity 
+        style={[styles.viewModeButton, viewMode === 'grid' && styles.viewModeButtonActive]}
+        onPress={() => setViewMode('grid')}
+      >
+        <Ionicons name="grid-outline" size={16} color={viewMode === 'grid' ? 'white' : '#007AFF'} />
+        <Text style={[styles.viewModeText, viewMode === 'grid' && styles.viewModeTextActive]}>Grid View</Text>
+      </TouchableOpacity>
+      <TouchableOpacity 
+        style={[styles.viewModeButton, viewMode === 'list' && styles.viewModeButtonActive]}
+        onPress={() => setViewMode('list')}
+      >
+        <Ionicons name="list-outline" size={16} color={viewMode === 'list' ? 'white' : '#007AFF'} />
+        <Text style={[styles.viewModeText, viewMode === 'list' && styles.viewModeTextActive]}>List View</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  // Render content based on active section
+  const renderContent = () => {
+    switch(activeSection) {
+      case 'categories':
+        return (
+          <View style={styles.contentContainer}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>All Categories</Text>
               <CreateCategoryButton onPress={handleCreateCategory} />
             </View>
-          </View>
-          <View style={styles.categoryContainer}>
             <CategoryList
               categories={categories}
-              selectedCategoryId={selectedCategory?.id}
+              selectedCategoryId={undefined}
               onSelect={handleCategoryClick}
               onEdit={handleEditCategory}
               onDelete={handleDeleteCategory}
               loading={categoriesLoading}
             />
           </View>
-        </View>
+        );
+      
+      case 'products':
+        return (
+          <>
+            {renderCategoryTabs()}
+            {renderViewModeControls()}
+            <View style={styles.contentContainer}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>
+                  {selectedCategory ? selectedCategory.name : 'All Products'}
+                </Text>
+                <CreateProductButton onPress={handleCreateProduct} />
+              </View>
+              <View style={styles.productContainer}>
+                <ProductList
+                  products={products}
+                  viewMode={viewMode}
+                  onEdit={handleEditProduct}
+                  onDelete={handleDeleteProduct}
+                  onRefresh={refreshProducts}
+                  loading={productsLoading}
+                />
+              </View>
+            </View>
+          </>
+        );
+      
+      case 'racks':
+        return (
+          <View style={styles.contentContainer}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Rack Labels</Text>
+              <TouchableOpacity 
+                style={styles.rackPrintButton}
+                onPress={printRackLabels}
+                disabled={generateRackLabels().length === 0}
+              >
+                <Ionicons name="print" size={20} color="#fff" />
+                <Text style={styles.rackPrintButtonText}>
+                  Print {generateRackLabels().length} Label{generateRackLabels().length !== 1 ? 's' : ''}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            
+            {/* Input Section */}
+            <View style={styles.rackInputSection}>
+              <View style={styles.rackInputGroup}>
+                <Text style={styles.rackInputLabel}>Rack Prefix</Text>
+                <TextInput
+                  style={styles.rackInput}
+                  value={rackPrefix}
+                  onChangeText={setRackPrefix}
+                  placeholder="R"
+                  maxLength={3}
+                  autoCapitalize="characters"
+                />
+              </View>
+              
+              <View style={styles.rackInputGroup}>
+                <Text style={styles.rackInputLabel}>Starting Number</Text>
+                <TextInput
+                  style={styles.rackInput}
+                  value={startingNumber}
+                  onChangeText={setStartingNumber}
+                  placeholder="1"
+                  keyboardType="numeric"
+                />
+              </View>
+              
+              <View style={styles.rackInputGroup}>
+                <Text style={styles.rackInputLabel}>Number of Labels</Text>
+                <TextInput
+                  style={styles.rackInput}
+                  value={numberOfLabels}
+                  onChangeText={setNumberOfLabels}
+                  placeholder="10"
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
 
-        {/* Products Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
-              Products {selectedCategory && `- ${selectedCategory.name}`}
-            </Text>
-            <View style={styles.productActions}>
-              <TouchableOpacity 
-                style={[styles.viewModeButton, viewMode === 'grid' && styles.viewModeButtonActive]}
-                onPress={() => setViewMode('grid')}
+            {/* Preview Section */}
+            <View style={styles.rackPreviewSection}>
+              <Text style={styles.rackPreviewTitle}>Preview ({generateRackLabels().length} labels)</Text>
+              <ScrollView 
+                style={styles.rackPreviewScrollView}
+                contentContainerStyle={styles.rackPreviewScrollContent}
+                showsVerticalScrollIndicator={true}
               >
-                <Text style={[styles.viewModeText, viewMode === 'grid' && styles.viewModeTextActive]}>Grid</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.viewModeButton, viewMode === 'list' && styles.viewModeButtonActive]}
-                onPress={() => setViewMode('list')}
-              >
-                <Text style={[styles.viewModeText, viewMode === 'list' && styles.viewModeTextActive]}>List</Text>
-              </TouchableOpacity>
-              <CreateProductButton onPress={handleCreateProduct} />
+                <View style={styles.rackPreviewContainer}>
+                  {generateRackLabels().map((label, index) => (
+                    <RackPreviewItem 
+                      key={label.id} 
+                      label={label} 
+                      qrRefs={qrRefs}
+                    />
+                  ))}
+                </View>
+              </ScrollView>
             </View>
           </View>
-          <View style={styles.productContainer}>
-            <ProductList
-              products={products}
-              viewMode={viewMode}
-              onEdit={handleEditProduct}
-              onDelete={handleDeleteProduct}
-              onRefresh={refreshProducts}
-              loading={productsLoading}
-            />
-          </View>
-        </View>
+        );
+      
+      default:
+        return null;
+    }
+  };
 
-        {/* Rack Labels Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Rack Labels</Text>
-            <TouchableOpacity 
-              style={styles.createRackButton}
-              onPress={() => setShowRackLabelForm(true)}
-            >
-              <Ionicons name="add" size={20} color="#fff" />
-              <Text style={styles.createRackButtonText}>Create Rack Labels</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.rackInfo}>
-            <Text style={styles.rackInfoText}>Generate QR code labels for storage racks</Text>
-          </View>
-        </View>
+  return (
+    <BaseScreen title="" hideHeader={true}>
+      <View style={styles.container}>
+        {/* Top Navigation */}
+        {renderTopNav()}
+        
+        {/* Dynamic Content */}
+        {renderContent()}
 
         {/* Category Form Modal */}
         {showCategoryForm && (
@@ -733,94 +946,7 @@ export default function ProductsScreen() {
           />
         )}
 
-        {/* Rack Label Form Modal */}
-        {showRackLabelForm && (
-          <Modal visible={true} animationType="slide" presentationStyle="pageSheet">
-            <SafeAreaView style={styles.rackModalContainer}>
-              <View style={styles.rackModalHeader}>
-                <TouchableOpacity 
-                  style={styles.rackCloseButton} 
-                  onPress={() => setShowRackLabelForm(false)}
-                >
-                  <Ionicons name="close" size={24} color="#333" />
-                </TouchableOpacity>
-                <Text style={styles.rackModalTitle}>Create Rack Labels</Text>
-                <View style={styles.placeholder} />
-              </View>
-              
-              <ScrollView style={styles.rackModalContent}>
-                {/* Input Section */}
-                <View style={styles.rackInputSection}>
-                  <View style={styles.rackInputGroup}>
-                    <Text style={styles.rackInputLabel}>Rack Prefix</Text>
-                    <TextInput
-                      style={styles.rackInput}
-                      value={rackPrefix}
-                      onChangeText={setRackPrefix}
-                      placeholder="R"
-                      maxLength={3}
-                      autoCapitalize="characters"
-                    />
-                  </View>
-                  
-                  <View style={styles.rackInputGroup}>
-                    <Text style={styles.rackInputLabel}>Starting Number</Text>
-                    <TextInput
-                      style={styles.rackInput}
-                      value={startingNumber}
-                      onChangeText={setStartingNumber}
-                      placeholder="1"
-                      keyboardType="numeric"
-                    />
-                  </View>
-                  
-                  <View style={styles.rackInputGroup}>
-                    <Text style={styles.rackInputLabel}>Number of Labels</Text>
-                    <TextInput
-                      style={styles.rackInput}
-                      value={numberOfLabels}
-                      onChangeText={setNumberOfLabels}
-                      placeholder="10"
-                      keyboardType="numeric"
-                    />
-                  </View>
-                </View>
-
-                {/* Preview Section - Show ALL labels in scrollable view */}
-                <View style={styles.rackPreviewSection}>
-                  <Text style={styles.rackPreviewTitle}>Preview ({generateRackLabels().length} labels)</Text>
-                  <ScrollView 
-                    style={styles.rackPreviewScrollView}
-                    contentContainerStyle={styles.rackPreviewScrollContent}
-                    showsVerticalScrollIndicator={true}
-                  >
-                    <View style={styles.rackPreviewContainer}>
-                      {generateRackLabels().map((label, index) => (
-                        <RackPreviewItem 
-                          key={label.id} 
-                          label={label} 
-                          qrRefs={qrRefs}
-                        />
-                      ))}
-                    </View>
-                  </ScrollView>
-                </View>
-
-                {/* Print Button */}
-                <TouchableOpacity 
-                  style={styles.rackPrintButton}
-                  onPress={printRackLabels}
-                  disabled={generateRackLabels().length === 0}
-                >
-                  <Ionicons name="print" size={20} color="#fff" />
-                  <Text style={styles.rackPrintButtonText}>
-                    Print {generateRackLabels().length} Label{generateRackLabels().length !== 1 ? 's' : ''}
-                  </Text>
-                </TouchableOpacity>
-              </ScrollView>
-            </SafeAreaView>
-          </Modal>
-        )}
+        {/* Rack Label Form Modal - No longer needed as it's now inline */}
       </View>
     </BaseScreen>
   );
