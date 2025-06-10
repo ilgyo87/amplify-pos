@@ -106,13 +106,15 @@ export async function generateLabelHTML({
   customerName,
   garmentType,
   notes,
-  qrImageBase64
+  qrImageBase64,
+  employeeName
 }: {
   orderNumber: string,
   customerName: string,
   garmentType: string,
   notes: string,
-  qrImageBase64: string
+  qrImageBase64: string,
+  employeeName?: string
 }): Promise<string> {
   // Check if qrImageBase64 is a captured image or just the QR data
   let imageUri: string;
@@ -138,6 +140,7 @@ export async function generateLabelHTML({
         <div class="info-line">Name: ${customerName}</div>
         <div class="info-line">Garment: ${garmentType}</div>
         <div class="info-line">Notes: ${notes || 'None'}</div>
+        ${employeeName ? `<div class="info-line">Served by: ${employeeName}</div>` : ''}
       </div>
     </div>`;
 }

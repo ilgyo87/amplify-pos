@@ -26,6 +26,7 @@ import { ProductDocument } from '../../database/schemas/product';
 import { OrderItem, OrderItemOptions, generateOrderItemKey } from '../../types/order';
 import { RootStackParamList } from '../../navigation/types';
 import { toPreciseAmount } from '../../utils/monetaryUtils';
+import { useEmployeeAuth } from '../../context/EmployeeAuthContext';
 
 type CheckoutScreenRouteProp = RouteProp<RootStackParamList, 'Checkout'>;
 type CheckoutScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Checkout'>;
@@ -98,6 +99,12 @@ const generateThermalReceiptCommands = (order: any, paymentMethod: string, selec
   addLF();
   if (order.customerPhone) {
     addText(`Phone: ${order.customerPhone}`);
+    addLF();
+  }
+  
+  // Employee info (if available)
+  if (order.employeeName) {
+    addText(`Served by: ${order.employeeName}`);
     addLF();
   }
   addLF();
@@ -286,30 +293,21 @@ const printReceiptToThermalPrinter = async (order: any, paymentMethod: string, s
 };
 
 export default function CheckoutScreen({ route, navigation }: CheckoutScreenProps) {
-  const { customer } = route.params;
-  
-  // State management
-  const [selectedCategory, setSelectedCategory] = useState<CategoryDocument | null>(null);
+  const { customer: routeCustomer } = route.params;
+  const [customer, setCustomer] = useState(routeCustomer);
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
-  const [currentPage, setCurrentPage] = useState(0);
   const [showReceiptPreview, setShowReceiptPreview] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined);
+  const [isSmallScreen, setIsSmallScreen] = useState(!isTablet);
+  const [currentPage, setCurrentPage] = useState(0);
   const [orderNumber, setOrderNumber] = useState<string | undefined>(undefined);
   
-  // Layout state for responsive design
-  const [isSmallScreen, setIsSmallScreen] = useState(!isTablet);
-
   // Database hooks
-  const {
-    categories,
-    loading: categoriesLoading,
-  } = useCategories();
-
-  const {
-    products,
-    loading: productsLoading,
-  } = useProducts(selectedCategory?.id);
+  const { categories, loading: categoriesLoading } = useCategories();
+  const [selectedCategory, setSelectedCategory] = useState<CategoryDocument | null>(null);
+  const { products, loading: productsLoading } = useProducts(selectedCategory?.id);
+  const { currentEmployee } = useEmployeeAuth();
 
   const {
     createOrder,
@@ -455,7 +453,11 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
         paymentMethod,
         selectedDate: selectedDate || undefined,
         notes: undefined,
-        barcodeData: qrData
+        barcodeData: qrData,
+        employee: currentEmployee ? {
+          id: currentEmployee.id,
+          name: `${currentEmployee.firstName} ${currentEmployee.lastName}`
+        } : undefined
       });
 
       // Calculate total for confirmation
@@ -612,6 +614,7 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
         orderItems={orderItems}
         selectedDate={selectedDate || undefined}
         orderNumber={orderNumber || ''}
+        employeeName={currentEmployee ? `${currentEmployee.firstName} ${currentEmployee.lastName}` : undefined}
         onClose={() => setShowReceiptPreview(false)}
         onComplete={handleOrderComplete}
       />

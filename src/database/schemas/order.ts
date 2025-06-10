@@ -6,6 +6,8 @@ export interface OrderDocType {
   customerId: string;
   customerName: string; // Denormalized for easy display
   customerPhone?: string; // Denormalized for easy display
+  employeeId?: string; // ID of the employee who created the order
+  employeeName?: string; // Denormalized employee name for easy display
   items: Array<{
     id: string;
     name: string;
@@ -61,6 +63,14 @@ export const orderSchema: RxJsonSchema<OrderDocType> = {
     customerPhone: {
       type: 'string',
       maxLength: 50
+    },
+    employeeId: {
+      type: 'string',
+      maxLength: 100
+    },
+    employeeName: {
+      type: 'string',
+      maxLength: 200
     },
     items: {
       type: 'array',

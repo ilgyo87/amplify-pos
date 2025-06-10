@@ -1,12 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  TextInput,
   StyleSheet,
   TouchableOpacity,
-  Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Dimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -26,16 +25,6 @@ export function PinInput({
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const inputRef = useRef<TextInput>(null);
-
-  useEffect(() => {
-    // Auto-focus on mount
-    const timer = setTimeout(() => {
-      inputRef.current?.focus();
-    }, 100);
-    
-    return () => clearTimeout(timer);
-  }, []);
 
   useEffect(() => {
     // Auto-submit when PIN is 4 digits
@@ -59,34 +48,34 @@ export function PinInput({
       if (!result.success) {
         setError(result.error || 'Sign-in failed');
         setPin(''); // Clear PIN on error
-        // Refocus input after error
-        setTimeout(() => {
-          inputRef.current?.focus();
-        }, 100);
       }
     } catch (error) {
       console.error('PIN submit error:', error);
       setError('Sign-in failed. Please try again.');
       setPin('');
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 100);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handlePinChange = (text: string) => {
-    // Only allow numeric input and max 4 digits
-    const numericText = text.replace(/[^0-9]/g, '').slice(0, 4);
-    setPin(numericText);
-    setError(''); // Clear error when user types
+  const handleAddDigit = (digit: string) => {
+    if (pin.length < 4 && !isSubmitting && !isLoading) {
+      const newPin = pin + digit;
+      setPin(newPin);
+      setError(''); // Clear error when user types
+    }
   };
 
   const handleClear = () => {
     setPin('');
     setError('');
-    inputRef.current?.focus();
+  };
+
+  const handleDelete = () => {
+    if (pin.length > 0) {
+      setPin(pin.slice(0, -1));
+      setError('');
+    }
   };
 
   const renderPinDots = () => {
@@ -97,6 +86,61 @@ export function PinInput({
       );
     }
     return dots;
+  };
+
+  // Render the numeric keypad
+  const renderKeypad = () => {
+    const buttons = [
+      ['1', '2', '3'],
+      ['4', '5', '6'],
+      ['7', '8', '9'],
+      ['delete', '0', 'clear']
+    ];
+
+    return (
+      <View style={styles.keypadContainer}>
+        {buttons.map((row, rowIndex) => (
+          <View key={`row-${rowIndex}`} style={styles.keypadRow}>
+            {row.map((button) => {
+              if (button === 'delete') {
+                return (
+                  <TouchableOpacity
+                    key={button}
+                    style={styles.keypadButton}
+                    onPress={handleDelete}
+                    disabled={isSubmitting || isLoading || pin.length === 0}
+                  >
+                    <Ionicons name="backspace-outline" size={24} color={pin.length === 0 || isSubmitting || isLoading ? '#ccc' : '#666'} />
+                  </TouchableOpacity>
+                );
+              }
+              if (button === 'clear') {
+                return (
+                  <TouchableOpacity
+                    key={button}
+                    style={styles.keypadButton}
+                    onPress={handleClear}
+                    disabled={isSubmitting || isLoading || pin.length === 0}
+                  >
+                    <Text style={[styles.keypadText, { color: pin.length === 0 || isSubmitting || isLoading ? '#ccc' : '#FF3B30' }]}>Clear</Text>
+                  </TouchableOpacity>
+                );
+              }
+              return (
+                <TouchableOpacity
+                  key={button}
+                  style={styles.keypadButton}
+                  onPress={() => handleAddDigit(button)}
+                  disabled={isSubmitting || isLoading || pin.length >= 4}
+                >
+                  <Text style={[styles.keypadText, { color: pin.length >= 4 || isSubmitting || isLoading ? '#ccc' : '#333' }]}>{button}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ))}
+      </View>
+    );
   };
 
   return (
@@ -111,19 +155,6 @@ export function PinInput({
           <View style={styles.pinDotsContainer}>
             {renderPinDots()}
           </View>
-          
-          <TextInput
-            ref={inputRef}
-            style={styles.hiddenInput}
-            value={pin}
-            onChangeText={handlePinChange}
-            keyboardType="numeric"
-            maxLength={4}
-            secureTextEntry
-            autoFocus
-            editable={!isSubmitting && !isLoading}
-            caretHidden
-          />
         </View>
 
         {error ? (
@@ -140,16 +171,8 @@ export function PinInput({
           </View>
         )}
 
-        <View style={styles.actions}>
-          <TouchableOpacity
-            style={styles.clearButton}
-            onPress={handleClear}
-            disabled={isSubmitting || isLoading}
-          >
-            <Text style={styles.clearButtonText}>Clear</Text>
-          </TouchableOpacity>
-        </View>
-
+        {renderKeypad()}
+        
         <Text style={styles.hint}>
           Enter your PIN and it will auto-submit when complete
         </Text>
@@ -170,6 +193,9 @@ export function PinInput({
   );
 }
 
+const { width } = Dimensions.get('window');
+const buttonSize = Math.min(width / 5, 70);
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -180,7 +206,7 @@ const styles = StyleSheet.create({
   },
   content: {
     width: '100%',
-    maxWidth: 300,
+    maxWidth: 350,
     alignItems: 'center',
   },
   header: {
@@ -201,13 +227,12 @@ const styles = StyleSheet.create({
   pinContainer: {
     alignItems: 'center',
     marginBottom: 20,
-    position: 'relative',
   },
   pinDotsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 30,
+    marginBottom: 20,
   },
   pinDot: {
     width: 20,
@@ -221,15 +246,6 @@ const styles = StyleSheet.create({
   pinDotFilled: {
     backgroundColor: '#007AFF',
     borderColor: '#007AFF',
-  },
-  hiddenInput: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 50,
-    opacity: 0,
-    fontSize: 18,
   },
   errorContainer: {
     flexDirection: 'row',
@@ -255,19 +271,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginLeft: 8,
   },
-  actions: {
-    alignItems: 'center',
+  // Numeric keypad styles
+  keypadContainer: {
     marginBottom: 20,
+    width: '100%',
+    maxWidth: 300,
   },
-  clearButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 6,
-    backgroundColor: '#f0f0f0',
+  keypadRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
-  clearButtonText: {
-    color: '#666',
-    fontSize: 14,
+  keypadButton: {
+    width: buttonSize,
+    height: buttonSize,
+    borderRadius: 8,
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    elevation: 2,
+  },
+  keypadText: {
+    fontSize: 24,
     fontWeight: '500',
   },
   hint: {
