@@ -67,7 +67,11 @@ function CustomerItem({
   const fullAddress = formatAddress();
 
   return (
-    <View style={styles.customerItem}>
+    <TouchableOpacity 
+      style={styles.customerItem}
+      onPress={() => onEdit(customer)}
+      activeOpacity={0.7}
+    >
       <View style={styles.customerInfo}>
         <View style={styles.customerHeader}>
           <Text style={styles.customerName}>
@@ -103,27 +107,42 @@ function CustomerItem({
               </Text>
             </View>
           )}
+
+          {customer.notes && customer.notes.trim() && (
+            <View style={styles.contactRow}>
+              <Ionicons name="document-text-outline" size={16} color="#666" />
+              <Text style={[styles.contactText, styles.notesText]} numberOfLines={2}>
+                {customer.notes}
+              </Text>
+            </View>
+          )}
         </View>
       </View>
 
       {showActions && (
         <View style={styles.actions}>
           <TouchableOpacity
-            onPress={() => onEdit(customer)}
+            onPress={(e) => {
+              e.stopPropagation();
+              onEdit(customer);
+            }}
             style={[styles.actionButton, styles.editButton]}
           >
             <Ionicons name="pencil" size={18} color="#007AFF" />
           </TouchableOpacity>
           
           <TouchableOpacity
-            onPress={handleDelete}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleDelete();
+            }}
             style={[styles.actionButton, styles.deleteButton]}
           >
             <Ionicons name="trash" size={18} color="#e74c3c" />
           </TouchableOpacity>
         </View>
       )}
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -254,6 +273,11 @@ const styles = StyleSheet.create({
   },
   addressText: {
     lineHeight: 18,
+  },
+  notesText: {
+    lineHeight: 18,
+    fontStyle: 'italic',
+    color: '#888',
   },
   actions: {
     flexDirection: 'row',

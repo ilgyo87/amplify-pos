@@ -217,7 +217,8 @@ export default function CustomersScreen() {
               address: editingCustomer.address || '',
               city: editingCustomer.city || '',
               state: editingCustomer.state || '',
-              zipCode: editingCustomer.zipCode || ''
+              zipCode: editingCustomer.zipCode || '',
+              notes: editingCustomer.notes || ''
             } : undefined}
             onSubmit={handleUpdateCustomer}
             onCancel={handleCloseEditModal}
