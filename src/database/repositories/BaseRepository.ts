@@ -13,8 +13,8 @@ export abstract class BaseRepository<T, C extends RxCollection = RxCollection> {
 
   constructor(collection: C) {
     this.collection = collection;
-    // Default prefix based on collection name, fallback to 'item_' if not available
-    this.idPrefix = collection.name ? `${collection.name}_` : 'item_';
+    // Default prefix, will be set by child classes if needed
+    this.idPrefix = 'item_';
   }
 
   /**
@@ -61,7 +61,7 @@ export abstract class BaseRepository<T, C extends RxCollection = RxCollection> {
     const result = await this.collection.insert(doc);
     
     // Log the creation
-    const collectionName = this.collection.name;
+    const collectionName = this.idPrefix.replace('_', '');
     console.log(`[${new Date().toLocaleString()}] CREATED: ${collectionName} - ID: ${result.id}`);
     
     return result;
@@ -82,7 +82,7 @@ export abstract class BaseRepository<T, C extends RxCollection = RxCollection> {
     });
     
     // Log the update
-    const collectionName = this.collection.name;
+    const collectionName = this.idPrefix.replace('_', '');
     console.log(`[${new Date().toLocaleString()}] UPDATED: ${collectionName} - ID: ${id}`);
     
     return this.findById(id);
@@ -98,7 +98,7 @@ export abstract class BaseRepository<T, C extends RxCollection = RxCollection> {
     await doc.remove();
     
     // Log the hard delete
-    const collectionName = this.collection.name;
+    const collectionName = this.idPrefix.replace('_', '');
     console.log(`[${new Date().toLocaleString()}] HARD DELETED: ${collectionName} - ID: ${id}`);
     
     return true;
@@ -119,7 +119,7 @@ export abstract class BaseRepository<T, C extends RxCollection = RxCollection> {
     });
     
     // Log the soft delete
-    const collectionName = this.collection.name;
+    const collectionName = this.idPrefix.replace('_', '');
     console.log(`[${new Date().toLocaleString()}] DELETED: ${collectionName} - ID: ${id}`);
     
     return true;

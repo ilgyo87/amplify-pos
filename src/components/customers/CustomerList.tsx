@@ -31,12 +31,12 @@ interface CustomerItemProps {
   showActions: boolean;
 }
 
-const CustomerItem: React.FC<CustomerItemProps> = ({ 
+function CustomerItem({ 
   customer, 
   onEdit, 
   onDelete, 
   showActions 
-}) => {
+}: CustomerItemProps) {
   const handleDelete = () => {
     Alert.alert(
       'Delete Customer',
@@ -125,9 +125,9 @@ const CustomerItem: React.FC<CustomerItemProps> = ({
       )}
     </View>
   );
-};
+}
 
-export const CustomerList: React.FC<CustomerListProps> = ({
+export function CustomerList({
   customers,
   onEdit,
   onDelete,
@@ -136,7 +136,7 @@ export const CustomerList: React.FC<CustomerListProps> = ({
   onRefresh,
   emptyMessage = 'No customers found',
   showActions = true
-}) => {
+}: CustomerListProps) {
   const renderCustomer = ({ item }: { item: CustomerDocument }) => (
     <CustomerItem
       customer={item}
@@ -200,7 +200,7 @@ export const CustomerList: React.FC<CustomerListProps> = ({
       showsVerticalScrollIndicator={false}
     />
   );
-};
+}
 
 const styles = StyleSheet.create({
   list: {

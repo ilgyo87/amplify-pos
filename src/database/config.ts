@@ -22,12 +22,16 @@ import { customerSchema, CustomerCollection, CustomerDocType, CustomerDocument }
 import { employeeSchema, EmployeeCollection, EmployeeDocType, EmployeeDocument } from './schemas/employee';
 import { categorySchema, CategoryCollection, CategoryDocType, CategoryDocument } from './schemas/category';
 import { productSchema, ProductCollection, ProductDocType, ProductDocument } from './schemas/product';
+import { businessSchema, BusinessCollection, BusinessDocType, BusinessDocument } from './schemas/business';
+import { orderSchema, OrderCollection, OrderDocType, OrderDocument } from './schemas/order';
 
 export interface DatabaseCollections {
   customers: CustomerCollection;
   employees: EmployeeCollection;
   categories: CategoryCollection;
   products: ProductCollection;
+  businesses: BusinessCollection;
+  orders: OrderCollection;
 }
 
 // Extend the RxDatabase type with our collections
@@ -53,7 +57,7 @@ const createDatabase = async (): Promise<AppDatabase> => {
 
   try {
     const database = await createRxDatabase<DatabaseCollections>({
-      name: 'amplifyposdb_v9',
+      name: 'amplifyposdb_v12',
       storage,
       multiInstance: false, // Set to false in React Native
       ignoreDuplicate: true,
@@ -112,6 +116,19 @@ const createDatabase = async (): Promise<AppDatabase> => {
                 quantity: oldDoc.quantity || null,
                 isActive: oldDoc.isActive !== undefined ? oldDoc.isActive : true
               };
+            }
+          }
+        },
+        businesses: {
+          schema: businessSchema
+        },
+        orders: {
+          schema: orderSchema,
+          migrationStrategies: {
+            // Migration from version 0 to 1 - initial creation
+            1: function(oldDoc: any) {
+              // This is the initial version, no transformation needed
+              return oldDoc;
             }
           }
         }

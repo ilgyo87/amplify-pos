@@ -31,12 +31,12 @@ interface EmployeeItemProps {
   showActions: boolean;
 }
 
-const EmployeeItem: React.FC<EmployeeItemProps> = ({ 
+function EmployeeItem({ 
   employee, 
   onEdit, 
   onDelete, 
   showActions 
-}) => {
+}: EmployeeItemProps) {
   const handleDelete = () => {
     Alert.alert(
       'Delete Employee',
@@ -131,9 +131,9 @@ const EmployeeItem: React.FC<EmployeeItemProps> = ({
       )}
     </View>
   );
-};
+}
 
-export const EmployeeList: React.FC<EmployeeListProps> = ({
+export function EmployeeList({
   employees,
   onEdit,
   onDelete,
@@ -142,7 +142,7 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
   onRefresh,
   emptyMessage = 'No employees found',
   showActions = true
-}) => {
+}: EmployeeListProps) {
   const renderEmployee = ({ item }: { item: EmployeeDocument }) => (
     <EmployeeItem
       employee={item}
@@ -206,7 +206,7 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
       showsVerticalScrollIndicator={false}
     />
   );
-};
+}
 
 const styles = StyleSheet.create({
   list: {

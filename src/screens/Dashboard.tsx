@@ -5,7 +5,9 @@ import { InputBox } from '../components/ui/InputBox';
 import { DashboardMenu, MenuItem } from '../components/ui/DashboardMenu';
 import { BusinessForm } from '../components/forms/BusinessForm';
 import { customerService } from '../database/services/customerService';
+import { businessService } from '../database/services/businessService';
 import { CustomerDocument } from '../database/schemas/customer';
+import { BusinessDocument } from '../database/schemas/business';
 import { BusinessFormData, BusinessValidationErrors } from '../utils/businessValidation';
 import { useDebouncedCallback } from '../utils/hooks';
 import { useNavigation } from '@react-navigation/native';
@@ -14,6 +16,7 @@ import { RootStackParamList } from '../navigation/types';
 
 export default function Dashboard() {
   const [businessName, setBusinessName] = useState('No Business');
+  const [currentBusiness, setCurrentBusiness] = useState<BusinessDocument | null>(null);
   const [showBusinessForm, setShowBusinessForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [customers, setCustomers] = useState<CustomerDocument[]>([]);
@@ -22,15 +25,46 @@ export default function Dashboard() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   
   useEffect(() => {
-    // Initialize the customer service
+    let businessSubscription: any = null;
+
     const initialize = async () => {
       try {
         await customerService.initialize();
+        await businessService.initialize();
+        
+        // Subscribe to business changes using RxDB reactive query
+        const { getDatabaseInstance } = await import('../database/config');
+        const database = await getDatabaseInstance();
+        
+        businessSubscription = database.businesses
+          .find({
+            selector: {
+              isDeleted: { $ne: true }
+            }
+          })
+          .$.subscribe((businesses: any[]) => {
+            if (businesses.length > 0) {
+              const business = businesses[0];
+              setCurrentBusiness(business);
+              setBusinessName(business.name);
+            } else {
+              setCurrentBusiness(null);
+              setBusinessName('No Business');
+            }
+          });
       } catch (error) {
-        console.error('Failed to initialize customer service:', error);
+        console.error('Failed to initialize services:', error);
       }
     };
+
     initialize();
+
+    // Cleanup subscription on unmount
+    return () => {
+      if (businessSubscription) {
+        businessSubscription.unsubscribe();
+      }
+    };
   }, []);
   
   const searchCustomers = useDebouncedCallback(async (term: string) => {
@@ -91,14 +125,24 @@ export default function Dashboard() {
 
   const handleCreateBusiness = async (data: BusinessFormData): Promise<{ business?: any; errors?: BusinessValidationErrors }> => {
     try {
-      // For now, just update the business name in state
-      // In a real app, you would save this to a database
-      setBusinessName(data.name);
+      const result = await businessService.createBusiness(data);
       
-      // TODO: Save business data to database
-      console.log('Creating business:', data);
-      
-      return { business: data };
+      if (result.business) {
+        setCurrentBusiness(result.business);
+        setBusinessName(result.business.name);
+        setShowBusinessForm(false);
+        console.log('Business created successfully:', result.business.name);
+        return { business: result.business };
+      } else {
+        // Convert string array errors to BusinessValidationErrors format
+        const formattedErrors: BusinessValidationErrors = {};
+        if (result.errors && result.errors.length > 0) {
+          formattedErrors.name = result.errors.join('\n');
+        } else if (result.duplicateError) {
+          formattedErrors.name = result.duplicateError;
+        }
+        return { errors: formattedErrors };
+      }
     } catch (error) {
       console.error('Error creating business:', error);
       return { errors: { name: 'Failed to create business' } };

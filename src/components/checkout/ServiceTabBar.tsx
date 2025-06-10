@@ -17,13 +17,13 @@ interface ServiceTabBarProps {
   style?: any;
 }
 
-export const ServiceTabBar: React.FC<ServiceTabBarProps> = ({
+export function ServiceTabBar({
   categories,
   selectedCategory,
   onSelectCategory,
   isLoading = false,
   style
-}) => {
+}: ServiceTabBarProps) {
   if (isLoading) {
     return (
       <View style={[styles.container, styles.loadingContainer, style]}>
@@ -79,7 +79,7 @@ export const ServiceTabBar: React.FC<ServiceTabBarProps> = ({
       </ScrollView>
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {

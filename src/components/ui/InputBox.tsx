@@ -5,11 +5,11 @@ interface InputBoxProps extends TextInputProps {
   placeholder: string;
 }
 
-export const InputBox: React.FC<InputBoxProps> = ({
+export function InputBox({
   placeholder,
   style,
   ...props
-}) => {
+}: InputBoxProps) {
   return (
     <View style={[styles.container, style]}>
       <TextInput
@@ -20,7 +20,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
       />
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {

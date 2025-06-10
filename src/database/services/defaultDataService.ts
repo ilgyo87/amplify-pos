@@ -1,9 +1,7 @@
 import { categoryService } from './categoryService';
 import { productService } from './productService';
-import { employeeService } from './employeeService';
 import { CategoryFormData } from '../../utils/categoryValidation';
 import { ProductFormData } from '../../utils/productValidation';
-import { EmployeeFormData } from '../../utils/employeeValidation';
 
 export interface DefaultCategory {
   name: string;
@@ -23,15 +21,6 @@ export interface DefaultProduct {
   notes?: string;
 }
 
-export interface DefaultEmployee {
-  firstName: string;
-  lastName: string;
-  email: string;
-  pin: string;
-  role: string;
-  phone?: string;
-  isActive: boolean;
-}
 
 // Default categories for dry cleaning business
 const DEFAULT_CATEGORIES: DefaultCategory[] = [
@@ -230,35 +219,6 @@ const DEFAULT_PRODUCTS: DefaultProduct[] = [
   }
 ];
 
-// Default employees for testing and initial setup
-const DEFAULT_EMPLOYEES: DefaultEmployee[] = [
-  {
-    firstName: 'Manager',
-    lastName: 'Demo',
-    email: 'manager@drycleaner.com',
-    pin: '1234',
-    role: 'Manager',
-    phone: '(555) 123-4567',
-    isActive: true
-  },
-  {
-    firstName: 'Employee',
-    lastName: 'Demo',
-    email: 'employee@drycleaner.com',
-    pin: '5678',
-    role: 'Cashier',
-    phone: '(555) 234-5678',
-    isActive: true
-  },
-  {
-    firstName: 'Test',
-    lastName: 'User',
-    email: 'test@drycleaner.com',
-    pin: '0000',
-    role: 'Staff',
-    isActive: true
-  }
-];
 
 /**
  * Service for setting up default data in the database
@@ -275,14 +235,6 @@ export class DefaultDataService {
       // Initialize services
       await categoryService.initialize();
       await productService.initialize();
-      await employeeService.initialize();
-
-      // Check if categories already exist
-      const existingCategories = await categoryService.getAllCategories();
-      if (existingCategories.length > 0) {
-        console.log('Categories already exist, skipping default data creation');
-        return false;
-      }
 
       console.log('Setting up default categories and products...');
 
@@ -291,6 +243,7 @@ export class DefaultDataService {
       
       for (const categoryData of DEFAULT_CATEGORIES) {
         try {
+          console.log(`[DEFAULT DATA] Creating category: ${categoryData.name}`);
           const categoryFormData: CategoryFormData = {
             name: categoryData.name,
             description: categoryData.description,
@@ -298,15 +251,28 @@ export class DefaultDataService {
             displayOrder: categoryData.displayOrder,
             isActive: true
           };
+          
+          console.log(`[DEFAULT DATA] Category form data:`, categoryFormData);
           const result = await categoryService.createCategory(categoryFormData);
+          console.log(`[DEFAULT DATA] Category creation result:`, result);
+          
           if (result.category) {
             createdCategories[categoryData.name] = result.category.id;
-            console.log(`Created category: ${categoryData.name}`);
+            console.log(`[DEFAULT DATA] ✓ Created category: ${categoryData.name} (ID: ${result.category.id})`);
           } else {
-            console.error(`Failed to create category ${categoryData.name}:`, result.errors || result.duplicateError);
+            console.error(`[DEFAULT DATA] ✗ Failed to create category ${categoryData.name}:`, result.errors || result.duplicateError);
+            // If it's a duplicate, try to find the existing category
+            if (result.duplicateError) {
+              const existingCategories = await categoryService.getAllCategories();
+              const existing = existingCategories.find(c => c.name === categoryData.name);
+              if (existing) {
+                createdCategories[categoryData.name] = existing.id;
+                console.log(`[DEFAULT DATA] ✓ Using existing category: ${categoryData.name} (ID: ${existing.id})`);
+              }
+            }
           }
         } catch (error) {
-          console.error(`Error creating category ${categoryData.name}:`, error);
+          console.error(`[DEFAULT DATA] Error creating category ${categoryData.name}:`, error);
         }
       }
 
@@ -344,35 +310,7 @@ export class DefaultDataService {
         }
       }
 
-      // Create default employees
-      let employeesCreated = 0;
-      
-      for (const employeeData of DEFAULT_EMPLOYEES) {
-        try {
-          const employeeFormData: EmployeeFormData = {
-            firstName: employeeData.firstName,
-            lastName: employeeData.lastName,
-            email: employeeData.email,
-            pin: employeeData.pin,
-            role: employeeData.role,
-            phone: employeeData.phone,
-            isActive: employeeData.isActive,
-            hireDate: new Date().toISOString().split('T')[0]
-          };
-
-          const result = await employeeService.createEmployee(employeeFormData);
-          if (result.employee) {
-            employeesCreated++;
-            console.log(`Created employee: ${employeeData.firstName} ${employeeData.lastName} (PIN: ${employeeData.pin})`);
-          } else {
-            console.error(`Failed to create employee ${employeeData.firstName} ${employeeData.lastName}:`, result.errors || result.duplicateError);
-          }
-        } catch (error) {
-          console.error(`Error creating employee ${employeeData.firstName} ${employeeData.lastName}:`, error);
-        }
-      }
-
-      console.log(`Default data setup complete. Created ${Object.keys(createdCategories).length} categories, ${productsCreated} products, and ${employeesCreated} employees.`);
+      console.log(`Default data setup complete. Created ${Object.keys(createdCategories).length} categories and ${productsCreated} products.`);
       return true;
 
     } catch (error) {
@@ -393,7 +331,6 @@ export class DefaultDataService {
       // Initialize services
       await categoryService.initialize();
       await productService.initialize();
-      await employeeService.initialize();
 
       // Delete all existing products first (to avoid foreign key constraints)
       const existingProducts = await productService.getAllProducts();
@@ -405,12 +342,6 @@ export class DefaultDataService {
       const existingCategories = await categoryService.getAllCategories();
       for (const category of existingCategories) {
         await categoryService.deleteCategory(category.id);
-      }
-
-      // Delete all existing employees
-      const existingEmployees = await employeeService.getAllEmployees();
-      for (const employee of existingEmployees) {
-        await employeeService.deleteEmployee(employee.id);
       }
 
       console.log('Existing data cleared. Setting up default data...');
@@ -431,18 +362,15 @@ export class DefaultDataService {
   async getDataStatistics(): Promise<{
     categoriesCount: number;
     productsCount: number;
-    employeesCount: number;
     categoriesWithProducts: number;
     emptyCategories: number;
   }> {
     try {
       await categoryService.initialize();
       await productService.initialize();
-      await employeeService.initialize();
 
       const categories = await categoryService.getAllCategories();
       const products = await productService.getAllProducts();
-      const employees = await employeeService.getAllEmployees();
 
       const categoriesWithProducts = new Set(products.map(p => p.categoryId)).size;
       const emptyCategories = categories.length - categoriesWithProducts;
@@ -450,7 +378,6 @@ export class DefaultDataService {
       return {
         categoriesCount: categories.length,
         productsCount: products.length,
-        employeesCount: employees.length,
         categoriesWithProducts,
         emptyCategories
       };
@@ -460,7 +387,6 @@ export class DefaultDataService {
       return {
         categoriesCount: 0,
         productsCount: 0,
-        employeesCount: 0,
         categoriesWithProducts: 0,
         emptyCategories: 0
       };

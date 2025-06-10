@@ -15,10 +15,10 @@ interface AddDefaultDataButtonProps {
   style?: any;
 }
 
-export const AddDefaultDataButton: React.FC<AddDefaultDataButtonProps> = ({
+export function AddDefaultDataButton({
   onDataAdded,
   style
-}) => {
+}: AddDefaultDataButtonProps) {
   const [loading, setLoading] = useState(false);
 
   const handleAddDefaultData = async () => {
@@ -36,23 +36,6 @@ export const AddDefaultDataButton: React.FC<AddDefaultDataButtonProps> = ({
             try {
               setLoading(true);
 
-              // Check if data already exists
-              const hasData = await defaultDataService.hasData();
-              if (hasData) {
-                Alert.alert(
-                  'Data Exists',
-                  'You already have categories or products in your system. Would you like to add the default data anyway? This will not replace existing data.',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Add Anyway',
-                      onPress: () => addDefaultData()
-                    }
-                  ]
-                );
-                return;
-              }
-
               await addDefaultData();
             } catch (error) {
               console.error('Error adding default data:', error);
@@ -68,29 +51,25 @@ export const AddDefaultDataButton: React.FC<AddDefaultDataButtonProps> = ({
 
   const addDefaultData = async () => {
     try {
+      console.log('[DEFAULT DATA] Starting default data creation...');
       const result = await defaultDataService.initializeDefaultData();
       
-      if (result) {
-        Alert.alert(
-          'Success!',
-          'Default categories and products have been added successfully. You can now start processing orders for dry cleaning, laundry, alterations, and special services.',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                if (onDataAdded) {
-                  onDataAdded();
-                }
+      console.log('[DEFAULT DATA] Result:', result);
+      
+      Alert.alert(
+        'Success!',
+        'Default categories and products have been added successfully. You can now start processing orders for dry cleaning, laundry, alterations, and special services.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              if (onDataAdded) {
+                onDataAdded();
               }
             }
-          ]
-        );
-      } else {
-        Alert.alert(
-          'Info',
-          'Default data was not added because you already have existing categories or products in your system.'
-        );
-      }
+          }
+        ]
+      );
     } catch (error) {
       console.error('Error in addDefaultData:', error);
       Alert.alert('Error', 'Failed to add default data. Please check the logs for details.');
@@ -116,7 +95,7 @@ export const AddDefaultDataButton: React.FC<AddDefaultDataButtonProps> = ({
       <Text style={styles.buttonText}>Add Default Data</Text>
     </TouchableOpacity>
   );
-};
+}
 
 const styles = StyleSheet.create({
   button: {

@@ -4,8 +4,7 @@ export interface BusinessFormData {
   city?: string;
   state?: string;
   zipCode?: string;
-  phone?: string;
-  email?: string;
+  phone: string;
   taxId?: string;
   website?: string;
 }
@@ -17,7 +16,6 @@ export interface BusinessValidationErrors {
   state?: string;
   zipCode?: string;
   phone?: string;
-  email?: string;
   taxId?: string;
   website?: string;
 }
@@ -34,16 +32,10 @@ export const validateBusinessForm = (data: BusinessFormData): BusinessValidation
     errors.name = 'Business name must be less than 100 characters';
   }
 
-  // Optional email validation
-  if (data.email && data.email.trim()) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(data.email.trim())) {
-      errors.email = 'Please enter a valid email address';
-    }
-  }
-
-  // Optional phone validation
-  if (data.phone && data.phone.trim()) {
+  // Required phone validation
+  if (!data.phone || !data.phone.trim()) {
+    errors.phone = 'Phone number is required';
+  } else {
     const phoneRegex = /^\(?([0-9]{3})\)?[-. ]?([0-9]{3})[-. ]?([0-9]{4})$/;
     if (!phoneRegex.test(data.phone.trim())) {
       errors.phone = 'Please enter a valid phone number';

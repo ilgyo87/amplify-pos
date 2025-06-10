@@ -16,17 +16,19 @@ interface OrderSummaryProps {
   onRemoveItem: (itemKey: string) => void;
   onEditItem: (item: OrderItem) => void;
   onCheckout: () => void;
+  selectedDate?: string;
   style?: any;
 }
 
-export const OrderSummary: React.FC<OrderSummaryProps> = ({
+export function OrderSummary({
   items,
   onUpdateQuantity,
   onRemoveItem,
   onEditItem,
   onCheckout,
+  selectedDate,
   style
-}) => {
+}: OrderSummaryProps) {
   const calculateSummary = (): OrderSummaryData => {
     const subtotal = items.reduce((sum, item) => {
       const basePrice = Number(item.price) || 0;
@@ -204,15 +206,45 @@ export const OrderSummary: React.FC<OrderSummaryProps> = ({
             </View>
           </View>
 
-          <TouchableOpacity style={styles.checkoutButton} onPress={onCheckout}>
-            <Text style={styles.checkoutButtonText}>Continue to Pickup & Payment</Text>
-            <Ionicons name="arrow-forward" size={20} color="white" />
-          </TouchableOpacity>
+          {/* Complete Button with validation */}
+          <View style={styles.buttonContainer}>
+            {(!selectedDate || items.length === 0) && (
+              <View style={styles.validationMessage}>
+                <Ionicons name="information-circle-outline" size={16} color="#ff6b35" />
+                <Text style={styles.validationText}>
+                  {!selectedDate && items.length > 0 ? 'Please select a pickup date' : 
+                   items.length === 0 ? 'Please add items to order' : 
+                   'Date and items required'}
+                </Text>
+              </View>
+            )}
+            
+            <TouchableOpacity 
+              style={[
+                styles.checkoutButton,
+                (!selectedDate || items.length === 0) && styles.checkoutButtonDisabled
+              ]} 
+              onPress={onCheckout}
+              disabled={!selectedDate || items.length === 0}
+            >
+              <Text style={[
+                styles.checkoutButtonText,
+                (!selectedDate || items.length === 0) && styles.checkoutButtonTextDisabled
+              ]}>
+                Complete
+              </Text>
+              <Ionicons 
+                name="checkmark-circle" 
+                size={20} 
+                color={(!selectedDate || items.length === 0) ? "#ccc" : "white"} 
+              />
+            </TouchableOpacity>
+          </View>
         </>
       )}
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -397,21 +429,51 @@ const styles = StyleSheet.create({
     color: '#007AFF',
   },
   
+  // Button container and validation
+  buttonContainer: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  validationMessage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#fff5f2',
+    borderRadius: 6,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#ffd4cc',
+  },
+  validationText: {
+    fontSize: 14,
+    color: '#ff6b35',
+    marginLeft: 6,
+    fontWeight: '500',
+  },
+  
   // Checkout button
   checkoutButton: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#007AFF',
-    margin: 16,
-    marginTop: 8,  // Reduced top margin
-    paddingVertical: 14,  // Slightly reduced padding
+    paddingVertical: 14,
     borderRadius: 8,
+  },
+  checkoutButtonDisabled: {
+    backgroundColor: '#f0f0f0',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   checkoutButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
     marginRight: 8,
+  },
+  checkoutButtonTextDisabled: {
+    color: '#ccc',
   },
 });

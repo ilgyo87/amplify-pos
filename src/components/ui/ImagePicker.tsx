@@ -20,14 +20,14 @@ interface ImagePickerProps {
   title?: string;
 }
 
-export const ImagePicker: React.FC<ImagePickerProps> = ({
+export function ImagePicker({
   visible,
   selectedImageKey,
   onSelect,
   onCancel,
   onClear,
   title = 'Select Image',
-}) => {
+}: ImagePickerProps) {
   return (
     <Modal 
       visible={visible} 
@@ -84,7 +84,7 @@ export const ImagePicker: React.FC<ImagePickerProps> = ({
       </View>
     </Modal>
   );
-};
+}
 
 interface ImageDisplayProps {
   imageKey?: string;
@@ -93,12 +93,12 @@ interface ImageDisplayProps {
   showPlaceholder?: boolean;
 }
 
-export const ImageDisplay: React.FC<ImageDisplayProps> = ({
+export function ImageDisplay({
   imageKey,
   style,
   size = 40,
   showPlaceholder = true,
-}) => {
+}: ImageDisplayProps) {
   const getImageSource = () => {
     if (!imageKey) return showPlaceholder ? getDefaultGarmentImage() : null;
     const imageSource = getGarmentImageByKey(imageKey);
@@ -120,7 +120,7 @@ export const ImageDisplay: React.FC<ImageDisplayProps> = ({
       resizeMode="contain"
     />
   );
-};
+}
 
 interface ImageFieldProps {
   label: string;
@@ -130,13 +130,13 @@ interface ImageFieldProps {
   required?: boolean;
 }
 
-export const ImageField: React.FC<ImageFieldProps> = ({
+export function ImageField({
   label,
   imageKey,
   onPress,
   error,
   required = false,
-}) => {
+}: ImageFieldProps) {
   const getImageName = () => {
     if (!imageKey) return 'Default Image';
     const image = GARMENT_IMAGES.find(img => img.key === imageKey);
@@ -164,7 +164,7 @@ export const ImageField: React.FC<ImageFieldProps> = ({
       {error && <Text style={styles.errorText}>{error}</Text>}
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {

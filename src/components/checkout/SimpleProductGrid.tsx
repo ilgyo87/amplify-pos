@@ -25,7 +25,7 @@ interface SimpleProductGridProps {
   style?: any;
 }
 
-export const SimpleProductGrid: React.FC<SimpleProductGridProps> = (props) => {
+export function SimpleProductGrid(props: SimpleProductGridProps) {
   const { products, onSelectProduct, isLoading, style } = props;
 
   if (isLoading) {
@@ -85,7 +85,7 @@ export const SimpleProductGrid: React.FC<SimpleProductGridProps> = (props) => {
       />
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
