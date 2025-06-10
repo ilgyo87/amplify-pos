@@ -59,6 +59,7 @@ const schema = a.schema({
       paymentMethod: a.string().required(),
       total: a.float().required(),
       status: a.string().required(),
+      rackNumber: a.string(),
     })
     .authorization((allow) => [
       allow.authenticated().to(['read']),

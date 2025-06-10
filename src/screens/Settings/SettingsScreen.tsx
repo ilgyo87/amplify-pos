@@ -28,6 +28,12 @@ export default function SettingsScreen() {
     totalUnsyncedEmployees: 0,
     totalLocalBusinesses: 0,
     totalUnsyncedBusinesses: 0,
+    totalLocalProducts: 0,
+    totalUnsyncedProducts: 0,
+    totalLocalCategories: 0,
+    totalUnsyncedCategories: 0,
+    totalLocalOrders: 0,
+    totalUnsyncedOrders: 0,
     customersUploaded: 0,
     customersDownloaded: 0,
     employeesUploaded: 0,
@@ -38,6 +44,8 @@ export default function SettingsScreen() {
     productsDownloaded: 0,
     businessesUploaded: 0,
     businessesDownloaded: 0,
+    ordersUploaded: 0,
+    ordersDownloaded: 0,
     startTime: new Date(),
     success: false
   });
@@ -513,7 +521,18 @@ export default function SettingsScreen() {
 
   const formatDate = (date?: Date) => {
     if (!date) return 'Never';
-    return date.toLocaleString();
+    return new Date(date).toLocaleString();
+  };
+
+  const getTotalUnsyncedCount = () => {
+    return (
+      syncStatus.totalUnsyncedCustomers + 
+      syncStatus.totalUnsyncedEmployees + 
+      (syncStatus.totalUnsyncedBusinesses || 0) +
+      (syncStatus.totalUnsyncedProducts || 0) +
+      (syncStatus.totalUnsyncedCategories || 0) +
+      (syncStatus.totalUnsyncedOrders || 0)
+    );
   };
 
   interface SyncCardProps {
@@ -579,6 +598,7 @@ export default function SettingsScreen() {
           <Text style={styles.sectionTitle}>Data Sync</Text>
           
           <View style={styles.statusCard}>
+            {/* Customers, Employees, Businesses */}
             <View style={styles.statusRow}>
               <Text style={styles.statusLabel}>Local Customers:</Text>
               <Text style={styles.statusValue}>{syncStatus.totalLocalCustomers}</Text>
@@ -593,14 +613,65 @@ export default function SettingsScreen() {
               <Text style={styles.statusLabel}>Local Businesses:</Text>
               <Text style={styles.statusValue}>{syncStatus.totalLocalBusinesses || 0}</Text>
             </View>
+
+            {/* Products, Categories, Orders */}
+            <View style={styles.statusRow}>
+              <Text style={styles.statusLabel}>Local Products:</Text>
+              <Text style={styles.statusValue}>{syncStatus.totalLocalProducts || 0}</Text>
+            </View>
             
             <View style={styles.statusRow}>
-              <Text style={styles.statusLabel}>Unsynced Changes:</Text>
+              <Text style={styles.statusLabel}>Local Categories:</Text>
+              <Text style={styles.statusValue}>{syncStatus.totalLocalCategories || 0}</Text>
+            </View>
+            
+            <View style={styles.statusRow}>
+              <Text style={styles.statusLabel}>Local Orders:</Text>
+              <Text style={styles.statusValue}>{syncStatus.totalLocalOrders || 0}</Text>
+            </View>
+            
+            {/* Unsynced Data */}
+            <View style={[styles.statusRow, styles.sectionDivider]}>
+              <Text style={[styles.statusLabel, styles.sectionLabel]}>Unsynced Data</Text>
+            </View>
+
+            <View style={styles.statusRow}>
+              <Text style={styles.statusLabel}>Customers:</Text>
               <Text style={[
                 styles.statusValue,
-                (syncStatus.totalUnsyncedCustomers + syncStatus.totalUnsyncedEmployees + (syncStatus.totalUnsyncedBusinesses || 0)) > 0 && styles.statusValueWarning
+                syncStatus.totalUnsyncedCustomers > 0 && styles.statusValueWarning
               ]}>
-                {syncStatus.totalUnsyncedCustomers + syncStatus.totalUnsyncedEmployees + (syncStatus.totalUnsyncedBusinesses || 0)}
+                {syncStatus.totalUnsyncedCustomers || 0}
+              </Text>
+            </View>
+
+            <View style={styles.statusRow}>
+              <Text style={styles.statusLabel}>Products:</Text>
+              <Text style={[
+                styles.statusValue,
+                (syncStatus.totalUnsyncedProducts || 0) > 0 && styles.statusValueWarning
+              ]}>
+                {syncStatus.totalUnsyncedProducts || 0}
+              </Text>
+            </View>
+
+            <View style={styles.statusRow}>
+              <Text style={styles.statusLabel}>Categories:</Text>
+              <Text style={[
+                styles.statusValue,
+                (syncStatus.totalUnsyncedCategories || 0) > 0 && styles.statusValueWarning
+              ]}>
+                {syncStatus.totalUnsyncedCategories || 0}
+              </Text>
+            </View>
+
+            <View style={styles.statusRow}>
+              <Text style={styles.statusLabel}>Orders:</Text>
+              <Text style={[
+                styles.statusValue,
+                (syncStatus.totalUnsyncedOrders || 0) > 0 && styles.statusValueWarning
+              ]}>
+                {syncStatus.totalUnsyncedOrders || 0}
               </Text>
             </View>
             
@@ -713,15 +784,15 @@ export default function SettingsScreen() {
           />
           
           <SyncCard
-            title="Upload to Cloud"
+            title="Upload Data"
             description={
-              (syncStatus.totalUnsyncedCustomers + syncStatus.totalUnsyncedEmployees + (syncStatus.totalUnsyncedBusinesses || 0)) === 0
-                ? "All data is already synced to the cloud"
-                : `Upload ${syncStatus.totalUnsyncedCustomers + syncStatus.totalUnsyncedEmployees + (syncStatus.totalUnsyncedBusinesses || 0)} local changes to the cloud`
+              getTotalUnsyncedCount() === 0
+                ? 'All local data is synchronized'
+                : `Upload ${getTotalUnsyncedCount()} local changes to the cloud`
             }
             onPress={handleUpload}
             loading={syncStatus.isUploading}
-            disabled={(syncStatus.totalUnsyncedCustomers + syncStatus.totalUnsyncedEmployees + (syncStatus.totalUnsyncedBusinesses || 0)) === 0}
+            disabled={getTotalUnsyncedCount() === 0}
             icon="cloud-upload"
             color="#007AFF"
           />
@@ -932,7 +1003,19 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   statusValueWarning: {
-    color: '#e74c3c',
+    color: '#FF9500',
+    fontWeight: '700',
+  },
+  sectionDivider: {
+    marginTop: 16,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  sectionLabel: {
+    fontWeight: '700',
+    fontSize: 16,
+    color: '#333',
   },
   syncCard: {
     backgroundColor: '#fff',

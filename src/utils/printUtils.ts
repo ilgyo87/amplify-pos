@@ -129,21 +129,22 @@ export async function generateLabelHTML({
   }
   
   return `
-    <div class="qr-container">
-      <img src="${imageUri}" alt="QR Code" />
-    </div>
-    <div class="order-info">
-      <div class="order-number">Order #: ${orderNumber}</div>
-      <div>Name: ${customerName}</div>
-      <div>Garment: ${garmentType}</div>
-      <div>Notes: ${notes || 'None'}</div>
+    <div class="label-container">
+      <div class="qr-container">
+        <img src="${imageUri}" alt="QR Code" class="qr-code" />
+      </div>
+      <div class="order-info">
+        <div class="order-number">Order #: ${orderNumber}</div>
+        <div class="info-line">Name: ${customerName}</div>
+        <div class="info-line">Garment: ${garmentType}</div>
+        <div class="info-line">Notes: ${notes || 'None'}</div>
+      </div>
     </div>`;
 }
 
 export const printLabel = async (html: string) => {
   try {
     console.log('🖨️ Starting print job...');
-    console.log('📄 HTML content length:', html.length);
     
     // Create a temporary HTML file with the content
     const printContent = `
@@ -156,53 +157,65 @@ export const printLabel = async (html: string) => {
             @page {
               size: 29mm 90mm;
               margin: 0;
+              padding: 0;
             }
             body {
               margin: 0;
-              padding: 2mm;
-              width: 27mm;
-              height: 88mm;
+              padding: 0;
+              width: 100%;
+              height: 100%;
               font-family: Arial, sans-serif;
-              font-size: 10px;
+              font-size: 9px;
+            }
+            .label-container {
+              width: 29mm;
+              height: 90mm;
+              padding: 2mm;
               display: flex;
               flex-direction: column;
               align-items: center;
               justify-content: space-between;
+              page-break-after: always;
+              page-break-inside: avoid;
             }
             .qr-container {
-              width: 25mm;
-              height: 25mm;
+              width: 100%;
+              height: 45mm;
               display: flex;
               justify-content: center;
               align-items: center;
-              margin: 2mm 0;
+              margin-bottom: 2mm;
             }
-            .qr-container img {
-              width: 20mm;
-              height: 20mm;
-              display: block;
+            .qr-code {
+              max-width: 100%;
+              max-height: 100%;
+              object-fit: contain;
             }
             .order-info {
+              width: 100%;
+              height: 40mm;
               writing-mode: vertical-rl;
               text-orientation: mixed;
               transform: rotate(180deg);
-              margin: 0;
-              padding: 0;
-              height: 50mm;
+              padding: 2mm 0;
               display: flex;
               flex-direction: column;
-              justify-content: flex-start;
+              justify-content: space-between;
               align-items: flex-start;
-              gap: 4mm;
+              gap: 3mm;
             }
             .order-info div {
               margin: 0;
               padding: 0;
               white-space: nowrap;
+              line-height: 1.2;
             }
             .order-number {
               font-weight: bold;
-              font-size: 11px;
+              font-size: 10px;
+            }
+            .info-line {
+              font-size: 9px;
             }
           </style>
         </head>
@@ -212,40 +225,23 @@ export const printLabel = async (html: string) => {
       </html>
     `;
 
-    // Print the HTML content
     const printOptions = {
       html: printContent,
       width: 29 * 2.83465, // 29mm in points
       height: 90 * 2.83465, // 90mm in points
       margins: { left: 0, right: 0, top: 0, bottom: 0 },
-      // Ensure the print dialog shows
-      printerUrl: undefined // Let the system choose printer
+      printerUrl: undefined
     };
 
-    console.log('🖨️ About to call Print.printAsync with options:', JSON.stringify(printOptions, null, 2));
-    console.log('📱 Print options html length:', printOptions.html.length);
+    console.log('🖨️ Printing with options:', JSON.stringify({
+      ...printOptions,
+      html: `[HTML content length: ${printOptions.html.length}]`
+    }));
     
     const result = await Print.printAsync(printOptions);
-    console.log('✅ Print.printAsync completed with result:', result ? 'success' : 'void');
-    
-    try {
-      if (result && typeof result === 'object') {
-        console.log('📋 Print result object:', JSON.stringify(result));
-        if ('uri' in result) {
-          console.log('📋 Print dialog should have opened with URI:', (result as any).uri);
-        }
-      } else {
-        console.log('⚠️ No result object - dialog may not have opened');
-      }
-    } catch (logError) {
-      console.log('⚠️ Could not log print result');
-    }
-    
+    console.log('✅ Print job completed');
     return result;
   } catch (error: unknown) {
-    console.error('❌ Print error in printLabel:', error);
-    
-    // Check if the error is due to user cancellation
     const errorMessage = error instanceof Error ? error.message : String(error);
     const isCancellation = errorMessage.includes('Printing did not complete') || 
                           errorMessage.includes('cancelled') || 
@@ -254,11 +250,12 @@ export const printLabel = async (html: string) => {
                           errorMessage.includes('user canceled');
     
     if (isCancellation) {
-      console.log('ℹ️ Print cancelled by user - no error shown');
-      return null; // Return null instead of throwing to indicate cancellation
+      console.log('ℹ️ Print cancelled by user:', errorMessage);
+      return null;
+    } else {
+      console.error('❌ Print error:', error);
+      Alert.alert('Print Error', `Failed to print: ${errorMessage}`);
+      throw error;
     }
-    
-    Alert.alert('Print Error', `Failed to print: ${errorMessage}`);
-    throw error;
   }
 };

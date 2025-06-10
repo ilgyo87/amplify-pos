@@ -11,6 +11,12 @@ export const useSync = () => {
     totalUnsyncedEmployees: 0,
     totalLocalBusinesses: 0,
     totalUnsyncedBusinesses: 0,
+    totalLocalProducts: 0,
+    totalUnsyncedProducts: 0,
+    totalLocalCategories: 0, 
+    totalUnsyncedCategories: 0,
+    totalLocalOrders: 0,
+    totalUnsyncedOrders: 0,
     customersUploaded: 0,
     customersDownloaded: 0,
     employeesUploaded: 0,
@@ -21,6 +27,8 @@ export const useSync = () => {
     productsDownloaded: 0,
     businessesUploaded: 0,
     businessesDownloaded: 0,
+    ordersUploaded: 0,
+    ordersDownloaded: 0,
     startTime: new Date(),
     success: false
   });

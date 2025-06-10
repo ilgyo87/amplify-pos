@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { 
   View, 
   StyleSheet, 
@@ -9,13 +9,11 @@ import {
   ScrollView, 
   FlatList, 
   Modal, 
-  TextInput, 
-  Dimensions 
+  TextInput
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { captureRef } from 'react-native-view-shot';
-import * as Print from 'expo-print';
 import { useOrders } from '../../database/hooks/useOrders';
 import { OrderDocument, OrderDocType } from '../../database/schemas/order';
 import { generateLabelHTML, printLabel } from '../../utils/printUtils';
@@ -29,14 +27,16 @@ export default function OrdersScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [selectedOrder, setSelectedOrder] = useState<OrderDocument | null>(null);
   const [scannedItemsState, setScannedItemsState] = useState<{[key: string]: boolean}>({});
+  const [selectedItemsForPrint, setSelectedItemsForPrint] = useState<{[key: string]: boolean}>({});
   const [manualOrderInput, setManualOrderInput] = useState('');
   const [showItemScanner, setShowItemScanner] = useState(false);
   const [itemScanInput, setItemScanInput] = useState('');
   const [showRackScanner, setShowRackScanner] = useState(false);
   const [rackScanInput, setRackScanInput] = useState('');
+  const [notificationMessage, setNotificationMessage] = useState('');
   // Store QR refs for mass printing
   const qrRefs = useRef<{[key: string]: React.RefObject<View | null>}>({});
-  const { orders, loading, updateOrderStatus } = useOrders(selectedStatus === 'all' ? undefined : selectedStatus);
+  const { orders, loading, updateOrderStatus, updateOrderStatusAndRack } = useOrders(selectedStatus === 'all' ? undefined : selectedStatus);
   
   // Create a memoized lookup map for orders
   const orderLookupMap = useMemo(() => {
@@ -52,10 +52,27 @@ export default function OrdersScreen() {
     return map;
   }, [orders]);
 
-  const toggleItemScan = (itemKey: string) => {
-    setScannedItemsState(prev => ({
+  // Helper function to auto-select all items for pending orders
+  const autoSelectAllItemsForPrint = (order: OrderDocument) => {
+    if (order.status === 'pending') {
+      const allItemsSelected: {[key: string]: boolean} = {};
+      order.items.forEach(item => {
+        for (let i = 0; i < item.quantity; i++) {
+          const itemId = `${item.itemKey}-${i}`;
+          allItemsSelected[itemId] = true;
+        }
+      });
+      setSelectedItemsForPrint(allItemsSelected);
+    } else {
+      setSelectedItemsForPrint({});
+    }
+  };
+
+  const toggleItemForPrint = (itemKey: string, itemIndex: number) => {
+    const fullItemId = `${itemKey}-${itemIndex}`;
+    setSelectedItemsForPrint(prev => ({
       ...prev,
-      [itemKey]: !prev[itemKey]
+      [fullItemId]: !prev[fullItemId]
     }));
   };
 
@@ -94,7 +111,15 @@ export default function OrdersScreen() {
 
   const onSelectOrder = (order: OrderDocument) => {
     setSelectedOrder(order);
-    setScannedItemsState({});
+    setScannedItemsState({}); // Clear scanned items for new order
+    autoSelectAllItemsForPrint(order); // Auto-select items for pending orders
+  };
+
+  const showTimedNotification = (message: string) => {
+    setNotificationMessage(message);
+    setTimeout(() => {
+      setNotificationMessage('');
+    }, 2000); // Hide after 2 seconds
   };
 
   const searchForOrder = (searchTerm: string) => {
@@ -109,7 +134,7 @@ export default function OrdersScreen() {
       console.log('Order found and modal opening');
     } else {
       console.log('❌ No order found for:', searchTerm);
-      Alert.alert('Order Not Found', `No order found matching "${searchTerm}"`);
+      showTimedNotification(`Order "${searchTerm}" not found`);
       setManualOrderInput('');
     }
   };
@@ -147,6 +172,9 @@ export default function OrdersScreen() {
   };
 
   const processItemScan = async (data: string) => {
+    // Clear input immediately
+    setItemScanInput('');
+    
     // Check if this is a valid item QR code (orderNumber-itemNumber format)
     if (selectedOrder && data.startsWith(selectedOrder.orderNumber + '-')) {
       const itemNumber = data.replace(selectedOrder.orderNumber + '-', '');
@@ -179,12 +207,12 @@ export default function OrdersScreen() {
                 }
               }
               
-              Alert.alert('Item Scanned', `${item.name} #${globalItemNumber} has been scanned.`);
+              console.log(`✅ Item scanned: ${item.name} #${globalItemNumber}`);
               
-              // Check if all items are now scanned and auto-close for pending orders
+              // Check if all items are now scanned and auto-close
               setTimeout(() => {
-                checkAndAutoCloseIfAllScanned();
-              }, 100); // Small delay to ensure state is updated
+                checkAndAutoCloseIfAllScanned(itemId);
+              }, 200); // Small delay to ensure state is updated
               
               return;
             }
@@ -196,49 +224,67 @@ export default function OrdersScreen() {
       // Clear input without showing alert
     } else {
       console.log('❌ Invalid QR code:', data, 'does not belong to order:', selectedOrder?.orderNumber);
-      // Clear input without showing alert
+      // Input already cleared at start of function
     }
-    
-    // Always clear the input field after scanning
-    setItemScanInput('');
   };
 
-  const checkAndAutoCloseIfAllScanned = () => {
+  const checkAndAutoCloseIfAllScanned = (newlyScannedItemId?: string) => {
     if (!selectedOrder) return;
     
-    // Auto-close for both pending and in_progress orders (when they become ready)
+    // Auto-close for both pending and in_progress orders
     if (selectedOrder.status !== 'pending' && selectedOrder.status !== 'in_progress') return;
+    
+    // Get current scanned state including the newly scanned item
+    const currentScannedState = { ...scannedItemsState };
+    if (newlyScannedItemId) {
+      currentScannedState[newlyScannedItemId] = true;
+    }
     
     // Check if all items are scanned
     const allScanned = selectedOrder.items.every(item => {
       for (let i = 0; i < item.quantity; i++) {
         const itemId = `${item.itemKey}-${i}`;
-        if (!scannedItemsState[itemId]) {
+        if (!currentScannedState[itemId]) {
           return false;
         }
       }
       return true;
     });
     
+    console.log('🔍 Checking auto-close:', {
+      allScanned,
+      totalItems: selectedOrder.items.reduce((sum, item) => sum + item.quantity, 0),
+      scannedCount: Object.keys(currentScannedState).length,
+      orderStatus: selectedOrder.status
+    });
+    
     if (allScanned) {
-      console.log('🎉 All items scanned! Auto-closing modal and updating status to ready.');
+      // Determine the next status based on current status
+      let nextStatus: 'in_progress' | 'ready';
+      if (selectedOrder.status === 'pending') {
+        nextStatus = 'in_progress';
+        console.log('🎉 All items scanned for pending order! Updating status to in_progress and closing modal.');
+      } else {
+        nextStatus = 'ready';
+        console.log('🎉 All items scanned for in_progress order! Updating status to ready and closing modal.');
+      }
       
-      // Update order status to ready
-      updateOrderStatus(selectedOrder.id, 'ready')
+      // Update order status
+      updateOrderStatus(selectedOrder.id, nextStatus)
         .then(() => {
           // Close the modal
           setSelectedOrder(null);
           setScannedItemsState({}); // Clear scanned items state
+          setSelectedItemsForPrint({}); // Clear print selections
           
-          Alert.alert(
-            'Order Complete', 
-            `All items for Order #${selectedOrder.orderNumber} have been scanned and the order is now ready for pickup.`
-          );
+          console.log(`✅ Order #${selectedOrder.orderNumber} updated to ${nextStatus} status`);
         })
         .catch((error) => {
-          console.error('Failed to update order status to ready:', error);
+          console.error('Failed to update order status:', error);
           Alert.alert('Error', 'All items scanned but failed to update order status. Please try again.');
         });
+    } else {
+      console.log('⏳ Not all items scanned yet, keeping modal open');
     }
   };
 
@@ -272,25 +318,13 @@ export default function OrdersScreen() {
     if (selectedOrder.status === 'ready') {
       try {
         // Update order status to completed and save rack number
-        await updateOrderStatus(selectedOrder.id, 'completed');
+        await updateOrderStatusAndRack(selectedOrder.id, 'completed', rackNumber);
         
-        // Here you might want to save the rack number to the order
-        // This would require updating the order schema to include rackNumber
         console.log(`Order ${selectedOrder.orderNumber} moved to rack ${rackNumber} and marked as completed`);
         
-        Alert.alert(
-          'Order Completed', 
-          `Order #${selectedOrder.orderNumber} has been moved to rack ${rackNumber} and marked as completed.`,
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                setSelectedOrder(null);
-                setScannedItemsState({});
-              }
-            }
-          ]
-        );
+        // Close modal automatically without alert
+        setSelectedOrder(null);
+        setScannedItemsState({});
       } catch (error) {
         console.error('Failed to update order status:', error);
         // Log error but don't show alert, just clear input
@@ -325,6 +359,134 @@ export default function OrdersScreen() {
         processRackScan(text.trim());
         // processRackScan will clear the input
       }, 100);
+    }
+  };
+
+  const printSelectedItems = async () => {
+    if (!selectedOrder) return;
+    
+    const selectedItems = Object.keys(selectedItemsForPrint).filter(key => selectedItemsForPrint[key]);
+    
+    if (selectedItems.length === 0) {
+      Alert.alert('No Items Selected', 'Please select at least one item to print.');
+      return;
+    }
+
+
+    try {
+      console.log(`🖨️ Starting mass print of ${selectedItems.length} labels...`);
+      
+      // Build combined HTML for all selected items
+      let combinedHTML = '';
+      const validItems = [];
+      
+      for (const itemId of selectedItems) {
+        const lastHyphenIndex = itemId.lastIndexOf('-');
+        const itemKey = itemId.substring(0, lastHyphenIndex);
+        const itemIndexStr = itemId.substring(lastHyphenIndex + 1);
+        const itemIndex = parseInt(itemIndexStr);
+        
+        // Find the item in the order
+        const orderItem = selectedOrder.items.find(item => item.itemKey === itemKey);
+        if (!orderItem) {
+          console.error(`❌ Could not find order item with key: ${itemKey}`);
+          continue;
+        }
+        
+        // Calculate global item number
+        let globalItemNumber = 1;
+        let found = false;
+        
+        for (const item of selectedOrder.items) {
+          for (let j = 0; j < item.quantity; j++) {
+            if (item.itemKey === itemKey && j === itemIndex) {
+              found = true;
+              break;
+            }
+            globalItemNumber++;
+          }
+          if (found) break;
+        }
+        
+        if (!found) {
+          console.error(`❌ Could not calculate global item number for ${itemKey}-${itemIndex}`);
+          continue;
+        }
+        
+        validItems.push({ orderItem, globalItemNumber, itemId, itemKey, itemIndex });
+      }
+      
+      if (validItems.length === 0) {
+        Alert.alert('Error', 'No valid items found for printing.');
+        return;
+      }
+      
+      // Generate HTML for each item and combine
+      for (let i = 0; i < validItems.length; i++) {
+        const { orderItem, globalItemNumber, itemKey, itemIndex } = validItems[i];
+        const qrData = `${selectedOrder.orderNumber}-${globalItemNumber}`;
+        
+        // Get QR ref and try to capture, fallback to QR data
+        const itemRefId = `${itemKey}-${itemIndex}`;
+        const qrRef = qrRefs.current[itemRefId];
+        
+        let qrImageBase64 = qrData; // Default to QR data
+        
+        // Try to capture QR code if ref is available
+        if (qrRef?.current) {
+          try {
+            const capturedBase64 = await captureRef(qrRef.current, {
+              format: 'png',
+              quality: 1,
+              result: 'base64',
+              width: 100,
+              height: 100,
+            });
+            
+            if (capturedBase64.length > 1000) {
+              qrImageBase64 = capturedBase64;
+            }
+          } catch (captureError) {
+            console.warn('QR capture failed for', itemRefId, ':', captureError);
+          }
+        }
+        
+        // Generate individual label HTML
+        const labelHTML = await generateLabelHTML({
+          orderNumber: selectedOrder.orderNumber,
+          customerName: selectedOrder.customerName,
+          garmentType: `${orderItem.name} #${globalItemNumber}`,
+          notes: orderItem.options?.notes || '',
+          qrImageBase64: qrImageBase64
+        });
+        
+        // Add page break after each label except the last one
+        combinedHTML += labelHTML;
+        if (i < validItems.length - 1) {
+          combinedHTML += '<div style="page-break-after: always;"></div>';
+        }
+      }
+      
+      console.log(`📋 Generated combined HTML for ${validItems.length} labels, size: ${combinedHTML.length}`);
+      
+      // Use the printLabel function with just the body content
+      const result = await printLabel(combinedHTML);
+      
+      // Check if print was cancelled
+      if (result === null) {
+        console.log('ℹ️ Mass print cancelled by user');
+        return;
+      }
+      
+      console.log(`✅ Mass print completed successfully for ${validItems.length} labels`);
+      Alert.alert('Success', `${validItems.length} label${validItems.length > 1 ? 's' : ''} printed successfully.`);
+      
+      // Clear selections after successful printing
+      setSelectedItemsForPrint({});
+      
+    } catch (error) {
+      console.error('❌ Mass print error:', error);
+      Alert.alert('Print Error', 'Failed to print labels. Please try again or print individually.');
     }
   };
 
@@ -399,19 +561,81 @@ export default function OrdersScreen() {
     itemIndex,
     globalItemNumber,
     isScanned,
+    isSelectedForPrint,
     qrData
   }: {
     item: OrderItem;
     itemIndex: number;
     globalItemNumber: number;
     isScanned: boolean;
+    isSelectedForPrint: boolean;
     qrData: string;
   }) => {
     const qrRef = useRef<View>(null);
     
-    // Store the ref for individual printing
+    // Store the ref for mass printing
     const itemId = `${item.itemKey}-${itemIndex}`;
     qrRefs.current[itemId] = qrRef;
+
+    // For pending and in_progress orders, show both selection UI AND individual print buttons
+    if (selectedOrder && (selectedOrder.status === 'pending' || selectedOrder.status === 'in_progress')) {
+      return (
+        <View style={[styles.individualItem, isScanned && styles.scannedItemHighlight]}>
+          <TouchableOpacity 
+            style={[
+              styles.selectableItem, 
+              isSelectedForPrint && styles.selectedForPrint
+            ]}
+            onPress={() => toggleItemForPrint(item.itemKey, itemIndex)}
+          >
+            <View style={styles.itemMainContent}>
+              <View style={styles.itemCheckbox}>
+                {isScanned && (
+                  <Ionicons name="checkmark-circle" size={20} color="#10b981" />
+                )}
+              </View>
+              <View style={styles.itemDetails}>
+                <Text style={styles.itemName}>{item.name} #{globalItemNumber}</Text>
+                <Text style={styles.itemPrice}>${item.price.toFixed(2)}</Text>
+                {item.options?.starch && item.options.starch !== 'none' && (
+                  <Text style={styles.itemOptions}>Starch: {item.options.starch}</Text>
+                )}
+                {item.options?.pressOnly && (
+                  <Text style={styles.itemOptions}>Press Only</Text>
+                )}
+                {item.options?.notes && (
+                  <Text style={styles.itemOptions}>Notes: {item.options.notes}</Text>
+                )}
+              </View>
+              {/* QR Code Preview for selectable items */}
+              <View ref={qrRef} style={styles.qrPreviewContainer} collapsable={false}>
+                <QRCode
+                  value={qrData}
+                  size={40}
+                  color="#000000"
+                  backgroundColor="#FFFFFF"
+                />
+              </View>
+              <View style={styles.selectionIndicator}>
+                <Ionicons 
+                  name={isSelectedForPrint ? "checkbox" : "square-outline"} 
+                  size={24} 
+                  color={isSelectedForPrint ? "#007AFF" : "#ccc"} 
+                />
+              </View>
+            </View>
+          </TouchableOpacity>
+          {/* Individual Print Button */}
+          <TouchableOpacity 
+            style={[styles.printButton, { alignSelf: 'center' }]}
+            onPress={() => printItemLabel(item, globalItemNumber, qrRef)}
+          >
+            <Ionicons name="print" size={16} color="#007AFF" />
+            <Text style={styles.printButtonText}>Print</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
     
     // For ready orders, don't show individual items (handled in parent)
     if (selectedOrder && selectedOrder.status === 'ready') {
@@ -420,16 +644,17 @@ export default function OrdersScreen() {
     
     // Default view for other statuses (completed, cancelled)
     return (
-      <View style={[styles.individualItem, isScanned && styles.scannedItem]}>
+      <View style={[styles.individualItem, isScanned && styles.scannedItemHighlight]}>
         <View style={styles.itemMainContent}>
           <View style={styles.itemCheckbox}>
             {isScanned && (
-              <Ionicons name="checkmark-circle" size={20} color="#10b981" />
+              <Ionicons name="checkmark" size={20} color="#10b981" />
             )}
           </View>
           <View style={styles.itemDetails}>
             <Text style={styles.itemName}>{item.name} #{globalItemNumber}</Text>
             <Text style={styles.itemPrice}>${item.price.toFixed(2)}</Text>
+            <Text style={styles.itemQRCode}>QR: {qrData}</Text>
             {item.options?.starch && item.options.starch !== 'none' && (
               <Text style={styles.itemOptions}>Starch: {item.options.starch}</Text>
             )}
@@ -440,6 +665,7 @@ export default function OrdersScreen() {
               <Text style={styles.itemOptions}>Notes: {item.options.notes}</Text>
             )}
           </View>
+          {/* QR Code Preview */}
           <View ref={qrRef} style={styles.qrPreviewContainer} collapsable={false}>
             <QRCode
               value={qrData}
@@ -448,14 +674,14 @@ export default function OrdersScreen() {
               backgroundColor="#FFFFFF"
             />
           </View>
-          <TouchableOpacity 
-            style={styles.printButton}
-            onPress={() => printItemLabel(item, globalItemNumber, qrRef)}
-          >
-            <Ionicons name="print" size={16} color="#007AFF" />
-            <Text style={styles.printButtonText}>Print</Text>
-          </TouchableOpacity>
         </View>
+        <TouchableOpacity 
+          style={styles.printButton}
+          onPress={() => printItemLabel(item, globalItemNumber, qrRef)}
+        >
+          <Ionicons name="print" size={16} color="#007AFF" />
+          <Text style={styles.printButtonText}>Print</Text>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -468,6 +694,7 @@ export default function OrdersScreen() {
       const isScanned = scannedItems[itemId] || false;
       const globalItemNumber = globalItemStartIndex + i + 1; // Global sequential numbering
       const qrData = selectedOrder ? `${selectedOrder.orderNumber}-${globalItemNumber}` : '';
+      const isSelectedForPrint = selectedItemsForPrint[itemId] || false;
       
       individualItems.push(
         <IndividualItemComponent
@@ -476,6 +703,7 @@ export default function OrdersScreen() {
           itemIndex={i}
           globalItemNumber={globalItemNumber}
           isScanned={isScanned}
+          isSelectedForPrint={isSelectedForPrint}
           qrData={qrData}
         />
       );
@@ -581,7 +809,7 @@ export default function OrdersScreen() {
 
       <View style={styles.itemsSection}>
         <Text style={styles.itemsLabel}>Items ({order.items.length}):</Text>
-        {order.items.slice(0, 2).map((item, index) => (
+        {order.items.slice(0, 2).map((item) => (
           <Text key={item.itemKey} style={styles.itemText}>
             {item.quantity}x {item.name}
           </Text>
@@ -673,6 +901,16 @@ export default function OrdersScreen() {
           <Ionicons name="qr-code" size={24} color="#007AFF" />
         </TouchableOpacity>
       </View>
+
+      {/* Timed Notification */}
+      {notificationMessage ? (
+        <View style={styles.notificationContainer}>
+          <View style={styles.notificationContent}>
+            <Ionicons name="information-circle" size={20} color="#f59e0b" />
+            <Text style={styles.notificationText}>{notificationMessage}</Text>
+          </View>
+        </View>
+      ) : null}
         
         {orders.length === 0 ? (
           <View style={styles.emptyContainer}>
@@ -741,11 +979,20 @@ export default function OrdersScreen() {
                   onPress={() => {
                     setSelectedOrder(null);
                     setScannedItemsState({});
+                    setSelectedItemsForPrint({});
                   }}
                 >
                   <Ionicons name="close" size={24} color="#333" />
                 </TouchableOpacity>
-                <Text style={styles.detailTitle}>Order #{selectedOrder.orderNumber}</Text>
+                <View style={styles.detailTitleContainer}>
+                  <Text style={styles.detailTitle}>Order #{selectedOrder.orderNumber}</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedOrder.status) }]}>
+                    <Ionicons name={getStatusIcon(selectedOrder.status) as any} size={14} color="white" />
+                    <Text style={styles.statusText}>
+                      {selectedOrder.status.charAt(0).toUpperCase() + selectedOrder.status.slice(1).replace('_', ' ')}
+                    </Text>
+                  </View>
+                </View>
                 <View style={styles.placeholder} />
               </View>
               
@@ -775,10 +1022,54 @@ export default function OrdersScreen() {
                 <View style={styles.itemsSection}>
                   <View style={styles.sectionTitleContainer}>
                     <Text style={styles.sectionTitle}>Order Items</Text>
+                    {/* Print button for pending and in_progress orders */}
+                    {selectedOrder.status !== 'ready' && selectedOrder.status !== 'completed' && selectedOrder.status !== 'cancelled' && (
+                      <TouchableOpacity 
+                        style={styles.headerPrintButton}
+                        onPress={printSelectedItems}
+                      >
+                        <Ionicons name="print-outline" size={18} color="#fff" />
+                        <Text style={styles.headerPrintButtonText}>Print Selected</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                   
-                  {/* Hide individual items for ready orders and show rack number input instead */}
-                  {selectedOrder.status === 'ready' ? (
+                  {/* Handle different order statuses */}
+                  {selectedOrder.status === 'completed' ? (
+                    <View style={styles.completedOrderContainer}>
+                      <Text style={styles.completedOrderText}>
+                        Order completed and ready for pickup.
+                      </Text>
+                      <Text style={styles.completedOrderDetails}>
+                        All {selectedOrder.items.reduce((total, item) => total + item.quantity, 0)} items have been processed and stored.
+                      </Text>
+                      <View style={styles.rackDisplayContainer}>
+                        <Ionicons name="cube-outline" size={24} color="#059669" />
+                        <Text style={styles.rackDisplayText}>
+                          Rack: {selectedOrder.rackNumber || 'Not assigned'}
+                        </Text>
+                      </View>
+                      <TouchableOpacity 
+                        style={styles.undoButton}
+                        onPress={async () => {
+                          try {
+                            await updateOrderStatus(selectedOrder.id, 'ready');
+                            console.log(`Order #${selectedOrder.orderNumber} moved back to ready status`);
+                            
+                            // Close the modal automatically
+                            setSelectedOrder(null);
+                            setSelectedItemsForPrint({});
+                          } catch (error) {
+                            console.error('Failed to undo order status:', error);
+                            Alert.alert('Error', 'Failed to reset order status. Please try again.');
+                          }
+                        }}
+                      >
+                        <Ionicons name="arrow-undo" size={16} color="#6b7280" />
+                        <Text style={styles.undoButtonText}>Undo - Back to Ready</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : selectedOrder.status === 'ready' ? (
                     <View style={styles.readyOrderContainer}>
                       <Text style={styles.readyOrderText}>
                         All items ({selectedOrder.items.reduce((total, item) => total + item.quantity, 0)}) have been processed.
@@ -786,6 +1077,26 @@ export default function OrdersScreen() {
                       <Text style={styles.readyOrderInstructions}>
                         Scan a rack number to complete this order and mark it for pickup.
                       </Text>
+                      <TouchableOpacity 
+                        style={styles.undoButton}
+                        onPress={async () => {
+                          try {
+                            await updateOrderStatus(selectedOrder.id, 'in_progress');
+                            setScannedItemsState({}); // Reset scanned items
+                            console.log(`Order #${selectedOrder.orderNumber} moved back to in_progress status`);
+                            
+                            // Close the modal automatically
+                            setSelectedOrder(null);
+                            setSelectedItemsForPrint({});
+                          } catch (error) {
+                            console.error('Failed to undo order status:', error);
+                            Alert.alert('Error', 'Failed to reset order status. Please try again.');
+                          }
+                        }}
+                      >
+                        <Ionicons name="arrow-undo" size={16} color="#6b7280" />
+                        <Text style={styles.undoButtonText}>Undo - Reset to In Progress</Text>
+                      </TouchableOpacity>
                     </View>
                   ) : (
                     <View style={styles.itemsList}>
@@ -799,39 +1110,41 @@ export default function OrdersScreen() {
                     </View>
                   )}
                   
-                  {/* Item Scan Input */}
-                  <View style={styles.itemScanContainer}>
-                    <Text style={styles.scanSectionTitle}>Scan Item Labels</Text>
-                    <View style={styles.itemScanInputContainer}>
-                      <TextInput
-                        style={styles.itemScanInput}
-                        placeholder={`${selectedOrder.orderNumber}-1, ${selectedOrder.orderNumber}-2, etc.`}
-                        value={itemScanInput}
-                        onChangeText={handleItemInputChange}
-                        onSubmitEditing={handleManualItemScan}
-                        returnKeyType="done"
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                        clearButtonMode="while-editing"
-                      />
-                      <TouchableOpacity 
-                        style={styles.itemScanButton}
-                        onPress={handleManualItemScan}
-                        disabled={!itemScanInput.trim()}
-                      >
-                        <Ionicons name="checkmark" size={16} color="#fff" />
-                      </TouchableOpacity>
+                  {/* Item Scan Section - disabled for ready and completed orders */}
+                  {selectedOrder.status !== 'ready' && selectedOrder.status !== 'completed' && (
+                    <View style={styles.itemScanContainer}>
+                      <Text style={styles.scanSectionTitle}>Scan Item Labels</Text>
+                      {/* Search and scan row - same as main screen */}
+                      <View style={styles.searchScanRow}>
+                        <View style={styles.searchContainer}>
+                          <TextInput
+                            style={styles.searchInput}
+                            placeholder={`${selectedOrder.orderNumber}-1, ${selectedOrder.orderNumber}-2, etc.`}
+                            value={itemScanInput}
+                            onChangeText={handleItemInputChange}
+                            onSubmitEditing={handleManualItemScan}
+                            returnKeyType="search"
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            clearButtonMode="while-editing"
+                          />
+                          <TouchableOpacity 
+                            style={styles.searchButton} 
+                            onPress={handleManualItemScan}
+                            disabled={!itemScanInput.trim()}
+                          >
+                            <Ionicons name="search" size={20} color="#fff" />
+                          </TouchableOpacity>
+                        </View>
+                        <TouchableOpacity 
+                          style={styles.scanButton} 
+                          onPress={() => setShowItemScanner(true)}
+                        >
+                          <Ionicons name="qr-code" size={24} color="#007AFF" />
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                  </View>
-                  
-                  {/* Camera Scan Button */}
-                  <TouchableOpacity 
-                    style={styles.cameraScanButton}
-                    onPress={() => setShowItemScanner(true)}
-                  >
-                    <Ionicons name="qr-code" size={20} color="#007AFF" />
-                    <Text style={styles.cameraScanButtonText}>Use Camera Scanner</Text>
-                  </TouchableOpacity>
+                  )}
                 </View>
 
                 {allItemsScanned && selectedOrder.status !== 'ready' && (
@@ -841,41 +1154,41 @@ export default function OrdersScreen() {
                   </View>
                 )}
 
-                {/* Rack Scanning Section for Ready Orders */}
+                {/* Rack Scanning Section for Ready Orders only */}
                 {selectedOrder.status === 'ready' && (
                   <View style={styles.rackScanSection}>
                     <Text style={styles.scanSectionTitle}>Scan Rack Number</Text>
                     <Text style={styles.rackScanDescription}>Scan the rack barcode to complete the order</Text>
                     
-                    <View style={styles.itemScanInputContainer}>
-                      <TextInput
-                        style={styles.itemScanInput}
-                        placeholder="Rack number (e.g. R001, A1, etc.)"
-                        value={rackScanInput}
-                        onChangeText={handleRackInputChange}
-                        onSubmitEditing={handleManualRackScan}
-                        returnKeyType="done"
-                        autoCapitalize="characters"
-                        autoCorrect={false}
-                        clearButtonMode="while-editing"
-                      />
+                    {/* Search and scan row - same as main screen */}
+                    <View style={styles.searchScanRow}>
+                      <View style={styles.searchContainer}>
+                        <TextInput
+                          style={styles.searchInput}
+                          placeholder="Rack number (e.g. R001, A1, etc.)"
+                          value={rackScanInput}
+                          onChangeText={handleRackInputChange}
+                          onSubmitEditing={handleManualRackScan}
+                          returnKeyType="search"
+                          autoCapitalize="characters"
+                          autoCorrect={false}
+                          clearButtonMode="while-editing"
+                        />
+                        <TouchableOpacity 
+                          style={styles.searchButton} 
+                          onPress={handleManualRackScan}
+                          disabled={!rackScanInput.trim()}
+                        >
+                          <Ionicons name="search" size={20} color="#fff" />
+                        </TouchableOpacity>
+                      </View>
                       <TouchableOpacity 
-                        style={styles.itemScanButton}
-                        onPress={handleManualRackScan}
-                        disabled={!rackScanInput.trim()}
+                        style={styles.scanButton} 
+                        onPress={() => setShowRackScanner(true)}
                       >
-                        <Ionicons name="checkmark" size={16} color="#fff" />
+                        <Ionicons name="qr-code" size={24} color="#007AFF" />
                       </TouchableOpacity>
                     </View>
-                    
-                    {/* Camera Scan Button for Rack */}
-                    <TouchableOpacity 
-                      style={styles.cameraScanButton}
-                      onPress={() => setShowRackScanner(true)}
-                    >
-                      <Ionicons name="qr-code" size={20} color="#007AFF" />
-                      <Text style={styles.cameraScanButtonText}>Use Camera Scanner</Text>
-                    </TouchableOpacity>
                   </View>
                 )}
               </ScrollView>
@@ -967,7 +1280,6 @@ export default function OrdersScreen() {
   );
 }
 
-const { width } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   // Order Item Styles
@@ -1006,8 +1318,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
   },
-  scannedItem: {
-    opacity: 0.6,
+  scannedItemHighlight: {
+    backgroundColor: '#dcfce7',
+    borderColor: '#10b981',
+    borderWidth: 2,
   },
   
   // Detail Modal Styles
@@ -1022,8 +1336,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
-  detailTitle: {
+  detailTitleContainer: {
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  detailTitle: {
     textAlign: 'center',
     fontSize: 18,
     fontWeight: '600',
@@ -1609,14 +1928,73 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
     textAlign: 'center',
+    marginBottom: 16,
+  },
+  undoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f3f4f6',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+  },
+  undoButtonText: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  // Completed order styles
+  completedOrderContainer: {
+    padding: 20,
+    backgroundColor: '#f0fdf4',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  completedOrderText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#059669',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  completedOrderDetails: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  rackDisplayContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ecfdf5',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    marginBottom: 16,
+    gap: 8,
+  },
+  rackDisplayText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#059669',
   },
   // Item selection styles
   selectableItem: {
+    flex: 1,
     borderWidth: 1,
     borderColor: '#e5e7eb',
     borderRadius: 8,
     padding: 12,
-    marginBottom: 8,
+    marginRight: 8,
     backgroundColor: '#fff',
   },
   selectedForPrint: {
@@ -1627,5 +2005,31 @@ const styles = StyleSheet.create({
     marginLeft: 'auto',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  // Notification styles
+  notificationContainer: {
+    backgroundColor: '#fef3cd',
+    borderLeftWidth: 4,
+    borderLeftColor: '#f59e0b',
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  notificationContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 8,
+  },
+  notificationText: {
+    fontSize: 14,
+    color: '#92400e',
+    fontWeight: '500',
+    flex: 1,
   },
 });

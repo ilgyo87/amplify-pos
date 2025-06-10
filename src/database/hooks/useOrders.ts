@@ -90,6 +90,17 @@ export const useOrders = (status?: OrderDocType['status']) => {
     }
   };
 
+  const updateOrderStatusAndRack = async (orderId: string, newStatus: OrderDocType['status'], rackNumber?: string) => {
+    try {
+      const service = getOrderService();
+      await service.initialize();
+      return await service.updateOrderStatusAndRack(orderId, newStatus, rackNumber);
+    } catch (err) {
+      console.error('Error updating order status and rack:', err);
+      throw err;
+    }
+  };
+
   const deleteOrder = async (orderId: string) => {
     try {
       const service = getOrderService();
@@ -118,6 +129,7 @@ export const useOrders = (status?: OrderDocType['status']) => {
     error,
     createOrder,
     updateOrderStatus,
+    updateOrderStatusAndRack,
     deleteOrder,
     generateOrderNumber
   };
