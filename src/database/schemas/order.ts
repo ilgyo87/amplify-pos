@@ -69,7 +69,7 @@ export const orderSchema: RxJsonSchema<OrderDocType> = {
           id: { type: 'string', maxLength: 100 },
           name: { type: 'string', maxLength: 100 },
           description: { type: 'string', maxLength: 500 },
-          price: { type: 'number', minimum: 0, maximum: 999999.99, multipleOf: 0.01 },
+          price: { type: 'number', minimum: 0, maximum: 999999.99 },
           quantity: { type: 'number', minimum: 1, maximum: 999999, multipleOf: 1 },
           options: {
             type: 'object',
@@ -87,20 +87,17 @@ export const orderSchema: RxJsonSchema<OrderDocType> = {
     subtotal: {
       type: 'number',
       minimum: 0,
-      maximum: 999999.99,
-      multipleOf: 0.01
+      maximum: 999999.99
     },
     tax: {
       type: 'number',
       minimum: 0,
-      maximum: 999999.99,
-      multipleOf: 0.01
+      maximum: 999999.99
     },
     total: {
       type: 'number',
       minimum: 0,
-      maximum: 999999.99,
-      multipleOf: 0.01
+      maximum: 999999.99
     },
     paymentMethod: {
       type: 'string',

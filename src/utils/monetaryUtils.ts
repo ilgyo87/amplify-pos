@@ -10,10 +10,9 @@
  * @returns A number that is precisely rounded to 2 decimal places
  */
 export const toPreciseAmount = (num: number): number => {
-  // Convert to cents (integer), then back to dollars to avoid floating point issues
+  // Convert to cents (integer), then back to dollars
   const cents = Math.round(num * 100);
-  // Use parseFloat(toFixed(2)) to ensure the result is a clean decimal
-  return parseFloat((cents / 100).toFixed(2));
+  return cents / 100;
 };
 
 /**

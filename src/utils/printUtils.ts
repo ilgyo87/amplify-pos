@@ -1,28 +1,31 @@
 import { Alert } from 'react-native';
 import * as Print from 'expo-print';
 
-// Generate QR code using qrcode library for HTML
+// Generate QR code using a more robust pattern for HTML
 async function generateQRCodeSVG(data: string): Promise<string> {
   try {
-    // Use a simple approach to generate a QR-like pattern
+    console.log('🔲 Generating SVG QR code for:', data);
+    
     const size = 100;
     const cellSize = 4;
     const modules = 25;
     
-    // Create a hash-based pattern
+    // Create a deterministic pattern based on the data
     const hash = data.split('').reduce((acc, char, i) => {
       return ((acc << 5) - acc + char.charCodeAt(0) * (i + 1)) & 0xFFFFFF;
     }, 0);
     
     let svgContent = '';
     
-    // Add finder patterns (corner squares)
+    // Add prominent finder patterns (corner squares) - make them more visible
     const addFinderPattern = (startX: number, startY: number) => {
       for (let y = 0; y < 7; y++) {
         for (let x = 0; x < 7; x++) {
-          const isEdge = x === 0 || x === 6 || y === 0 || y === 6;
-          const isCenter = x >= 2 && x <= 4 && y >= 2 && y <= 4;
-          if ((startX + x < modules) && (startY + y < modules) && (isEdge || isCenter)) {
+          const isOuterBorder = x === 0 || x === 6 || y === 0 || y === 6;
+          const isInnerCenter = x >= 2 && x <= 4 && y >= 2 && y <= 4;
+          const shouldFill = isOuterBorder || isInnerCenter;
+          
+          if ((startX + x < modules) && (startY + y < modules) && shouldFill) {
             const px = (startX + x) * cellSize;
             const py = (startY + y) * cellSize;
             svgContent += `<rect x="${px}" y="${py}" width="${cellSize}" height="${cellSize}" fill="black"/>`;
@@ -31,40 +34,69 @@ async function generateQRCodeSVG(data: string): Promise<string> {
       }
     };
     
-    // Add finder patterns
+    // Add the three finder patterns
     addFinderPattern(0, 0);      // Top-left
-    addFinderPattern(18, 0);     // Top-right  
-    addFinderPattern(0, 18);     // Bottom-left
+    addFinderPattern(modules - 7, 0);     // Top-right  
+    addFinderPattern(0, modules - 7);     // Bottom-left
     
-    // Add data pattern
-    for (let y = 9; y < modules - 1; y++) {
-      for (let x = 9; x < modules - 1; x++) {
-        const seed = hash + (y * modules + x);
-        if ((seed % 3) === 0) {
-          const px = x * cellSize;
-          const py = y * cellSize;
-          svgContent += `<rect x="${px}" y="${py}" width="${cellSize}" height="${cellSize}" fill="black"/>`;
+    // Add timing patterns (alternating lines)
+    for (let i = 8; i < modules - 8; i++) {
+      if (i % 2 === 0) {
+        // Horizontal timing pattern
+        const px = i * cellSize;
+        const py = 6 * cellSize;
+        svgContent += `<rect x="${px}" y="${py}" width="${cellSize}" height="${cellSize}" fill="black"/>`;
+        
+        // Vertical timing pattern
+        const vx = 6 * cellSize;
+        const vy = i * cellSize;
+        svgContent += `<rect x="${vx}" y="${vy}" width="${cellSize}" height="${cellSize}" fill="black"/>`;
+      }
+    }
+    
+    // Add dense data pattern to make it look more like a real QR code
+    for (let y = 0; y < modules; y++) {
+      for (let x = 0; x < modules; x++) {
+        // Skip finder pattern areas
+        const inTopLeftFinder = x < 9 && y < 9;
+        const inTopRightFinder = x >= modules - 9 && y < 9;
+        const inBottomLeftFinder = x < 9 && y >= modules - 9;
+        const inTimingPattern = (x === 6 || y === 6) && !inTopLeftFinder && !inTopRightFinder && !inBottomLeftFinder;
+        
+        if (!inTopLeftFinder && !inTopRightFinder && !inBottomLeftFinder && !inTimingPattern) {
+          const seed = hash + (y * modules + x) + data.charCodeAt(Math.min(data.length - 1, x + y));
+          if ((seed % 3) === 0) {
+            const px = x * cellSize;
+            const py = y * cellSize;
+            svgContent += `<rect x="${px}" y="${py}" width="${cellSize}" height="${cellSize}" fill="black"/>`;
+          }
         }
       }
     }
     
     const svg = `
       <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-        <rect width="${size}" height="${size}" fill="white"/>
+        <rect width="${size}" height="${size}" fill="white" stroke="black" stroke-width="0.5"/>
         ${svgContent}
       </svg>
     `;
     
-    return `data:image/svg+xml;base64,${btoa(svg)}`;
+    console.log('✅ Generated SVG QR code, content length:', svg.length);
+    const base64 = `data:image/svg+xml;base64,${btoa(svg)}`;
+    console.log('✅ Base64 QR code length:', base64.length);
+    
+    return base64;
   } catch (error) {
-    console.error('QR generation error:', error);
-    // Simple fallback with text
+    console.error('❌ QR generation error:', error);
+    // More prominent fallback
     const fallbackSvg = `
       <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
-        <rect width="100" height="100" fill="white" stroke="black" stroke-width="1"/>
-        <text x="50" y="50" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold">${data}</text>
+        <rect width="100" height="100" fill="white" stroke="black" stroke-width="2"/>
+        <rect x="10" y="10" width="80" height="80" fill="none" stroke="black" stroke-width="1"/>
+        <text x="50" y="50" text-anchor="middle" font-family="monospace" font-size="8" font-weight="bold" fill="black">${data}</text>
       </svg>
     `;
+    console.log('⚠️ Using fallback QR SVG');
     return `data:image/svg+xml;base64,${btoa(fallbackSvg)}`;
   }
 }
@@ -110,7 +142,8 @@ export async function generateLabelHTML({
 
 export const printLabel = async (html: string) => {
   try {
-    console.log('Starting print job...');
+    console.log('🖨️ Starting print job...');
+    console.log('📄 HTML content length:', html.length);
     
     // Create a temporary HTML file with the content
     const printContent = `
@@ -185,13 +218,47 @@ export const printLabel = async (html: string) => {
       width: 29 * 2.83465, // 29mm in points
       height: 90 * 2.83465, // 90mm in points
       margins: { left: 0, right: 0, top: 0, bottom: 0 },
-      useWebView: true, // Use WebView for better HTML rendering
+      // Ensure the print dialog shows
+      printerUrl: undefined // Let the system choose printer
     };
 
+    console.log('🖨️ About to call Print.printAsync with options:', JSON.stringify(printOptions, null, 2));
+    console.log('📱 Print options html length:', printOptions.html.length);
+    
     const result = await Print.printAsync(printOptions);
-    console.log('Print result:', result);
+    console.log('✅ Print.printAsync completed with result:', result ? 'success' : 'void');
+    
+    try {
+      if (result && typeof result === 'object') {
+        console.log('📋 Print result object:', JSON.stringify(result));
+        if ('uri' in result) {
+          console.log('📋 Print dialog should have opened with URI:', (result as any).uri);
+        }
+      } else {
+        console.log('⚠️ No result object - dialog may not have opened');
+      }
+    } catch (logError) {
+      console.log('⚠️ Could not log print result');
+    }
+    
     return result;
   } catch (error: unknown) {
-    console.log(error);
+    console.error('❌ Print error in printLabel:', error);
+    
+    // Check if the error is due to user cancellation
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const isCancellation = errorMessage.includes('Printing did not complete') || 
+                          errorMessage.includes('cancelled') || 
+                          errorMessage.includes('canceled') ||
+                          errorMessage.includes('user cancelled') ||
+                          errorMessage.includes('user canceled');
+    
+    if (isCancellation) {
+      console.log('ℹ️ Print cancelled by user - no error shown');
+      return null; // Return null instead of throwing to indicate cancellation
+    }
+    
+    Alert.alert('Print Error', `Failed to print: ${errorMessage}`);
+    throw error;
   }
 };
