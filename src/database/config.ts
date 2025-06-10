@@ -37,12 +37,17 @@ export interface DatabaseCollections {
 // Extend the RxDatabase type with our collections
 export type AppDatabase = RxDatabase<DatabaseCollections>;
 
+let databaseInstance: AppDatabase | null = null;
 let databasePromise: Promise<AppDatabase> | null = null;
 
 /**
  * Get or create the database instance
  */
 export const getDatabaseInstance = async (): Promise<AppDatabase> => {
+  if (databaseInstance) {
+    return databaseInstance;
+  }
+  
   if (!databasePromise) {
     databasePromise = createDatabase();
   }
@@ -50,6 +55,9 @@ export const getDatabaseInstance = async (): Promise<AppDatabase> => {
 };
 
 const createDatabase = async (): Promise<AppDatabase> => {
+  // Clean up any existing database instances to avoid hitting collection limits
+  await forceCleanup();
+
   // Use memory storage with validation wrapper for dev-mode
   const storage = wrappedValidateAjvStorage({
     storage: getRxStorageMemory()
@@ -57,7 +65,7 @@ const createDatabase = async (): Promise<AppDatabase> => {
 
   try {
     const database = await createRxDatabase<DatabaseCollections>({
-      name: 'amplifyposdb_v12',
+      name: `amplifyposdb_${Date.now()}`,
       storage,
       multiInstance: false, // Set to false in React Native
       ignoreDuplicate: true,
@@ -127,12 +135,15 @@ const createDatabase = async (): Promise<AppDatabase> => {
           migrationStrategies: {
             // Migration from version 0 to 1 - initial creation
             1: function(oldDoc: any) {
-              // This is the initial version, no transformation needed
               return oldDoc;
             }
           }
         }
       });
+      
+      // Store the instance for reuse
+      databaseInstance = database;
+      databasePromise = null;
       return database;
     } catch (error) {
       console.error('Error adding collections:', error);
@@ -145,9 +156,36 @@ const createDatabase = async (): Promise<AppDatabase> => {
 };
 
 export const closeDatabase = async () => {
-  if (databasePromise) {
-    const db = await databasePromise;
-    await db.remove();
-    databasePromise = null;
+  try {
+    if (databaseInstance) {
+      await databaseInstance.remove();
+      databaseInstance = null;
+    }
+    if (databasePromise) {
+      const db = await databasePromise;
+      await db.remove();
+      databasePromise = null;
+    }
+  } catch (error) {
+    console.log('Database cleanup completed');
+  }
+};
+
+/**
+ * Force cleanup of all databases - useful for development
+ */
+export const forceCleanup = async () => {
+  try {
+    if (databaseInstance) {
+      await databaseInstance.remove();
+      databaseInstance = null;
+    }
+    if (databasePromise) {
+      const db = await databasePromise;
+      await db.remove();
+      databasePromise = null;
+    }
+  } catch (error) {
+    console.log('Database cleanup completed');
   }
 };

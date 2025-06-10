@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { captureRef } from 'react-native-view-shot';
+import * as Print from 'expo-print';
 import { useOrders } from '../../database/hooks/useOrders';
 import { OrderDocument, OrderDocType } from '../../database/schemas/order';
 import { generateLabelHTML, printLabel } from '../../utils/printUtils';
@@ -28,12 +29,13 @@ export default function OrdersScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [selectedOrder, setSelectedOrder] = useState<OrderDocument | null>(null);
   const [scannedItemsState, setScannedItemsState] = useState<{[key: string]: boolean}>({});
-  const [selectedItemsForPrint, setSelectedItemsForPrint] = useState<{[key: string]: boolean}>({});
   const [manualOrderInput, setManualOrderInput] = useState('');
   const [showItemScanner, setShowItemScanner] = useState(false);
   const [itemScanInput, setItemScanInput] = useState('');
   const [showRackScanner, setShowRackScanner] = useState(false);
   const [rackScanInput, setRackScanInput] = useState('');
+  // Store QR refs for mass printing
+  const qrRefs = useRef<{[key: string]: React.RefObject<View | null>}>({});
   const { orders, loading, updateOrderStatus } = useOrders(selectedStatus === 'all' ? undefined : selectedStatus);
   
   // Create a memoized lookup map for orders
@@ -90,6 +92,11 @@ export default function OrdersScreen() {
     }
   };
 
+  const onSelectOrder = (order: OrderDocument) => {
+    setSelectedOrder(order);
+    setScannedItemsState({});
+  };
+
   const searchForOrder = (searchTerm: string) => {
     if (!searchTerm) return;
     
@@ -97,15 +104,13 @@ export default function OrdersScreen() {
     const foundOrder = orderLookupMap.get(searchTerm);
     
     if (foundOrder) {
-      setSelectedOrder(foundOrder);
-      setScannedItemsState({}); // Clear scanned items for new order
-      setSelectedItemsForPrint({}); // Clear selected items for print
+      onSelectOrder(foundOrder);
       setManualOrderInput('');
       console.log('Order found and modal opening');
     } else {
-      console.log('No order found for:', searchTerm);
-      console.log('Available keys:', Array.from(orderLookupMap.keys()));
-      Alert.alert('Order Not Found', 'No order found with this number or barcode.');
+      console.log('❌ No order found for:', searchTerm);
+      Alert.alert('Order Not Found', `No order found matching "${searchTerm}"`);
+      setManualOrderInput('');
     }
   };
 
@@ -133,13 +138,11 @@ export default function OrdersScreen() {
     
     // O(1) lookup using the map
     const scannedOrder = orderLookupMap.get(data);
-    
     if (scannedOrder) {
-      setSelectedOrder(scannedOrder);
-      setScannedItemsState({}); // Clear scanned items for new order
-      setSelectedItemsForPrint({}); // Clear selected items for print
+      onSelectOrder(scannedOrder); // Use the shared onSelectOrder function
     } else {
-      Alert.alert('Order Not Found', 'No order found with this QR code.');
+      console.log('❌ No order found for QR code:', data);
+      // No alert, scanner already closed
     }
   };
 
@@ -177,15 +180,65 @@ export default function OrdersScreen() {
               }
               
               Alert.alert('Item Scanned', `${item.name} #${globalItemNumber} has been scanned.`);
+              
+              // Check if all items are now scanned and auto-close for pending orders
+              setTimeout(() => {
+                checkAndAutoCloseIfAllScanned();
+              }, 100); // Small delay to ensure state is updated
+              
               return;
             }
             currentIndex++;
           }
         }
       }
-      Alert.alert('Invalid Item Number', 'Item number not found for this order.');
+      console.log('❌ Invalid item number:', itemNumber, 'for order:', selectedOrder.orderNumber);
+      // Clear input without showing alert
     } else {
-      Alert.alert('Invalid QR Code', 'This QR code does not belong to this order.');
+      console.log('❌ Invalid QR code:', data, 'does not belong to order:', selectedOrder?.orderNumber);
+      // Clear input without showing alert
+    }
+    
+    // Always clear the input field after scanning
+    setItemScanInput('');
+  };
+
+  const checkAndAutoCloseIfAllScanned = () => {
+    if (!selectedOrder) return;
+    
+    // Auto-close for both pending and in_progress orders (when they become ready)
+    if (selectedOrder.status !== 'pending' && selectedOrder.status !== 'in_progress') return;
+    
+    // Check if all items are scanned
+    const allScanned = selectedOrder.items.every(item => {
+      for (let i = 0; i < item.quantity; i++) {
+        const itemId = `${item.itemKey}-${i}`;
+        if (!scannedItemsState[itemId]) {
+          return false;
+        }
+      }
+      return true;
+    });
+    
+    if (allScanned) {
+      console.log('🎉 All items scanned! Auto-closing modal and updating status to ready.');
+      
+      // Update order status to ready
+      updateOrderStatus(selectedOrder.id, 'ready')
+        .then(() => {
+          // Close the modal
+          setSelectedOrder(null);
+          setScannedItemsState({}); // Clear scanned items state
+          
+          Alert.alert(
+            'Order Complete', 
+            `All items for Order #${selectedOrder.orderNumber} have been scanned and the order is now ready for pickup.`
+          );
+        })
+        .catch((error) => {
+          console.error('Failed to update order status to ready:', error);
+          Alert.alert('Error', 'All items scanned but failed to update order status. Please try again.');
+        });
     }
   };
 
@@ -197,7 +250,7 @@ export default function OrdersScreen() {
   const handleManualItemScan = () => {
     if (itemScanInput.trim()) {
       processItemScan(itemScanInput.trim());
-      setItemScanInput('');
+      // processItemScan will clear the input
     }
   };
 
@@ -208,7 +261,7 @@ export default function OrdersScreen() {
     if (selectedOrder && text.match(new RegExp(`^${selectedOrder.orderNumber}-\\d+$`))) {
       setTimeout(() => {
         processItemScan(text);
-        setItemScanInput('');
+        // processItemScan will clear the input
       }, 100);
     }
   };
@@ -240,11 +293,15 @@ export default function OrdersScreen() {
         );
       } catch (error) {
         console.error('Failed to update order status:', error);
-        Alert.alert('Error', 'Failed to complete order. Please try again.');
+        // Log error but don't show alert, just clear input
       }
     } else {
-      Alert.alert('Invalid Status', 'Order must be in "Ready" status to assign to a rack.');
+      console.log('❌ Invalid status for rack assignment:', selectedOrder.status, 'Expected: ready');
+      // Log error but don't show alert, just clear input
     }
+    
+    // Always clear the rack input field after scanning
+    setRackScanInput('');
   };
 
   const handleRackQRScanned = ({ data }: { data: string }) => {
@@ -255,7 +312,7 @@ export default function OrdersScreen() {
   const handleManualRackScan = () => {
     if (rackScanInput.trim()) {
       processRackScan(rackScanInput.trim());
-      setRackScanInput('');
+      // processRackScan will clear the input
     }
   };
 
@@ -266,220 +323,12 @@ export default function OrdersScreen() {
     if (text.trim().length >= 2) {
       setTimeout(() => {
         processRackScan(text.trim());
-        setRackScanInput('');
+        // processRackScan will clear the input
       }, 100);
     }
   };
 
-  const toggleItemForPrint = (itemKey: string, itemIndex: number) => {
-    const fullItemId = `${itemKey}-${itemIndex}`;
-    setSelectedItemsForPrint(prev => ({
-      ...prev,
-      [fullItemId]: !prev[fullItemId]
-    }));
-  };
-
-  const printSelectedItems = async () => {
-    if (!selectedOrder) return;
-    
-    const selectedItems = Object.keys(selectedItemsForPrint).filter(key => selectedItemsForPrint[key]);
-    
-    if (selectedItems.length === 0) {
-      Alert.alert('No Items Selected', 'Please select at least one item to print.');
-      return;
-    }
-
-    try {
-      for (const itemId of selectedItems) {
-        const [itemKey, itemIndexStr] = itemId.split('-');
-        const itemIndex = parseInt(itemIndexStr);
-        
-        // Find the item in the order
-        const orderItem = selectedOrder.items.find(item => item.itemKey === itemKey);
-        if (orderItem) {
-          // Calculate global item number
-          let globalItemNumber = 1;
-          for (const item of selectedOrder.items) {
-            for (let i = 0; i < item.quantity; i++) {
-              if (item.itemKey === itemKey && i === itemIndex) {
-                await printItemLabel(orderItem, globalItemNumber);
-                break;
-              }
-              globalItemNumber++;
-            }
-            if (orderItem.itemKey === itemKey && itemIndex < item.quantity) break;
-          }
-        }
-      }
-      
-      Alert.alert('Labels Printed', `${selectedItems.length} labels have been printed successfully.`);
-      
-      // Clear selections after printing
-      setSelectedItemsForPrint({});
-      
-    } catch (error) {
-      console.error('Print error:', error);
-      Alert.alert('Print Error', 'Failed to print some labels. Please try again.');
-    }
-  };
-
-  const generateQRCodeDataURL = async (data: string): Promise<string> => {
-    try {
-      // Create a simple, clean QR-style code that's scannable
-      const size = 21; // Standard QR code size
-      const cellSize = 5; // Each cell is 5x5 pixels
-      const totalSize = size * cellSize;
-      
-      // Create a simple hash-based pattern
-      const hash = data.split('').reduce((acc, char) => {
-        return ((acc << 5) - acc + char.charCodeAt(0)) & 0xFFFFFF;
-      }, 0);
-      
-      // Initialize empty grid
-      const grid = Array(size).fill(null).map(() => Array(size).fill(false));
-      
-      // Add finder patterns (corner squares)
-      const addFinderPattern = (startX: number, startY: number) => {
-        // 7x7 finder pattern
-        for (let y = 0; y < 7; y++) {
-          for (let x = 0; x < 7; x++) {
-            const isEdge = x === 0 || x === 6 || y === 0 || y === 6;
-            const isCenter = x >= 2 && x <= 4 && y >= 2 && y <= 4;
-            if (startX + x < size && startY + y < size) {
-              grid[startY + y][startX + x] = isEdge || isCenter;
-            }
-          }
-        }
-      };
-      
-      // Add the three finder patterns
-      addFinderPattern(0, 0);      // Top-left
-      addFinderPattern(14, 0);     // Top-right
-      addFinderPattern(0, 14);     // Bottom-left
-      
-      // Add timing patterns
-      for (let i = 8; i < 13; i++) {
-        if (i < size) {
-          grid[6][i] = i % 2 === 0;
-          grid[i][6] = i % 2 === 0;
-        }
-      }
-      
-      // Add data pattern based on hash
-      for (let y = 9; y < size - 1; y++) {
-        for (let x = 9; x < size - 1; x++) {
-          const seed = hash + (y * size + x);
-          grid[y][x] = (seed % 3) === 0;
-        }
-      }
-      
-      // Generate SVG
-      let svgContent = '';
-      for (let y = 0; y < size; y++) {
-        for (let x = 0; x < size; x++) {
-          if (grid[y][x]) {
-            const px = x * cellSize;
-            const py = y * cellSize;
-            svgContent += `<rect x="${px}" y="${py}" width="${cellSize}" height="${cellSize}" fill="black"/>`;
-          }
-        }
-      }
-      
-      const svg = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 ${totalSize} ${totalSize}">
-          <rect width="${totalSize}" height="${totalSize}" fill="white"/>
-          ${svgContent}
-        </svg>
-      `;
-      
-      return `data:image/svg+xml;base64,${btoa(svg)}`;
-    } catch (error) {
-      console.error('QR generation error:', error);
-      // Simple fallback with just the text
-      const fallbackSvg = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
-          <rect width="100" height="100" fill="white" stroke="black" stroke-width="1"/>
-          <text x="50" y="50" text-anchor="middle" font-family="monospace" font-size="12" font-weight="bold">${data}</text>
-        </svg>
-      `;
-      return `data:image/svg+xml;base64,${btoa(fallbackSvg)}`;
-    }
-  };
-
-  const generateQRCodeFromComponent = (data: string): Promise<string> => {
-    return new Promise((resolve) => {
-      try {
-        // Use the same QRCode component that's shown in the preview
-        // Generate SVG string that matches react-native-qrcode-svg output
-        import('react-native-qrcode-svg').then((QRCodeModule) => {
-          // Since we can't directly get SVG from the component in React Native,
-          // we'll create a compatible SVG manually
-          const size = 100;
-          const modules = 25; // Standard QR code modules
-          const moduleSize = size / modules;
-          
-          // Create a simple hash-based pattern that looks like a real QR code
-          const hash = data.split('').reduce((acc, char, i) => {
-            return ((acc << 5) - acc + char.charCodeAt(0) * (i + 1)) & 0xFFFFFF;
-          }, 0);
-          
-          // Generate a pattern similar to what react-native-qrcode-svg would create
-          let svgContent = '';
-          for (let y = 0; y < modules; y++) {
-            for (let x = 0; x < modules; x++) {
-              // Create finder patterns (corners)
-              const isFinderPattern = 
-                (x < 9 && y < 9) || // Top-left
-                (x >= modules - 9 && y < 9) || // Top-right
-                (x < 9 && y >= modules - 9); // Bottom-left
-              
-              // Create timing patterns
-              const isTimingPattern = (x === 6 || y === 6) && !isFinderPattern;
-              
-              // Create data pattern
-              const seed = hash + (y * modules + x);
-              const isDataModule = !isFinderPattern && !isTimingPattern && (seed % 3 === 0);
-              
-              if (isFinderPattern || isTimingPattern || isDataModule) {
-                const px = x * moduleSize;
-                const py = y * moduleSize;
-                svgContent += `<rect x="${px.toFixed(2)}" y="${py.toFixed(2)}" width="${moduleSize.toFixed(2)}" height="${moduleSize.toFixed(2)}" fill="black"/>`;
-              }
-            }
-          }
-          
-          const svg = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-              <rect width="${size}" height="${size}" fill="white"/>
-              ${svgContent}
-            </svg>
-          `;
-          
-          resolve(`data:image/svg+xml;base64,${btoa(svg)}`);
-        }).catch(() => {
-          // Fallback
-          const fallbackSvg = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
-              <rect width="100" height="100" fill="white" stroke="black" stroke-width="1"/>
-              <text x="50" y="50" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold">${data}</text>
-            </svg>
-          `;
-          resolve(`data:image/svg+xml;base64,${btoa(fallbackSvg)}`);
-        });
-      } catch (error) {
-        // Simple text fallback
-        const fallbackSvg = `
-          <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
-            <rect width="100" height="100" fill="white" stroke="black" stroke-width="1"/>
-            <text x="50" y="50" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold">${data}</text>
-          </svg>
-        `;
-        resolve(`data:image/svg+xml;base64,${btoa(fallbackSvg)}`);
-      }
-    });
-  };
-
-  const printItemLabel = async (item: OrderItem, globalItemNumber: number, qrRef?: React.RefObject<View | null>) => {
+  const printItemLabel = async (item: OrderItem, globalItemNumber: number, qrRef?: React.RefObject<View | null> | null) => {
     try {
       if (!selectedOrder) return;
       
@@ -516,6 +365,7 @@ export default function OrdersScreen() {
         }
       }
       
+      console.log('🏷️ Generating label HTML...');
       const html = await generateLabelHTML({
         orderNumber: selectedOrder.orderNumber,
         customerName: selectedOrder.customerName,
@@ -524,7 +374,18 @@ export default function OrdersScreen() {
         qrImageBase64: qrImageBase64
       });
       
-      await printLabel(html);
+      console.log('📋 Generated HTML, length:', html.length);
+      console.log('🖨️ About to call printLabel...');
+      
+      const printResult = await printLabel(html);
+      
+      // Check if print was cancelled
+      if (printResult === null) {
+        console.log('ℹ️ Print cancelled by user');
+        return; // Exit without showing any message
+      }
+      
+      console.log('✅ printLabel completed with result:', printResult);
       Alert.alert('Label Printed', `Label for ${item.name} #${globalItemNumber} has been printed.`);
     } catch (error) {
       console.error('Print error:', error);
@@ -538,58 +399,19 @@ export default function OrdersScreen() {
     itemIndex,
     globalItemNumber,
     isScanned,
-    isSelectedForPrint,
     qrData
   }: {
     item: OrderItem;
     itemIndex: number;
     globalItemNumber: number;
     isScanned: boolean;
-    isSelectedForPrint: boolean;
     qrData: string;
   }) => {
     const qrRef = useRef<View>(null);
-
-    // For pending and in_progress orders, show selection UI
-    if (selectedOrder && (selectedOrder.status === 'pending' || selectedOrder.status === 'in_progress')) {
-      return (
-        <TouchableOpacity 
-          style={[
-            styles.selectableItem, 
-            isSelectedForPrint && styles.selectedForPrint
-          ]}
-          onPress={() => toggleItemForPrint(item.itemKey, itemIndex)}
-        >
-          <View style={styles.itemMainContent}>
-            <View style={styles.itemCheckbox}>
-              {isScanned && (
-                <Ionicons name="checkmark-circle" size={20} color="#10b981" />
-              )}
-            </View>
-            <View style={styles.itemDetails}>
-              <Text style={styles.itemName}>{item.name} #{globalItemNumber}</Text>
-              <Text style={styles.itemPrice}>${item.price.toFixed(2)}</Text>
-              {item.options?.starch && item.options.starch !== 'none' && (
-                <Text style={styles.itemOptions}>Starch: {item.options.starch}</Text>
-              )}
-              {item.options?.pressOnly && (
-                <Text style={styles.itemOptions}>Press Only</Text>
-              )}
-              {item.options?.notes && (
-                <Text style={styles.itemOptions}>Notes: {item.options.notes}</Text>
-              )}
-            </View>
-            <View style={styles.selectionIndicator}>
-              <Ionicons 
-                name={isSelectedForPrint ? "checkbox" : "square-outline"} 
-                size={24} 
-                color={isSelectedForPrint ? "#007AFF" : "#ccc"} 
-              />
-            </View>
-          </View>
-        </TouchableOpacity>
-      );
-    }
+    
+    // Store the ref for individual printing
+    const itemId = `${item.itemKey}-${itemIndex}`;
+    qrRefs.current[itemId] = qrRef;
     
     // For ready orders, don't show individual items (handled in parent)
     if (selectedOrder && selectedOrder.status === 'ready') {
@@ -602,13 +424,12 @@ export default function OrdersScreen() {
         <View style={styles.itemMainContent}>
           <View style={styles.itemCheckbox}>
             {isScanned && (
-              <Ionicons name="checkmark" size={20} color="#10b981" />
+              <Ionicons name="checkmark-circle" size={20} color="#10b981" />
             )}
           </View>
           <View style={styles.itemDetails}>
             <Text style={styles.itemName}>{item.name} #{globalItemNumber}</Text>
             <Text style={styles.itemPrice}>${item.price.toFixed(2)}</Text>
-            <Text style={styles.itemQRCode}>QR: {qrData}</Text>
             {item.options?.starch && item.options.starch !== 'none' && (
               <Text style={styles.itemOptions}>Starch: {item.options.starch}</Text>
             )}
@@ -619,7 +440,6 @@ export default function OrdersScreen() {
               <Text style={styles.itemOptions}>Notes: {item.options.notes}</Text>
             )}
           </View>
-          {/* QR Code Preview */}
           <View ref={qrRef} style={styles.qrPreviewContainer} collapsable={false}>
             <QRCode
               value={qrData}
@@ -628,14 +448,14 @@ export default function OrdersScreen() {
               backgroundColor="#FFFFFF"
             />
           </View>
+          <TouchableOpacity 
+            style={styles.printButton}
+            onPress={() => printItemLabel(item, globalItemNumber, qrRef)}
+          >
+            <Ionicons name="print" size={16} color="#007AFF" />
+            <Text style={styles.printButtonText}>Print</Text>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity 
-          style={styles.printButton}
-          onPress={() => printItemLabel(item, globalItemNumber, qrRef)}
-        >
-          <Ionicons name="print" size={16} color="#007AFF" />
-          <Text style={styles.printButtonText}>Print</Text>
-        </TouchableOpacity>
       </View>
     );
   };
@@ -648,7 +468,6 @@ export default function OrdersScreen() {
       const isScanned = scannedItems[itemId] || false;
       const globalItemNumber = globalItemStartIndex + i + 1; // Global sequential numbering
       const qrData = selectedOrder ? `${selectedOrder.orderNumber}-${globalItemNumber}` : '';
-      const isSelectedForPrint = selectedItemsForPrint[itemId] || false;
       
       individualItems.push(
         <IndividualItemComponent
@@ -657,7 +476,6 @@ export default function OrdersScreen() {
           itemIndex={i}
           globalItemNumber={globalItemNumber}
           isScanned={isScanned}
-          isSelectedForPrint={isSelectedForPrint}
           qrData={qrData}
         />
       );
@@ -735,7 +553,10 @@ export default function OrdersScreen() {
   );
 
   const OrderCard = ({ order }: { order: OrderDocument }) => (
-    <View style={styles.orderCard}>
+    <TouchableOpacity 
+      style={styles.orderCard}
+      onPress={() => onSelectOrder(order)}
+    >
       <View style={styles.orderHeader}>
         <View style={styles.orderNumberSection}>
           <Text style={styles.orderNumber}>#{order.orderNumber}</Text>
@@ -801,7 +622,7 @@ export default function OrdersScreen() {
           )}
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   if (loading) {
@@ -954,16 +775,6 @@ export default function OrdersScreen() {
                 <View style={styles.itemsSection}>
                   <View style={styles.sectionTitleContainer}>
                     <Text style={styles.sectionTitle}>Order Items</Text>
-                    {/* Print button for pending and in_progress orders */}
-                    {selectedOrder.status !== 'ready' && selectedOrder.status !== 'completed' && selectedOrder.status !== 'cancelled' && (
-                      <TouchableOpacity 
-                        style={styles.headerPrintButton}
-                        onPress={printSelectedItems}
-                      >
-                        <Ionicons name="print-outline" size={18} color="#fff" />
-                        <Text style={styles.headerPrintButtonText}>Print Selected</Text>
-                      </TouchableOpacity>
-                    )}
                   </View>
                   
                   {/* Hide individual items for ready orders and show rack number input instead */}
@@ -1069,9 +880,9 @@ export default function OrdersScreen() {
                 )}
               </ScrollView>
 
-              <View style={styles.actionBar}>
-                {/* Show different button based on order status */}
-                {selectedOrder.status === 'ready' ? (
+              {/* Only show action bar for ready orders (rack scanning) */}
+              {selectedOrder.status === 'ready' && (
+                <View style={styles.actionBar}>
                   <TouchableOpacity 
                     style={[
                       styles.actionButton,
@@ -1083,27 +894,8 @@ export default function OrdersScreen() {
                       Scan Rack Number to Complete
                     </Text>
                   </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity 
-                    style={[
-                      styles.actionButton,
-                      allItemsScanned && styles.completeButton
-                    ]}
-                    onPress={() => {
-                      if (allItemsScanned) {
-                        handleStatusChange(selectedOrder.id, 'ready');
-                        setSelectedOrder(null);
-                        setScannedItemsState({});
-                      }
-                    }}
-                    disabled={!allItemsScanned}
-                  >
-                    <Text style={styles.actionButtonText}>
-                      {allItemsScanned ? 'Mark as Ready' : 'Scan All Items'}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+                </View>
+              )}
             </SafeAreaView>
           </Modal>
         )}
