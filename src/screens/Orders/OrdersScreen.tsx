@@ -1,4 +1,4 @@
-import { View, StyleSheet, SafeAreaView, Text, TouchableOpacity, Alert, ScrollView, FlatList, Modal } from 'react-native';
+import { View, StyleSheet, SafeAreaView, Text, TouchableOpacity, Alert, ScrollView, FlatList, Modal, TextInput } from 'react-native';
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';

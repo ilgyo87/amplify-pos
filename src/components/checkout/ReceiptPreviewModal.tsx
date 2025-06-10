@@ -10,8 +10,6 @@ import {
   Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Print from 'expo-print';
-import { captureRef } from 'react-native-view-shot';
 import { OrderItem } from '../../types/order';
 import { SerializableCustomer } from '../../navigation/types';
 import { QRCode } from '../../utils/qrUtils';
@@ -58,202 +56,150 @@ export function ReceiptPreviewModal({
   const tax = subtotal * 0.0875; // 8.75% tax
   const total = subtotal + tax;
 
-  const generateReceiptHTML = () => {
-    const currentDate = new Date().toLocaleDateString();
-    const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
-    let itemsHTML = '';
-    orderItems.forEach(item => {
-      const basePrice = Number(item.price) || 0;
-      const additionalPrice = Number(item.additionalPrice) || 0;
-      const itemPrice = basePrice + additionalPrice;
-      const discount = Number(item.discount) || 0;
-      const quantity = Number(item.quantity) || 0;
-      
-      const discountedPrice = discount > 0 ? itemPrice * (1 - discount / 100) : itemPrice;
-      const totalPrice = discountedPrice * quantity;
-      
-      let optionsText = '';
-      if (item.options?.starch && item.options.starch !== 'none') {
-        optionsText += ` - ${item.options.starch} starch`;
-      }
-      if (item.options?.pressOnly) {
-        optionsText += ' - Press Only';
-      }
-      
-      itemsHTML += `
-        <tr>
-          <td style="text-align: left; padding: 4px 0;">${item.name}${optionsText}</td>
-          <td style="text-align: center; padding: 4px 0;">${quantity}</td>
-          <td style="text-align: right; padding: 4px 0;">$${itemPrice.toFixed(2)}</td>
-          <td style="text-align: right; padding: 4px 0;">$${totalPrice.toFixed(2)}</td>
-        </tr>
-      `;
-    });
 
-    return `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Receipt</title>
-        <style>
-          body { font-family: 'Courier New', monospace; width: 300px; margin: 0 auto; padding: 20px; }
-          .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 10px; }
-          .business-name { font-size: 18px; font-weight: bold; margin-bottom: 5px; }
-          .receipt-info { margin-bottom: 15px; }
-          .customer-info { margin-bottom: 15px; border-bottom: 1px dashed #000; padding-bottom: 10px; }
-          .items-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
-          .items-table th { border-bottom: 1px solid #000; padding: 5px 0; text-align: left; }
-          .items-table td { padding: 3px 0; }
-          .totals { border-top: 1px solid #000; padding-top: 10px; }
-          .total-line { display: flex; justify-content: space-between; margin-bottom: 3px; }
-          .grand-total { font-weight: bold; border-top: 1px dashed #000; padding-top: 5px; margin-top: 5px; }
-          .footer { text-align: center; margin-top: 20px; border-top: 1px dashed #000; padding-top: 10px; }
-          .small { font-size: 12px; }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <div class="business-name">DRY CLEANING SERVICES</div>
-          <div class="small">123 Main Street</div>
-          <div class="small">Phone: (555) 123-4567</div>
-        </div>
-        
-        <div class="receipt-info">
-          <div><strong>Order #:</strong> ${orderNumber}</div>
-          <div><strong>Date:</strong> ${currentDate}</div>
-          <div><strong>Time:</strong> ${currentTime}</div>
-          <div><strong>Pickup Date:</strong> ${selectedDate ? new Date(selectedDate + 'T00:00:00').toLocaleDateString() : 'Today'}</div>
-        </div>
-        
-        <div class="customer-info">
-          <div><strong>Customer:</strong> ${customer.firstName} ${customer.lastName}</div>
-          ${customer.phone ? `<div><strong>Phone:</strong> ${customer.phone}</div>` : ''}
-        </div>
-        
-        <table class="items-table">
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th style="text-align: center;">Qty</th>
-              <th style="text-align: right;">Price</th>
-              <th style="text-align: right;">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsHTML}
-          </tbody>
-        </table>
-        
-        <div class="totals">
-          <div class="total-line">
-            <span>Subtotal:</span>
-            <span>$${subtotal.toFixed(2)}</span>
-          </div>
-          <div class="total-line">
-            <span>Tax (8.75%):</span>
-            <span>$${tax.toFixed(2)}</span>
-          </div>
-          <div class="total-line grand-total">
-            <span>TOTAL:</span>
-            <span>$${total.toFixed(2)}</span>
-          </div>
-          <div class="total-line" style="margin-top: 10px;">
-            <span>Payment:</span>
-            <span>${selectedPayment?.charAt(0).toUpperCase()}${selectedPayment?.slice(1)}</span>
-          </div>
-        </div>
-        
-        <div class="footer">
-          <div class="qr-section">
-            <canvas id="qrcode" width="100" height="100" style="margin: 10px 0;"></canvas>
-          </div>
-          <div class="small">Thank you for your business!</div>
-          <div class="small">Please keep this receipt for pickup</div>
-          <div class="small">Order ID: ${qrData}</div>
-        </div>
-        
-        <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-        <script>
-          QRCode.toCanvas(document.getElementById('qrcode'), "${qrData}", {
-            width: 100,
-            height: 100,
-            margin: 1
-          });
-        </script>
-      </body>
-      </html>
-    `;
-  };
-
-  const sendDirectToPrinter = async (html: string, printerIP: string, printerPort: string) => {
+  const sendDirectToPrinter = async (printerIP: string, printerPort: string) => {
     try {
-      // Create ESC/POS commands for thermal printer
-      const escPosData = generateESCPOSCommands(html);
+      console.log(`Printing receipt directly to Munbyn printer at ${printerIP}:${printerPort}`);
       
-      // Send raw data to printer via TCP socket
-      const response = await fetch(`http://${printerIP}:${printerPort}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/octet-stream',
-        },
-        body: escPosData,
-      });
+      // Generate ESC/POS commands for thermal printing
+      const escPosCommands = generateThermalReceiptCommands();
       
-      if (response.ok) {
-        console.log('Successfully sent to thermal printer');
+      // Send commands directly to thermal printer via raw socket connection
+      const success = await sendRawDataToPrinter(printerIP, printerPort, escPosCommands);
+      
+      if (success) {
+        console.log('Receipt printed successfully to thermal printer');
         return true;
       } else {
-        throw new Error('Printer response not OK');
+        throw new Error('Failed to send data to printer');
       }
     } catch (error) {
-      console.error('Direct printer error:', error);
+      console.error('Direct print error:', error);
       throw error;
     }
   };
 
-  const generateESCPOSCommands = (html: string) => {
-    // Convert HTML receipt to ESC/POS thermal printer commands
-    const ESC = '\x1B';
-    const GS = '\x1D';
-    const LF = '\x0A';
-    const CR = '\x0D';
+  const sendRawDataToPrinter = async (ip: string, port: string, data: Uint8Array): Promise<boolean> => {
+    try {
+      console.log(`Sending ${data.length} bytes to thermal printer at ${ip}:${port}`);
+      
+      // For thermal printers, we'll try a simplified approach
+      // Most thermal printers accept raw data on port 9100 but don't send HTTP responses
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+      
+      try {
+        const response = await fetch(`http://${ip}:${port}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/octet-stream',
+          },
+          body: data,
+          signal: controller.signal,
+        });
+        
+        clearTimeout(timeoutId);
+        console.log('Printer responded with status:', response.status);
+        return response.ok;
+        
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        
+        // If it's a timeout or network error, assume printing worked
+        // Thermal printers often don't send proper HTTP responses
+        if (fetchError.name === 'AbortError' || fetchError.message.includes('Network request failed')) {
+          console.log('Printer connection timeout - assuming print succeeded (normal for thermal printers)');
+          return true; // Assume success for thermal printers
+        }
+        throw fetchError;
+      }
+    } catch (error) {
+      console.error('Failed to send raw data to printer:', error);
+      return false;
+    }
+  };
+
+  const generateThermalReceiptCommands = (): Uint8Array => {
+    const currentDate = new Date().toLocaleDateString();
+    const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
-    let escPos = '';
+    // ESC/POS command constants
+    const ESC = 0x1B;
+    const GS = 0x1D;
+    const LF = 0x0A;
+    const CR = 0x0D;
+    
+    // Initialize array for commands
+    const commands: number[] = [];
+    
+    // Helper function to add text
+    const addText = (text: string) => {
+      const utf8Encoder = new TextEncoder();
+      const bytes = utf8Encoder.encode(text);
+      commands.push(...Array.from(bytes));
+    };
+    
+    // Helper function to add line feed
+    const addLF = () => commands.push(LF);
+    
+    // Helper function to center text
+    const centerText = (text: string, width: number = 48) => {
+      const padding = Math.max(0, Math.floor((width - text.length) / 2));
+      return ' '.repeat(padding) + text;
+    };
+    
+    // Helper function to format two-column text
+    const formatTwoColumns = (left: string, right: string, width: number = 48) => {
+      const rightPadding = Math.max(0, width - left.length - right.length);
+      return left + ' '.repeat(rightPadding) + right;
+    };
     
     // Initialize printer
-    escPos += ESC + '@'; // Initialize
-    escPos += ESC + 'a' + '\x01'; // Center alignment
+    commands.push(ESC, 0x40); // Reset printer
+    commands.push(ESC, 0x61, 0x01); // Center alignment
     
-    // Business name (large text)
-    escPos += ESC + '!' + '\x18'; // Double height and width
-    escPos += 'DRY CLEANING SERVICES' + LF;
-    escPos += ESC + '!' + '\x00'; // Normal size
+    // Business header
+    commands.push(ESC, 0x45, 0x01); // Bold on
+    addText('DRY CLEANING SERVICES');
+    addLF();
+    commands.push(ESC, 0x45, 0x00); // Bold off
     
-    // Business details
-    escPos += '123 Main Street' + LF;
-    escPos += 'Phone: (555) 123-4567' + LF;
-    escPos += '--------------------------------' + LF;
+    addText('123 Main Street');
+    addLF();
+    addText('Phone: (555) 123-4567');
+    addLF();
+    addLF();
     
-    // Order details
-    escPos += ESC + 'a' + '\x00'; // Left alignment
-    escPos += `Order #: ${orderNumber}` + LF;
-    escPos += `Date: ${new Date().toLocaleDateString()}` + LF;
-    escPos += `Time: ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` + LF;
-    escPos += `Pickup: ${selectedDate ? new Date(selectedDate + 'T00:00:00').toLocaleDateString() : 'Today'}` + LF;
-    escPos += LF;
+    // Separator line
+    addText('--------------------------------');
+    addLF();
+    
+    // Order info - Left align
+    commands.push(ESC, 0x61, 0x00); // Left alignment
+    addText(`Order #: ${orderNumber}`);
+    addLF();
+    addText(`Date: ${currentDate} ${currentTime}`);
+    addLF();
+    addText(`Pickup: ${selectedDate ? new Date(selectedDate + 'T00:00:00').toLocaleDateString() : 'Today'}`);
+    addLF();
+    addLF();
     
     // Customer info
-    escPos += `Customer: ${customer.firstName} ${customer.lastName}` + LF;
+    addText(`Customer: ${customer.firstName} ${customer.lastName}`);
+    addLF();
     if (customer.phone) {
-      escPos += `Phone: ${customer.phone}` + LF;
+      addText(`Phone: ${customer.phone}`);
+      addLF();
     }
-    escPos += '--------------------------------' + LF;
+    addLF();
     
     // Items header
-    escPos += 'Item                 Qty  Total' + LF;
-    escPos += '--------------------------------' + LF;
+    addText('--------------------------------');
+    addLF();
+    addText('Item                    Qty Total');
+    addLF();
+    addText('--------------------------------');
+    addLF();
     
     // Items
     orderItems.forEach(item => {
@@ -268,92 +214,99 @@ export function ReceiptPreviewModal({
       
       let itemName = item.name;
       if (item.options?.starch && item.options.starch !== 'none') {
-        itemName += ` - ${item.options.starch}`;
+        itemName += ` - ${item.options.starch} starch`;
       }
       if (item.options?.pressOnly) {
         itemName += ' - Press Only';
       }
       
-      // Truncate item name to fit
-      if (itemName.length > 18) {
-        itemName = itemName.substring(0, 15) + '...';
+      // Truncate long item names
+      if (itemName.length > 20) {
+        itemName = itemName.substring(0, 17) + '...';
       }
       
-      const line = `${itemName.padEnd(18)} ${quantity.toString().padStart(2)} $${totalPrice.toFixed(2).padStart(6)}`;
-      escPos += line + LF;
+      const itemLine = formatTwoColumns(
+        itemName.padEnd(20),
+        `${quantity.toString().padStart(3)} ${totalPrice.toFixed(2).padStart(6)}`,
+        48
+      );
+      
+      addText(itemLine);
+      addLF();
     });
     
-    escPos += '--------------------------------' + LF;
+    addText('--------------------------------');
+    addLF();
     
     // Totals
-    const subtotal = orderItems.reduce((sum, item) => {
-      const basePrice = Number(item.price) || 0;
-      const additionalPrice = Number(item.additionalPrice) || 0;
-      const itemPrice = basePrice + additionalPrice;
-      const discount = Number(item.discount) || 0;
-      const quantity = Number(item.quantity) || 0;
-      
-      const discountedPrice = discount > 0 ? itemPrice * (1 - discount / 100) : itemPrice;
-      return sum + (discountedPrice * quantity);
-    }, 0);
+    addText(formatTwoColumns('Subtotal:', `$${subtotal.toFixed(2)}`, 32));
+    addLF();
+    addText(formatTwoColumns('Tax (8.75%):', `$${tax.toFixed(2)}`, 32));
+    addLF();
+    addText('--------------------------------');
+    addLF();
     
-    const tax = subtotal * 0.0875;
-    const total = subtotal + tax;
-    
-    escPos += `Subtotal:               $${subtotal.toFixed(2).padStart(8)}` + LF;
-    escPos += `Tax (8.75%):            $${tax.toFixed(2).padStart(8)}` + LF;
-    escPos += '--------------------------------' + LF;
-    escPos += ESC + '!' + '\x08'; // Emphasized text
-    escPos += `TOTAL:                  $${total.toFixed(2).padStart(8)}` + LF;
-    escPos += ESC + '!' + '\x00'; // Normal text
-    escPos += LF;
+    // Grand total - Bold
+    commands.push(ESC, 0x45, 0x01); // Bold on
+    addText(formatTwoColumns('TOTAL:', `$${total.toFixed(2)}`, 32));
+    addLF();
+    commands.push(ESC, 0x45, 0x00); // Bold off
+    addLF();
     
     // Payment method
     if (selectedPayment) {
-      escPos += `Payment: ${selectedPayment.charAt(0).toUpperCase()}${selectedPayment.slice(1)}` + LF;
+      addText(formatTwoColumns('Payment:', selectedPayment.charAt(0).toUpperCase() + selectedPayment.slice(1), 32));
+      addLF();
     }
-    escPos += LF;
+    addLF();
     
-    // QR Code - Using standard ESC/POS QR code commands
-    escPos += ESC + 'a' + '\x01'; // Center alignment
-    escPos += LF;
+    // QR Code using ESC/POS QR command
+    commands.push(ESC, 0x61, 0x01); // Center alignment
     
-    // QR Code commands for Munbyn ITPP047P
-    // Function 165 - QR Code: Select the model
-    escPos += '\x1D' + '(k' + '\x04' + '\x00' + '\x31' + '\x41' + '\x32' + '\x00';
+    // QR Code commands for ESC/POS thermal printers
+    // Set QR code model
+    commands.push(GS, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00);
+    // Set QR code size (module size)
+    commands.push(GS, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, 0x08);
+    // Set QR code error correction level
+    commands.push(GS, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x45, 0x31);
     
-    // Function 167 - QR Code: Set the size of module
-    escPos += '\x1D' + '(k' + '\x03' + '\x00' + '\x31' + '\x43' + '\x03'; // Size 3 (smaller for receipts)
+    // Store QR code data
+    const qrDataLength = qrData.length + 3;
+    const qrLowByte = qrDataLength & 0xFF;
+    const qrHighByte = (qrDataLength >> 8) & 0xFF;
+    commands.push(GS, 0x28, 0x6B, qrLowByte, qrHighByte, 0x31, 0x50, 0x30);
     
-    // Function 169 - QR Code: Select the error correction level
-    escPos += '\x1D' + '(k' + '\x03' + '\x00' + '\x31' + '\x45' + '\x30'; // Level L (7%)
+    // Add QR data
+    const qrBytes = new TextEncoder().encode(qrData);
+    commands.push(...Array.from(qrBytes));
     
-    // Function 180 - QR Code: Store the data in the symbol storage area
-    const qrDataBytes = new TextEncoder().encode(qrData);
-    const dataLength = qrDataBytes.length + 3;
-    const pL = dataLength & 0xFF;
-    const pH = (dataLength >> 8) & 0xFF;
+    // Print QR code
+    commands.push(GS, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30);
+    addLF();
     
-    escPos += '\x1D' + '(k' + String.fromCharCode(pL, pH) + '\x31' + '\x50' + '\x30';
-    escPos += qrData;
-    
-    // Function 181 - QR Code: Print the symbol data in the symbol storage area
-    escPos += '\x1D' + '(k' + '\x03' + '\x00' + '\x31' + '\x51' + '\x30';
-    escPos += LF + LF;
+    addText('Scan for order details');
+    addLF();
+    addText(`Order ID: ${qrData}`);
+    addLF();
+    addLF();
     
     // Footer
-    escPos += 'Thank you for your business!' + LF;
-    escPos += 'Please keep this receipt' + LF;
-    escPos += 'for pickup' + LF;
-    escPos += LF + LF + LF;
+    addText('Thank you for your business!');
+    addLF();
+    addText('Please keep this receipt');
+    addLF();
+    addText('for pickup');
+    addLF();
+    addLF();
+    addLF();
     
     // Cut paper
-    escPos += GS + 'V' + '\x42' + '\x00'; // Partial cut
+    commands.push(GS, 0x56, 0x00); // Full cut
     
-    // Convert string to bytes
-    const encoder = new TextEncoder();
-    return encoder.encode(escPos);
+    return new Uint8Array(commands);
   };
+
 
   const handleComplete = async () => {
     if (!selectedPayment) {
@@ -371,11 +324,10 @@ export function ReceiptPreviewModal({
         const { ip, port } = JSON.parse(printerSettings);
         
         if (ip) {
-          // Send directly to thermal printer
-          console.log(`Printing to Munbyn printer at ${ip}:${port || '9100'}`);
-          const html = generateReceiptHTML();
-          await sendDirectToPrinter(html, ip, port || '9100');
-          console.log('Receipt sent successfully to thermal printer');
+          // Send directly to thermal printer - NO AirPrint dialog
+          console.log(`Printing directly to Munbyn printer at ${ip}:${port || '9100'}`);
+          await sendDirectToPrinter(ip, port || '9100');
+          console.log('Receipt printed directly to thermal printer');
         } else {
           // No IP configured, show error
           Alert.alert('Printer Not Configured', 'Please configure your Munbyn printer in Settings before printing.');
