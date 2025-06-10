@@ -186,6 +186,7 @@ export default function Dashboard() {
             value={searchTerm}
             onChangeText={handleSearchChange}
             onFocus={() => searchTerm.trim() && setShowResults(true)}
+            autoFocus={true}
           />
           
           {showResults && (

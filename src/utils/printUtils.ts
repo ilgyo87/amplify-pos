@@ -14,9 +14,12 @@ export async function generateLabelHTML({
   notes: string,
   qrImageBase64: string
 }): Promise<string> {
+  // qrImageBase64 is now expected to be the captured base64 image from captureRef
+  const imageUri = qrImageBase64.startsWith('data:') ? qrImageBase64 : `data:image/png;base64,${qrImageBase64}`;
+  
   return `
     <div class="qr-container">
-      <img src="${qrImageBase64}" alt="QR Code" onerror="console.error('Failed to load QR code')" />
+      <img src="${imageUri}" alt="QR Code" />
     </div>
     <div class="order-info">
       <div class="order-number">Order #: ${orderNumber}</div>
@@ -63,8 +66,8 @@ export const printLabel = async (html: string) => {
               margin: 2mm 0;
             }
             .qr-container img {
-              max-width: 100%;
-              max-height: 100%;
+              width: 20mm;
+              height: 20mm;
               display: block;
             }
             .order-info {

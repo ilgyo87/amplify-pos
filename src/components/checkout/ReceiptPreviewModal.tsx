@@ -19,6 +19,7 @@ interface ReceiptPreviewModalProps {
   customer: SerializableCustomer;
   orderItems: OrderItem[];
   selectedDate?: string;
+  orderNumber: string;
   onClose: () => void;
   onComplete: (paymentMethod: 'cash' | 'card' | 'credit', qrData?: string) => void;
 }
@@ -28,6 +29,7 @@ export function ReceiptPreviewModal({
   customer,
   orderItems,
   selectedDate,
+  orderNumber,
   onClose,
   onComplete
 }: ReceiptPreviewModalProps) {
@@ -35,9 +37,8 @@ export function ReceiptPreviewModal({
   const [isPrinting, setIsPrinting] = useState(false);
   const receiptRef = useRef<View>(null);
   
-  // Generate consistent order number and QR data
-  const orderNumber = `ORD${Date.now().toString().slice(-6)}`;
-  const qrData = `ORDER:${orderNumber}:${customer.id}:${Date.now()}`;
+  // Use the passed order number and generate QR data
+  const qrData = orderNumber;
 
   // Calculate totals
   const subtotal = orderItems.reduce((sum, item) => {
@@ -300,6 +301,9 @@ export function ReceiptPreviewModal({
     addLF();
     addLF();
     addLF();
+    addLF();
+    addLF();
+    addLF();
     
     // Cut paper
     commands.push(GS, 0x56, 0x00); // Full cut
@@ -417,7 +421,7 @@ export function ReceiptPreviewModal({
             <View style={styles.receiptInfo}>
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Order #:</Text>
-                <Text style={styles.infoValue}>ORD{Date.now().toString().slice(-6)}</Text>
+                <Text style={styles.infoValue}>{orderNumber}</Text>
               </View>
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Date:</Text>
@@ -532,7 +536,10 @@ export function ReceiptPreviewModal({
               
               <Text style={styles.footerText}>Thank you for your business!</Text>
               <Text style={styles.footerText}>Please keep this receipt for pickup</Text>
-              <Text style={styles.orderIdText}>Order ID: {qrData}</Text>
+              <Text style={styles.orderIdText}>Order #: {orderNumber}</Text>
+              
+              {/* Extra spacing at bottom */}
+              <View style={{ height: 40 }} />
             </View>
           </View>
 

@@ -101,12 +101,24 @@ export const useOrders = (status?: OrderDocType['status']) => {
     }
   };
 
+  const generateOrderNumber = async () => {
+    try {
+      const service = getOrderService();
+      await service.initialize();
+      return await service.generateOrderNumber();
+    } catch (err) {
+      console.error('Error generating order number:', err);
+      throw err;
+    }
+  };
+
   return {
     orders,
     loading,
     error,
     createOrder,
     updateOrderStatus,
-    deleteOrder
+    deleteOrder,
+    generateOrderNumber
   };
 };

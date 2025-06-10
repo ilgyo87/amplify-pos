@@ -153,4 +153,9 @@ export class OrderService {
       callback
     );
   }
+
+  async generateOrderNumber(): Promise<string> {
+    const repository = await this.getRepository();
+    return repository.generateOrderNumber();
+  }
 }
