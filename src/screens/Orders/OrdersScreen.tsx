@@ -17,7 +17,6 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { captureRef } from 'react-native-view-shot';
 import { useOrders } from '../../database/hooks/useOrders';
 import { OrderDocument, OrderDocType } from '../../database/schemas/order';
-import { BaseScreen } from '../BaseScreen';
 import { generateLabelHTML, printLabel } from '../../utils/printUtils';
 import { QRCode } from '../../utils/qrUtils';
 
@@ -621,46 +620,52 @@ export default function OrdersScreen() {
 
   if (loading) {
     return (
-      <BaseScreen title="Orders">
-        <SafeAreaView style={styles.container}>
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Loading orders...</Text>
-          </View>
-        </SafeAreaView>
-      </BaseScreen>
+      <SafeAreaView style={styles.container}>
+        {/* Custom Header with Status Filters */}
+        <View style={styles.customHeader}>
+          <StatusFilter />
+        </View>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading orders...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <BaseScreen title="Orders">
-      <SafeAreaView style={styles.container}>
-        {/* Header with search and scan */}
-        <View style={styles.header}>
-          <View style={styles.searchContainer}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Order # or barcode"
-              value={manualOrderInput}
-              onChangeText={handleInputChange}
-              onSubmitEditing={handleManualOrderSearch}
-              returnKeyType="search"
-              autoCapitalize="none"
-              autoCorrect={false}
-              clearButtonMode="while-editing"
-              autoFocus={true}
-            />
-            <TouchableOpacity 
-              style={styles.searchButton} 
-              onPress={handleManualOrderSearch}
-              disabled={!manualOrderInput.trim()}
-            >
-              <Ionicons name="search" size={20} color="#fff" />
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity style={styles.scanButton} onPress={handleScanPress}>
-            <Ionicons name="qr-code" size={24} color="#007AFF" />
+    <SafeAreaView style={styles.container}>
+      {/* Custom Header with Status Filters */}
+      <View style={styles.customHeader}>
+        <StatusFilter />
+      </View>
+      
+      {/* Search and scan row */}
+      <View style={styles.searchScanRow}>
+        <View style={styles.searchContainer}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Order # or barcode"
+            value={manualOrderInput}
+            onChangeText={handleInputChange}
+            onSubmitEditing={handleManualOrderSearch}
+            returnKeyType="search"
+            autoCapitalize="none"
+            autoCorrect={false}
+            clearButtonMode="while-editing"
+            autoFocus={true}
+          />
+          <TouchableOpacity 
+            style={styles.searchButton} 
+            onPress={handleManualOrderSearch}
+            disabled={!manualOrderInput.trim()}
+          >
+            <Ionicons name="search" size={20} color="#fff" />
           </TouchableOpacity>
         </View>
+        <TouchableOpacity style={styles.scanButton} onPress={handleScanPress}>
+          <Ionicons name="qr-code" size={24} color="#007AFF" />
+        </TouchableOpacity>
+      </View>
         
         {orders.length === 0 ? (
           <View style={styles.emptyContainer}>
@@ -866,8 +871,7 @@ export default function OrdersScreen() {
             </View>
           </SafeAreaView>
         </Modal>
-      </SafeAreaView>
-    </BaseScreen>
+    </SafeAreaView>
   );
 }
 
@@ -1008,6 +1012,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
+  customHeader: {
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  searchScanRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -1016,15 +1036,6 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     color: '#6b7280',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
   },
   filterScrollView: {
     flex: 1,
