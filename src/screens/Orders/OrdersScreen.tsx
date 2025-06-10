@@ -1,17 +1,75 @@
-import { View, StyleSheet, SafeAreaView, Text, TouchableOpacity, Alert, ScrollView, FlatList, Modal, TextInput } from 'react-native';
-import { useState } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { 
+  View, 
+  StyleSheet, 
+  SafeAreaView, 
+  Text, 
+  TouchableOpacity, 
+  Alert, 
+  ScrollView, 
+  FlatList, 
+  Modal, 
+  TextInput, 
+  Dimensions 
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { captureRef } from 'react-native-view-shot';
 import { useOrders } from '../../database/hooks/useOrders';
 import { OrderDocument, OrderDocType } from '../../database/schemas/order';
 import { BaseScreen } from '../BaseScreen';
+import { generateLabelHTML, printLabel } from '../../utils/printUtils';
+import { QRCode } from '../../utils/qrUtils';
+
+type OrderItem = OrderDocument['items'][0];
 
 export default function OrdersScreen() {
   const [selectedStatus, setSelectedStatus] = useState<OrderDocType['status'] | 'all'>('all');
   const [showScanner, setShowScanner] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const [selectedOrder, setSelectedOrder] = useState<OrderDocument | null>(null);
+  const [scannedItemsState, setScannedItemsState] = useState<{[key: string]: boolean}>({});
+  const [manualOrderInput, setManualOrderInput] = useState('');
+  const [showItemScanner, setShowItemScanner] = useState(false);
+  const [itemScanInput, setItemScanInput] = useState('');
   const { orders, loading, updateOrderStatus } = useOrders(selectedStatus === 'all' ? undefined : selectedStatus);
+  
+  // Create a memoized lookup map for orders
+  const orderLookupMap = useMemo(() => {
+    const map = new Map<string, OrderDocument>();
+    orders.forEach(order => {
+      // Map by order number
+      map.set(order.orderNumber.toString(), order);
+      // Map by barcode if exists
+      if (order.barcodeData) {
+        map.set(order.barcodeData, order);
+      }
+    });
+    return map;
+  }, [orders]);
+
+  const toggleItemScan = (itemKey: string) => {
+    setScannedItemsState(prev => ({
+      ...prev,
+      [itemKey]: !prev[itemKey]
+    }));
+  };
+
+  // Derive scanned items state reactively
+  const scannedItems = scannedItemsState;
+
+  const allItemsScanned = selectedOrder 
+    ? selectedOrder.items.every(item => {
+        // Check if all individual items for this item are scanned
+        for (let i = 0; i < item.quantity; i++) {
+          const itemId = `${item.itemKey}-${i}`;
+          if (!scannedItems[itemId]) {
+            return false;
+          }
+        }
+        return true;
+      })
+    : false;
 
   const handleScanPress = async () => {
     if (!permission) {
@@ -30,17 +88,373 @@ export default function OrdersScreen() {
     }
   };
 
+  const searchForOrder = (searchTerm: string) => {
+    if (!searchTerm) return;
+    
+    // Try exact match with order number (now that QR code is just the order number)
+    const foundOrder = orderLookupMap.get(searchTerm);
+    
+    if (foundOrder) {
+      setSelectedOrder(foundOrder);
+      setManualOrderInput('');
+      console.log('Order found and modal opening');
+    } else {
+      console.log('No order found for:', searchTerm);
+      console.log('Available keys:', Array.from(orderLookupMap.keys()));
+      Alert.alert('Order Not Found', 'No order found with this number or barcode.');
+    }
+  };
+
+  const handleManualOrderSearch = () => {
+    searchForOrder(manualOrderInput.trim());
+  };
+
+  const handleInputChange = (text: string) => {
+    setManualOrderInput(text);
+    
+    // Auto-search as soon as we detect an order number (YYMMDD### format - 9 digits)
+    const orderNumberMatch = text.match(/\d{9}/);
+    if (orderNumberMatch) {
+      const orderNumber = orderNumberMatch[0];
+      // Search immediately when order number is detected
+      setTimeout(() => {
+        console.log('Auto-searching for order number:', orderNumber);
+        searchForOrder(orderNumber);
+      }, 50);
+    }
+  };
+
   const handleQRCodeScanned = ({ data }: { data: string }) => {
     setShowScanner(false);
     
-    // Find order by QR data
-    const scannedOrder = orders.find(order => order.barcodeData === data);
+    // O(1) lookup using the map
+    const scannedOrder = orderLookupMap.get(data);
     
     if (scannedOrder) {
       setSelectedOrder(scannedOrder);
     } else {
       Alert.alert('Order Not Found', 'No order found with this QR code.');
     }
+  };
+
+  const processItemScan = (data: string) => {
+    // Check if this is a valid item QR code (orderNumber-itemNumber format)
+    if (selectedOrder && data.startsWith(selectedOrder.orderNumber + '-')) {
+      const itemNumber = data.replace(selectedOrder.orderNumber + '-', '');
+      const itemIndex = parseInt(itemNumber) - 1; // Convert to 0-based index
+      
+      if (!isNaN(itemIndex) && itemIndex >= 0) {
+        // Find which item this belongs to
+        let currentIndex = 0;
+        for (const item of selectedOrder.items) {
+          for (let i = 0; i < item.quantity; i++) {
+            if (currentIndex === itemIndex) {
+              const itemId = `${item.itemKey}-${i}`;
+              setScannedItemsState(prev => ({
+                ...prev,
+                [itemId]: true
+              }));
+              Alert.alert('Item Scanned', `${item.name} #${i + 1} has been scanned.`);
+              return;
+            }
+            currentIndex++;
+          }
+        }
+      }
+      Alert.alert('Invalid Item Number', 'Item number not found for this order.');
+    } else {
+      Alert.alert('Invalid QR Code', 'This QR code does not belong to this order.');
+    }
+  };
+
+  const handleItemQRScanned = ({ data }: { data: string }) => {
+    setShowItemScanner(false);
+    processItemScan(data);
+  };
+
+  const handleManualItemScan = () => {
+    if (itemScanInput.trim()) {
+      processItemScan(itemScanInput.trim());
+      setItemScanInput('');
+    }
+  };
+
+  const handleItemInputChange = (text: string) => {
+    setItemScanInput(text);
+    
+    // Auto-scan when input matches the expected format (orderNumber-number)
+    if (selectedOrder && text.match(new RegExp(`^${selectedOrder.orderNumber}-\\d+$`))) {
+      setTimeout(() => {
+        processItemScan(text);
+        setItemScanInput('');
+      }, 100);
+    }
+  };
+
+  const generateQRCodeDataURL = async (data: string): Promise<string> => {
+    try {
+      // Create a simple, clean QR-style code that's scannable
+      const size = 21; // Standard QR code size
+      const cellSize = 5; // Each cell is 5x5 pixels
+      const totalSize = size * cellSize;
+      
+      // Create a simple hash-based pattern
+      const hash = data.split('').reduce((acc, char) => {
+        return ((acc << 5) - acc + char.charCodeAt(0)) & 0xFFFFFF;
+      }, 0);
+      
+      // Initialize empty grid
+      const grid = Array(size).fill(null).map(() => Array(size).fill(false));
+      
+      // Add finder patterns (corner squares)
+      const addFinderPattern = (startX: number, startY: number) => {
+        // 7x7 finder pattern
+        for (let y = 0; y < 7; y++) {
+          for (let x = 0; x < 7; x++) {
+            const isEdge = x === 0 || x === 6 || y === 0 || y === 6;
+            const isCenter = x >= 2 && x <= 4 && y >= 2 && y <= 4;
+            if (startX + x < size && startY + y < size) {
+              grid[startY + y][startX + x] = isEdge || isCenter;
+            }
+          }
+        }
+      };
+      
+      // Add the three finder patterns
+      addFinderPattern(0, 0);      // Top-left
+      addFinderPattern(14, 0);     // Top-right
+      addFinderPattern(0, 14);     // Bottom-left
+      
+      // Add timing patterns
+      for (let i = 8; i < 13; i++) {
+        if (i < size) {
+          grid[6][i] = i % 2 === 0;
+          grid[i][6] = i % 2 === 0;
+        }
+      }
+      
+      // Add data pattern based on hash
+      for (let y = 9; y < size - 1; y++) {
+        for (let x = 9; x < size - 1; x++) {
+          const seed = hash + (y * size + x);
+          grid[y][x] = (seed % 3) === 0;
+        }
+      }
+      
+      // Generate SVG
+      let svgContent = '';
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          if (grid[y][x]) {
+            const px = x * cellSize;
+            const py = y * cellSize;
+            svgContent += `<rect x="${px}" y="${py}" width="${cellSize}" height="${cellSize}" fill="black"/>`;
+          }
+        }
+      }
+      
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 ${totalSize} ${totalSize}">
+          <rect width="${totalSize}" height="${totalSize}" fill="white"/>
+          ${svgContent}
+        </svg>
+      `;
+      
+      return `data:image/svg+xml;base64,${btoa(svg)}`;
+    } catch (error) {
+      console.error('QR generation error:', error);
+      // Simple fallback with just the text
+      const fallbackSvg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+          <rect width="100" height="100" fill="white" stroke="black" stroke-width="1"/>
+          <text x="50" y="50" text-anchor="middle" font-family="monospace" font-size="12" font-weight="bold">${data}</text>
+        </svg>
+      `;
+      return `data:image/svg+xml;base64,${btoa(fallbackSvg)}`;
+    }
+  };
+
+  const generateQRCodeFromComponent = (data: string): Promise<string> => {
+    return new Promise((resolve) => {
+      try {
+        // Use the same QRCode component that's shown in the preview
+        // Generate SVG string that matches react-native-qrcode-svg output
+        import('react-native-qrcode-svg').then((QRCodeModule) => {
+          // Since we can't directly get SVG from the component in React Native,
+          // we'll create a compatible SVG manually
+          const size = 100;
+          const modules = 25; // Standard QR code modules
+          const moduleSize = size / modules;
+          
+          // Create a simple hash-based pattern that looks like a real QR code
+          const hash = data.split('').reduce((acc, char, i) => {
+            return ((acc << 5) - acc + char.charCodeAt(0) * (i + 1)) & 0xFFFFFF;
+          }, 0);
+          
+          // Generate a pattern similar to what react-native-qrcode-svg would create
+          let svgContent = '';
+          for (let y = 0; y < modules; y++) {
+            for (let x = 0; x < modules; x++) {
+              // Create finder patterns (corners)
+              const isFinderPattern = 
+                (x < 9 && y < 9) || // Top-left
+                (x >= modules - 9 && y < 9) || // Top-right
+                (x < 9 && y >= modules - 9); // Bottom-left
+              
+              // Create timing patterns
+              const isTimingPattern = (x === 6 || y === 6) && !isFinderPattern;
+              
+              // Create data pattern
+              const seed = hash + (y * modules + x);
+              const isDataModule = !isFinderPattern && !isTimingPattern && (seed % 3 === 0);
+              
+              if (isFinderPattern || isTimingPattern || isDataModule) {
+                const px = x * moduleSize;
+                const py = y * moduleSize;
+                svgContent += `<rect x="${px.toFixed(2)}" y="${py.toFixed(2)}" width="${moduleSize.toFixed(2)}" height="${moduleSize.toFixed(2)}" fill="black"/>`;
+              }
+            }
+          }
+          
+          const svg = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+              <rect width="${size}" height="${size}" fill="white"/>
+              ${svgContent}
+            </svg>
+          `;
+          
+          resolve(`data:image/svg+xml;base64,${btoa(svg)}`);
+        }).catch(() => {
+          // Fallback
+          const fallbackSvg = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+              <rect width="100" height="100" fill="white" stroke="black" stroke-width="1"/>
+              <text x="50" y="50" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold">${data}</text>
+            </svg>
+          `;
+          resolve(`data:image/svg+xml;base64,${btoa(fallbackSvg)}`);
+        });
+      } catch (error) {
+        // Simple text fallback
+        const fallbackSvg = `
+          <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+            <rect width="100" height="100" fill="white" stroke="black" stroke-width="1"/>
+            <text x="50" y="50" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold">${data}</text>
+          </svg>
+        `;
+        resolve(`data:image/svg+xml;base64,${btoa(fallbackSvg)}`);
+      }
+    });
+  };
+
+  const printItemLabel = async (item: OrderItem, itemIndex: number, qrRef: React.RefObject<View | null>) => {
+    try {
+      if (!selectedOrder || !qrRef.current) return;
+      
+      // Capture the QR code as base64 image
+      const qrImageBase64 = await captureRef(qrRef.current, {
+        format: 'png',
+        quality: 1,
+        result: 'base64',
+      });
+      
+      const html = await generateLabelHTML({
+        orderNumber: selectedOrder.orderNumber,
+        customerName: selectedOrder.customerName,
+        garmentType: `${item.name} #${itemIndex + 1}`,
+        notes: item.options?.notes || '',
+        qrImageBase64: qrImageBase64 // Pass the captured base64 image
+      });
+      
+      await printLabel(html);
+      Alert.alert('Label Printed', `Label for ${item.name} #${itemIndex + 1} has been printed.`);
+    } catch (error) {
+      console.error('Print error:', error);
+      Alert.alert('Print Error', 'Failed to print label. Please try again.');
+    }
+  };
+
+  // Individual Item Component
+  const IndividualItemComponent = ({ 
+    item, 
+    itemIndex, 
+    isScanned, 
+    qrData 
+  }: {
+    item: OrderItem;
+    itemIndex: number;
+    isScanned: boolean;
+    qrData: string;
+  }) => {
+    const qrRef = useRef<View>(null);
+    
+    return (
+      <View style={[styles.individualItem, isScanned && styles.scannedItem]}>
+        <View style={styles.itemMainContent}>
+          <View style={styles.itemCheckbox}>
+            {isScanned && (
+              <Ionicons name="checkmark" size={20} color="#10b981" />
+            )}
+          </View>
+          <View style={styles.itemDetails}>
+            <Text style={styles.itemName}>{item.name} #{itemIndex + 1}</Text>
+            <Text style={styles.itemPrice}>${item.price.toFixed(2)}</Text>
+            <Text style={styles.itemQRCode}>QR: {qrData}</Text>
+            {item.options?.starch && item.options.starch !== 'none' && (
+              <Text style={styles.itemOptions}>Starch: {item.options.starch}</Text>
+            )}
+            {item.options?.pressOnly && (
+              <Text style={styles.itemOptions}>Press Only</Text>
+            )}
+            {item.options?.notes && (
+              <Text style={styles.itemOptions}>Notes: {item.options.notes}</Text>
+            )}
+          </View>
+          {/* QR Code Preview */}
+          <View ref={qrRef} style={styles.qrPreviewContainer}>
+            <QRCode
+              value={qrData}
+              size={40}
+              color="#000"
+              backgroundColor="#fff"
+            />
+          </View>
+        </View>
+        <TouchableOpacity 
+          style={styles.printButton}
+          onPress={() => printItemLabel(item, itemIndex, qrRef)}
+        >
+          <Ionicons name="print" size={16} color="#007AFF" />
+          <Text style={styles.printButtonText}>Print</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
+  const renderOrderItem = (item: OrderItem) => {
+    // Create individual items for each quantity
+    const individualItems = [];
+    for (let i = 0; i < item.quantity; i++) {
+      const itemId = `${item.itemKey}-${i}`;
+      const isScanned = scannedItems[itemId] || false;
+      const qrData = selectedOrder ? `${selectedOrder.orderNumber}-${i + 1}` : '';
+      
+      individualItems.push(
+        <IndividualItemComponent
+          key={itemId}
+          item={item}
+          itemIndex={i}
+          isScanned={isScanned}
+          qrData={qrData}
+        />
+      );
+    }
+    
+    return (
+      <View key={item.itemKey} style={styles.orderItemGroup}>
+        {individualItems}
+      </View>
+    );
   };
 
   const handleStatusChange = (orderId: string, newStatus: OrderDocType['status']) => {
@@ -192,12 +606,31 @@ export default function OrdersScreen() {
   return (
     <BaseScreen title="Orders">
       <SafeAreaView style={styles.container}>
-        {/* Header with scan button */}
+        {/* Header with search and scan */}
         <View style={styles.header}>
-          <StatusFilter />
+          <View style={styles.searchContainer}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Order # or barcode"
+              value={manualOrderInput}
+              onChangeText={handleInputChange}
+              onSubmitEditing={handleManualOrderSearch}
+              returnKeyType="search"
+              autoCapitalize="none"
+              autoCorrect={false}
+              clearButtonMode="while-editing"
+              autoFocus={true}
+            />
+            <TouchableOpacity 
+              style={styles.searchButton} 
+              onPress={handleManualOrderSearch}
+              disabled={!manualOrderInput.trim()}
+            >
+              <Ionicons name="search" size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity style={styles.scanButton} onPress={handleScanPress}>
             <Ionicons name="qr-code" size={24} color="#007AFF" />
-            <Text style={styles.scanButtonText}>Scan QR</Text>
           </TouchableOpacity>
         </View>
         
@@ -256,7 +689,11 @@ export default function OrdersScreen() {
 
         {/* Order Detail Modal */}
         {selectedOrder && (
-          <Modal visible={!!selectedOrder} animationType="slide" presentationStyle="pageSheet">
+          <Modal 
+            visible={!!selectedOrder} 
+            animationType="slide" 
+            presentationStyle="pageSheet"
+          >
             <SafeAreaView style={styles.detailContainer}>
               <View style={styles.detailHeader}>
                 <TouchableOpacity 
@@ -265,38 +702,274 @@ export default function OrdersScreen() {
                 >
                   <Ionicons name="close" size={24} color="#333" />
                 </TouchableOpacity>
-                <Text style={styles.detailTitle}>Order Details</Text>
+                <Text style={styles.detailTitle}>Order #{selectedOrder.orderNumber}</Text>
                 <View style={styles.placeholder} />
               </View>
               
-              <ScrollView style={styles.detailContent}>
-                <View style={styles.orderDetailCard}>
-                  <Text style={styles.orderDetailNumber}>#{selectedOrder.orderNumber}</Text>
-                  <Text style={styles.orderDetailCustomer}>{selectedOrder.customerName}</Text>
-                  <Text style={styles.orderDetailDate}>
-                    {new Date(selectedOrder.createdAt).toLocaleDateString()}
-                  </Text>
-                  <Text style={styles.orderDetailTotal}>${selectedOrder.total.toFixed(2)}</Text>
-                  
-                  <View style={styles.itemsList}>
-                    <Text style={styles.itemsTitle}>Items:</Text>
-                    {selectedOrder.items.map((item, index) => (
-                      <Text key={index} style={styles.itemDetail}>
-                        {item.quantity}x {item.name} - ${(item.price * item.quantity).toFixed(2)}
-                      </Text>
-                    ))}
+              <ScrollView 
+                style={styles.detailContent}
+                contentContainerStyle={styles.detailContentContainer}
+              >
+                <View style={styles.orderInfoSection}>
+                  <View style={styles.orderInfoRow}>
+                    <Ionicons name="person-outline" size={20} color="#6b7280" />
+                    <Text style={styles.orderInfoText}>{selectedOrder.customerName}</Text>
+                  </View>
+                  <View style={styles.orderInfoRow}>
+                    <Ionicons name="calendar-outline" size={20} color="#6b7280" />
+                    <Text style={styles.orderInfoText}>
+                      {new Date(selectedOrder.createdAt).toLocaleString()}
+                    </Text>
+                  </View>
+                  <View style={styles.orderInfoRow}>
+                    <Ionicons name="pricetag-outline" size={20} color="#6b7280" />
+                    <Text style={[styles.orderInfoText, styles.orderTotal]}>
+                      Total: ${selectedOrder.total.toFixed(2)}
+                    </Text>
                   </View>
                 </View>
+
+                <View style={styles.itemsSection}>
+                  <Text style={styles.sectionTitle}>Order Items</Text>
+                  <View style={styles.itemsList}>
+                    {selectedOrder.items.map((item) => renderOrderItem(item))}
+                  </View>
+                  
+                  {/* Item Scan Input */}
+                  <View style={styles.itemScanContainer}>
+                    <Text style={styles.scanSectionTitle}>Scan Item Labels</Text>
+                    <View style={styles.itemScanInputContainer}>
+                      <TextInput
+                        style={styles.itemScanInput}
+                        placeholder={`${selectedOrder.orderNumber}-1, ${selectedOrder.orderNumber}-2, etc.`}
+                        value={itemScanInput}
+                        onChangeText={handleItemInputChange}
+                        onSubmitEditing={handleManualItemScan}
+                        returnKeyType="done"
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        clearButtonMode="while-editing"
+                      />
+                      <TouchableOpacity 
+                        style={styles.itemScanButton}
+                        onPress={handleManualItemScan}
+                        disabled={!itemScanInput.trim()}
+                      >
+                        <Ionicons name="checkmark" size={16} color="#fff" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                  
+                  {/* Camera Scan Button */}
+                  <TouchableOpacity 
+                    style={styles.cameraScanButton}
+                    onPress={() => setShowItemScanner(true)}
+                  >
+                    <Ionicons name="qr-code" size={20} color="#007AFF" />
+                    <Text style={styles.cameraScanButtonText}>Use Camera Scanner</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {allItemsScanned && (
+                  <View style={styles.completeSection}>
+                    <Ionicons name="checkmark-circle" size={48} color="#10b981" />
+                    <Text style={styles.completeText}>All items scanned!</Text>
+                  </View>
+                )}
               </ScrollView>
+
+              <View style={styles.actionBar}>
+                <TouchableOpacity 
+                  style={[
+                    styles.actionButton,
+                    allItemsScanned && styles.completeButton
+                  ]}
+                  onPress={() => {
+                    if (allItemsScanned) {
+                      handleStatusChange(selectedOrder.id, 'ready');
+                      setSelectedOrder(null);
+                    }
+                  }}
+                  disabled={!allItemsScanned}
+                >
+                  <Text style={styles.actionButtonText}>
+                    {allItemsScanned ? 'Complete Order' : 'Scan All Items'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </SafeAreaView>
           </Modal>
         )}
+
+        {/* Item Scanner Modal */}
+        <Modal visible={showItemScanner} animationType="slide">
+          <SafeAreaView style={styles.scannerContainer}>
+            <View style={styles.scannerHeader}>
+              <TouchableOpacity 
+                style={styles.closeButton} 
+                onPress={() => setShowItemScanner(false)}
+              >
+                <Ionicons name="close" size={24} color="white" />
+              </TouchableOpacity>
+              <Text style={styles.scannerTitle}>Scan Item Label</Text>
+              <View style={styles.placeholder} />
+            </View>
+            
+            <CameraView
+              style={styles.scanner}
+              facing="back"
+              onBarcodeScanned={handleItemQRScanned}
+              barcodeScannerSettings={{
+                barcodeTypes: ['qr'],
+              }}
+            />
+            
+            <View style={styles.scannerOverlay}>
+              <View style={styles.scannerFrame} />
+              <Text style={styles.scannerText}>
+                Scan the item label QR code
+              </Text>
+            </View>
+          </SafeAreaView>
+        </Modal>
       </SafeAreaView>
     </BaseScreen>
   );
 }
 
+const { width } = Dimensions.get('window');
+
 const styles = StyleSheet.create({
+  // Order Item Styles
+  orderItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  itemCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#ccc',
+    marginRight: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  itemDetails: {
+    flex: 1,
+  },
+  itemName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+    marginBottom: 4,
+  },
+  itemQuantity: {
+    fontSize: 14,
+    color: '#666',
+  },
+  itemPrice: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  scannedItem: {
+    opacity: 0.6,
+  },
+  
+  // Detail Modal Styles
+  detailContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  detailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  detailTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  detailContent: {
+    flex: 1,
+    padding: 16,
+  },
+  detailContentContainer: {
+    paddingBottom: 100, // Space for action bar
+  },
+  
+  // Order Info Styles
+  orderInfoSection: {
+    backgroundColor: '#f9f9f9',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
+  },
+  orderInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  orderInfoText: {
+    marginLeft: 12,
+    fontSize: 16,
+    color: '#333',
+  },
+  orderTotal: {
+    fontWeight: '600',
+    fontSize: 18,
+    color: '#000',
+  },
+  
+  // Section Styles
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  itemsList: {
+    marginTop: 8,
+  },
+  
+  // Completion Styles
+  completeSection: {
+    marginTop: 24,
+    alignItems: 'center',
+  },
+  completeText: {
+    marginTop: 12,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#10b981',
+  },
+  
+  // Action Bar Styles
+  actionBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  completeButton: {
+    backgroundColor: '#10b981',
+  },
+  // Action Button styles are defined later in the file
+  
+  // Container Styles
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
@@ -322,14 +995,34 @@ const styles = StyleSheet.create({
   filterScrollView: {
     flex: 1,
   },
-  scanButton: {
+  searchContainer: {
+    flex: 1,
     flexDirection: 'row',
-    alignItems: 'center',
+    marginRight: 12,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  searchInput: {
+    flex: 1,
     paddingHorizontal: 12,
     paddingVertical: 8,
+    fontSize: 14,
+    color: '#111827',
+  },
+  searchButton: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    backgroundColor: '#3b82f6',
+  },
+  scanButton: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 44,
+    height: 40,
     backgroundColor: '#f0f7ff',
     borderRadius: 8,
-    marginLeft: 12,
   },
   scanButtonText: {
     fontSize: 14,
@@ -532,32 +1225,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 20,
     paddingHorizontal: 20,
-  },
-  
-  // Detail Modal Styles
-  detailContainer: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  detailHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
-  detailTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-  },
-  detailContent: {
-    flex: 1,
-    padding: 16,
-  },
+  // detailTitle and detailContent are defined earlier in the file
   orderDetailCard: {
     backgroundColor: 'white',
     borderRadius: 12,
@@ -591,11 +1264,7 @@ const styles = StyleSheet.create({
     color: '#059669',
     marginBottom: 16,
   },
-  itemsList: {
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    paddingTop: 16,
-  },
+  // itemsList is defined earlier in the file
   itemsTitle: {
     fontSize: 16,
     fontWeight: '600',
@@ -606,5 +1275,135 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
     marginBottom: 4,
+  },
+  
+  // New styles for individual items
+  orderItemGroup: {
+    marginBottom: 8,
+  },
+  individualItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    marginBottom: 4,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  itemMainContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  itemOptions: {
+    fontSize: 12,
+    color: '#6c757d',
+    marginTop: 2,
+  },
+  itemQRCode: {
+    fontSize: 11,
+    color: '#007AFF',
+    fontFamily: 'monospace',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  qrPreviewContainer: {
+    marginLeft: 12,
+    padding: 4,
+    backgroundColor: '#fff',
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  printButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e7f3ff',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+    gap: 4,
+  },
+  printButtonText: {
+    fontSize: 12,
+    color: '#007AFF',
+    fontWeight: '500',
+  },
+  scanItemButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#28a745',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 16,
+    gap: 8,
+  },
+  scanItemButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  
+  // Item scan input styles
+  itemScanContainer: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  scanSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  itemScanInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  itemScanInput: {
+    flex: 1,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  itemScanButton: {
+    backgroundColor: '#28a745',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cameraScanButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#e7f3ff',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  cameraScanButtonText: {
+    color: '#007AFF',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

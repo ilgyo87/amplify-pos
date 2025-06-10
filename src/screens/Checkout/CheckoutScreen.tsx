@@ -293,7 +293,8 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
   const [currentPage, setCurrentPage] = useState(0);
   const [showReceiptPreview, setShowReceiptPreview] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined);
+  const [orderNumber, setOrderNumber] = useState<string | undefined>(undefined);
   
   // Layout state for responsive design
   const [isSmallScreen, setIsSmallScreen] = useState(!isTablet);
@@ -310,7 +311,8 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
   } = useProducts(selectedCategory?.id);
 
   const {
-    createOrder
+    createOrder,
+    generateOrderNumber
   } = useOrders();
 
   // Handle screen size changes
@@ -407,12 +409,21 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
   };
 
   // Handle checkout flow - go to receipt preview
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (orderItems.length === 0) {
       Alert.alert('Error', 'Please add items to your order');
       return;
     }
-    setShowReceiptPreview(true);
+    
+    try {
+      // Generate order number before showing the receipt preview
+      const newOrderNumber = await generateOrderNumber();
+      setOrderNumber(newOrderNumber);
+      setShowReceiptPreview(true);
+    } catch (error) {
+      console.error('Error generating order number:', error);
+      Alert.alert('Error', 'Failed to generate order number. Please try again.');
+    }
   };
 
   // Handle date picker
@@ -597,6 +608,7 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
         customer={customer}
         orderItems={orderItems}
         selectedDate={selectedDate || undefined}
+        orderNumber={orderNumber || ''}
         onClose={() => setShowReceiptPreview(false)}
         onComplete={handleOrderComplete}
       />
