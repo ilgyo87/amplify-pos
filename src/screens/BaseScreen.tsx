@@ -7,28 +7,31 @@ export type BaseScreenProps = {
   title: string;
   children: React.ReactNode;
   showBackButton?: boolean;
+  hideHeader?: boolean;
 };
 
-export function BaseScreen({ title, children, showBackButton = false }: BaseScreenProps) {
+export function BaseScreen({ title, children, showBackButton = false, hideHeader = false }: BaseScreenProps) {
   const navigation = useNavigation();
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        {showBackButton && (
-          <TouchableOpacity 
-            style={styles.backButton} 
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color="#333" />
-          </TouchableOpacity>
-        )}
-        
-        <Text style={[styles.headerText, showBackButton && styles.headerTextWithBack]}>
-          {title}
-        </Text>
-      </View>
-      <View style={styles.content}>
+      {!hideHeader && (
+        <View style={styles.header}>
+          {showBackButton && (
+            <TouchableOpacity 
+              style={styles.backButton} 
+              onPress={() => navigation.goBack()}
+            >
+              <Ionicons name="arrow-back" size={24} color="#333" />
+            </TouchableOpacity>
+          )}
+          
+          <Text style={[styles.headerText, showBackButton && styles.headerTextWithBack]}>
+            {title}
+          </Text>
+        </View>
+      )}
+      <View style={[styles.content, hideHeader && styles.contentNoHeader]}>
         {children}
       </View>
     </SafeAreaView>
@@ -63,5 +66,8 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 16,
+  },
+  contentNoHeader: {
+    paddingTop: 0,
   },
 });

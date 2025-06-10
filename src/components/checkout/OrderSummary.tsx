@@ -94,8 +94,8 @@ export function OrderSummary({
 
     return (
       <View style={styles.orderItem}>
-        <View style={styles.itemRow}>
-          {/* Left side: Name + Options */}
+        {/* Top row: Name + Price + Action Buttons */}
+        <View style={styles.topRow}>
           <View style={styles.itemNameContainer}>
             <Text style={styles.itemName} numberOfLines={1}>
               {item.name}
@@ -108,10 +108,26 @@ export function OrderSummary({
                 <Text style={styles.optionText}> PO</Text>
               )}
             </Text>
-            <Text style={styles.unitPrice}>${itemPrice.toFixed(2)}</Text>
           </View>
 
-          {/* Center: Quantity Controls */}
+          <View style={styles.actionButtons}>
+            <TouchableOpacity 
+              style={styles.editButton}
+              onPress={() => onEditItem(item)}
+            >
+              <Ionicons name="settings-outline" size={16} color="#666" />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.removeButton}
+              onPress={() => onRemoveItem(item.itemKey)}
+            >
+              <Ionicons name="close" size={16} color="#FF3B30" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Bottom row: Quantity Controls + Total Price */}
+        <View style={styles.bottomRow}>
           <View style={styles.quantityContainer}>
             <TouchableOpacity
               style={styles.quantityButton}
@@ -130,27 +146,8 @@ export function OrderSummary({
             </TouchableOpacity>
           </View>
 
-          {/* Right side: Total + Actions */}
-          <View style={styles.itemActions}>
-            <Text style={styles.itemTotal}>${totalPrice.toFixed(2)}</Text>
-            <View style={styles.actionButtons}>
-              <TouchableOpacity 
-                style={styles.editButton}
-                onPress={() => onEditItem(item)}
-              >
-                <Ionicons name="settings-outline" size={16} color="#666" />
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.removeButton}
-                onPress={() => onRemoveItem(item.itemKey)}
-              >
-                <Ionicons name="close" size={16} color="#FF3B30" />
-              </TouchableOpacity>
-            </View>
-          </View>
+          <Text style={styles.itemTotal}>${totalPrice.toFixed(2)}</Text>
         </View>
-
-        {/* Notes removed as per requirements */}
       </View>
     );
   };
@@ -307,11 +304,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,  // Increased vertical padding
   },
-  itemRow: {
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  bottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 48,  // Ensure minimum height for touch targets
   },
   itemNameContainer: {
     flex: 1,
@@ -336,7 +337,6 @@ const styles = StyleSheet.create({
   quantityContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 12,  // Increased horizontal margin
   },
   // Quantity controls
   quantityButton: {
@@ -364,21 +364,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   editButton: {
-    padding: 4,
-    marginRight: 4,
+    padding: 6,
+    marginRight: 6,
   },
   removeButton: {
-    padding: 4,
-  },
-  itemActions: {
-    alignItems: 'flex-end',
-    marginLeft: 8,  // Add some left margin
+    padding: 6,
   },
   itemTotal: {
-    fontSize: 15,  // Slightly larger
+    fontSize: 16,  // Larger for better visibility on bottom row
     fontWeight: '700',
     color: '#007AFF',
-    marginBottom: 4,  // Add some bottom margin
   },
   itemNotes: {
     fontSize: 11,

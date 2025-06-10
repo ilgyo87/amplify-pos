@@ -79,7 +79,7 @@ export function SimpleProductGrid(props: SimpleProductGridProps) {
         data={products}
         renderItem={renderProductItem}
         keyExtractor={(item) => item.id}
-        numColumns={3}
+        numColumns={4}
         contentContainerStyle={styles.gridContent}
         showsVerticalScrollIndicator={false}
       />

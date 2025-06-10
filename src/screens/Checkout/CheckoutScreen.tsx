@@ -300,7 +300,6 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined);
   const [isSmallScreen, setIsSmallScreen] = useState(!isTablet);
-  const [currentPage, setCurrentPage] = useState(0);
   const [orderNumber, setOrderNumber] = useState<string | undefined>(undefined);
   
   // Database hooks
@@ -324,6 +323,13 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
     const subscription = Dimensions.addEventListener('change', updateLayout);
     return () => subscription?.remove();
   }, []);
+
+  // Auto-select first category when categories are loaded
+  useEffect(() => {
+    if (categories.length > 0 && !selectedCategory) {
+      setSelectedCategory(categories[0]);
+    }
+  }, [categories, selectedCategory]);
 
   // Handle product selection
   const handleAddItem = (product: ProductDocument, options?: OrderItemOptions) => {
@@ -536,8 +542,6 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
               products={products || []}
               onSelectProduct={handleAddItem}
               isLoading={productsLoading}
-              currentPage={currentPage}
-              onChangePage={setCurrentPage}
               style={styles.productGrid}
             />
           </View>
@@ -568,8 +572,6 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
               products={products || []}
               onSelectProduct={handleAddItem}
               isLoading={productsLoading}
-              currentPage={currentPage}
-              onChangePage={setCurrentPage}
               style={styles.productGrid}
             />
           </View>

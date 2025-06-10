@@ -40,22 +40,6 @@ export function ServiceTabBar({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* All Categories Tab */}
-        <TouchableOpacity
-          style={[
-            styles.tab,
-            !selectedCategory && styles.activeTab
-          ]}
-          onPress={() => onSelectCategory(null)}
-        >
-          <Text style={[
-            styles.tabText,
-            !selectedCategory && styles.activeTabText
-          ]}>
-            All Services
-          </Text>
-        </TouchableOpacity>
-
         {/* Individual Category Tabs */}
         {categories.map((category) => (
           <TouchableOpacity

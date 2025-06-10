@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, View, StyleSheet, Alert } from 'react-native';
+import { Modal, View, StyleSheet, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { DynamicForm } from './DynamicForm';
 import { BusinessFormData, BusinessValidationErrors, validateBusinessForm } from '../../utils/businessValidation';
 
@@ -123,7 +123,11 @@ export function BusinessForm({
       presentationStyle="pageSheet"
       onRequestClose={onCancel}
     >
-      <View style={styles.container}>
+      <KeyboardAvoidingView 
+        style={styles.container} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
         <DynamicForm
           fields={BUSINESS_FORM_FIELDS}
           initialData={initialData}
@@ -135,7 +139,7 @@ export function BusinessForm({
           submitButtonText={title}
           title={title}
         />
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
