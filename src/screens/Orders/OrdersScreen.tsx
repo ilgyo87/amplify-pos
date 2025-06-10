@@ -31,6 +31,8 @@ export default function OrdersScreen() {
   const [manualOrderInput, setManualOrderInput] = useState('');
   const [showItemScanner, setShowItemScanner] = useState(false);
   const [itemScanInput, setItemScanInput] = useState('');
+  const [showRackScanner, setShowRackScanner] = useState(false);
+  const [rackScanInput, setRackScanInput] = useState('');
   const { orders, loading, updateOrderStatus } = useOrders(selectedStatus === 'all' ? undefined : selectedStatus);
   
   // Create a memoized lookup map for orders
@@ -204,6 +206,64 @@ export default function OrdersScreen() {
       setTimeout(() => {
         processItemScan(text);
         setItemScanInput('');
+      }, 100);
+    }
+  };
+
+  const processRackScan = async (rackNumber: string) => {
+    if (!selectedOrder) return;
+    
+    if (selectedOrder.status === 'ready') {
+      try {
+        // Update order status to completed and save rack number
+        await updateOrderStatus(selectedOrder.id, 'completed');
+        
+        // Here you might want to save the rack number to the order
+        // This would require updating the order schema to include rackNumber
+        console.log(`Order ${selectedOrder.orderNumber} moved to rack ${rackNumber} and marked as completed`);
+        
+        Alert.alert(
+          'Order Completed', 
+          `Order #${selectedOrder.orderNumber} has been moved to rack ${rackNumber} and marked as completed.`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                setSelectedOrder(null);
+                setScannedItemsState({});
+              }
+            }
+          ]
+        );
+      } catch (error) {
+        console.error('Failed to update order status:', error);
+        Alert.alert('Error', 'Failed to complete order. Please try again.');
+      }
+    } else {
+      Alert.alert('Invalid Status', 'Order must be in "Ready" status to assign to a rack.');
+    }
+  };
+
+  const handleRackQRScanned = ({ data }: { data: string }) => {
+    setShowRackScanner(false);
+    processRackScan(data);
+  };
+
+  const handleManualRackScan = () => {
+    if (rackScanInput.trim()) {
+      processRackScan(rackScanInput.trim());
+      setRackScanInput('');
+    }
+  };
+
+  const handleRackInputChange = (text: string) => {
+    setRackScanInput(text);
+    
+    // Auto-scan when input has content (rack numbers can be any format)
+    if (text.trim().length >= 2) {
+      setTimeout(() => {
+        processRackScan(text.trim());
+        setRackScanInput('');
       }, 100);
     }
   };
@@ -829,33 +889,86 @@ export default function OrdersScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {allItemsScanned && (
+                {allItemsScanned && selectedOrder.status !== 'ready' && (
                   <View style={styles.completeSection}>
                     <Ionicons name="checkmark-circle" size={48} color="#10b981" />
                     <Text style={styles.completeText}>All items scanned!</Text>
                   </View>
                 )}
+
+                {/* Rack Scanning Section for Ready Orders */}
+                {selectedOrder.status === 'ready' && (
+                  <View style={styles.rackScanSection}>
+                    <Text style={styles.scanSectionTitle}>Scan Rack Number</Text>
+                    <Text style={styles.rackScanDescription}>Scan the rack barcode to complete the order</Text>
+                    
+                    <View style={styles.itemScanInputContainer}>
+                      <TextInput
+                        style={styles.itemScanInput}
+                        placeholder="Rack number (e.g. R001, A1, etc.)"
+                        value={rackScanInput}
+                        onChangeText={handleRackInputChange}
+                        onSubmitEditing={handleManualRackScan}
+                        returnKeyType="done"
+                        autoCapitalize="characters"
+                        autoCorrect={false}
+                        clearButtonMode="while-editing"
+                      />
+                      <TouchableOpacity 
+                        style={styles.itemScanButton}
+                        onPress={handleManualRackScan}
+                        disabled={!rackScanInput.trim()}
+                      >
+                        <Ionicons name="checkmark" size={16} color="#fff" />
+                      </TouchableOpacity>
+                    </View>
+                    
+                    {/* Camera Scan Button for Rack */}
+                    <TouchableOpacity 
+                      style={styles.cameraScanButton}
+                      onPress={() => setShowRackScanner(true)}
+                    >
+                      <Ionicons name="qr-code" size={20} color="#007AFF" />
+                      <Text style={styles.cameraScanButtonText}>Use Camera Scanner</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </ScrollView>
 
               <View style={styles.actionBar}>
-                <TouchableOpacity 
-                  style={[
-                    styles.actionButton,
-                    allItemsScanned && styles.completeButton
-                  ]}
-                  onPress={() => {
-                    if (allItemsScanned) {
-                      handleStatusChange(selectedOrder.id, 'ready');
-                      setSelectedOrder(null);
-                      setScannedItemsState({});
-                    }
-                  }}
-                  disabled={!allItemsScanned}
-                >
-                  <Text style={styles.actionButtonText}>
-                    {allItemsScanned ? 'Complete Order' : 'Scan All Items'}
-                  </Text>
-                </TouchableOpacity>
+                {/* Show different button based on order status */}
+                {selectedOrder.status === 'ready' ? (
+                  <TouchableOpacity 
+                    style={[
+                      styles.actionButton,
+                      styles.rackScanPromptButton
+                    ]}
+                    onPress={() => setShowRackScanner(true)}
+                  >
+                    <Text style={styles.actionButtonText}>
+                      Scan Rack Number to Complete
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity 
+                    style={[
+                      styles.actionButton,
+                      allItemsScanned && styles.completeButton
+                    ]}
+                    onPress={() => {
+                      if (allItemsScanned) {
+                        handleStatusChange(selectedOrder.id, 'ready');
+                        setSelectedOrder(null);
+                        setScannedItemsState({});
+                      }
+                    }}
+                    disabled={!allItemsScanned}
+                  >
+                    <Text style={styles.actionButtonText}>
+                      {allItemsScanned ? 'Mark as Ready' : 'Scan All Items'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </SafeAreaView>
           </Modal>
@@ -888,6 +1001,38 @@ export default function OrdersScreen() {
               <View style={styles.scannerFrame} />
               <Text style={styles.scannerText}>
                 Scan the item label QR code
+              </Text>
+            </View>
+          </SafeAreaView>
+        </Modal>
+
+        {/* Rack Scanner Modal */}
+        <Modal visible={showRackScanner} animationType="slide">
+          <SafeAreaView style={styles.scannerContainer}>
+            <View style={styles.scannerHeader}>
+              <TouchableOpacity 
+                style={styles.closeButton} 
+                onPress={() => setShowRackScanner(false)}
+              >
+                <Ionicons name="close" size={24} color="white" />
+              </TouchableOpacity>
+              <Text style={styles.scannerTitle}>Scan Rack Number</Text>
+              <View style={styles.placeholder} />
+            </View>
+            
+            <CameraView
+              style={styles.scanner}
+              facing="back"
+              onBarcodeScanned={handleRackQRScanned}
+              barcodeScannerSettings={{
+                barcodeTypes: ['qr', 'code128', 'code39'],
+              }}
+            />
+            
+            <View style={styles.scannerOverlay}>
+              <View style={styles.scannerFrame} />
+              <Text style={styles.scannerText}>
+                Scan the rack barcode to complete the order
               </Text>
             </View>
           </SafeAreaView>
@@ -1475,5 +1620,24 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontSize: 14,
     fontWeight: '500',
+  },
+  
+  // Rack Scanning Styles
+  rackScanSection: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: '#fff5f5',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fee2e2',
+  },
+  rackScanDescription: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  rackScanPromptButton: {
+    backgroundColor: '#dc2626',
   },
 });
