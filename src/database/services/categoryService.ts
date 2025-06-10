@@ -103,7 +103,7 @@ export class CategoryService {
   async updateCategory(
     id: string, 
     categoryData: CategoryFormData
-  ): Promise<{ category?: CategoryDocument; errors?: CategoryValidationErrors; duplicateError?: string }> {
+  ): Promise<{ category?: CategoryDocument | null; errors?: CategoryValidationErrors; duplicateError?: string }> {
     const repository = this.getRepository();
     
     // Validate form data
