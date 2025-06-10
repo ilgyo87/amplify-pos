@@ -31,7 +31,8 @@ export class OrderService {
     paymentMethod,
     selectedDate,
     notes,
-    barcodeData
+    barcodeData,
+    employee
   }: {
     customer: SerializableCustomer;
     items: OrderItem[];
@@ -39,6 +40,7 @@ export class OrderService {
     selectedDate?: string;
     notes?: string;
     barcodeData?: string;
+    employee?: { id: string; name: string };
   }): Promise<OrderDocument> {
     const repository = await this.getRepository();
     const now = new Date().toISOString();
@@ -71,6 +73,8 @@ export class OrderService {
       customerId: customer.id,
       customerName: `${customer.firstName} ${customer.lastName}`,
       customerPhone: customer.phone,
+      employeeId: employee?.id,
+      employeeName: employee?.name,
       items: items.map(item => ({
         id: item.id,
         name: item.name,

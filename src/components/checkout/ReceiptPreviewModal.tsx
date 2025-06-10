@@ -21,6 +21,7 @@ interface ReceiptPreviewModalProps {
   orderItems: OrderItem[];
   selectedDate?: string;
   orderNumber: string;
+  employeeName?: string;
   onClose: () => void;
   onComplete: (paymentMethod: 'cash' | 'card' | 'credit', qrData?: string) => void;
 }
@@ -31,6 +32,7 @@ export function ReceiptPreviewModal({
   orderItems,
   selectedDate,
   orderNumber,
+  employeeName,
   onClose,
   onComplete
 }: ReceiptPreviewModalProps) {
@@ -458,6 +460,12 @@ export function ReceiptPreviewModal({
                 <View style={styles.infoRow}>
                   <Text style={styles.infoLabel}>Phone:</Text>
                   <Text style={styles.infoValue}>{customer.phone}</Text>
+                </View>
+              )}
+              {employeeName && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Served by:</Text>
+                  <Text style={styles.infoValue}>{employeeName}</Text>
                 </View>
               )}
               <View style={styles.dashedLine} />

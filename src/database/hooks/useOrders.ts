@@ -68,6 +68,7 @@ export const useOrders = (status?: OrderDocType['status']) => {
     selectedDate?: string;
     notes?: string;
     barcodeData?: string;
+    employee?: { id: string; name: string };
   }) => {
     try {
       const service = getOrderService();
