@@ -358,8 +358,11 @@ export class SyncService {
   private convertBusinessToLocalFormat(amplifyBusiness: any): any {
     return {
       id: amplifyBusiness.id,
-      name: amplifyBusiness.name,
+      name: amplifyBusiness.businessName, // Fix: Use businessName from Amplify schema
       address: amplifyBusiness.address || '',
+      city: amplifyBusiness.city || '',
+      state: amplifyBusiness.state || '',
+      zipCode: amplifyBusiness.zipCode || '',
       phone: amplifyBusiness.phone || '',
       email: amplifyBusiness.email || '',
       taxId: '', // Not available in Amplify schema

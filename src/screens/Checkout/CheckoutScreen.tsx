@@ -20,7 +20,10 @@ import { DatePickerModal } from '../../components/checkout/DatePickerModal';
 import { useCategories } from '../../database/hooks/useCategories';
 import { useProducts } from '../../database/hooks/useProducts';
 import { useOrders } from '../../database/hooks/useOrders';
+import { useCustomers } from '../../database/hooks/useCustomers';
 import { SerializableCustomer } from '../../navigation/types';
+import { DynamicForm } from '../../components/forms/DynamicForm';
+import { CustomerFormData } from '../../utils/customerValidation';
 import { CategoryDocument } from '../../database/schemas/category';
 import { ProductDocument } from '../../database/schemas/product';
 import { OrderItem, OrderItemOptions, generateOrderItemKey } from '../../types/order';
@@ -301,6 +304,9 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
   const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined);
   const [isSmallScreen, setIsSmallScreen] = useState(!isTablet);
   const [orderNumber, setOrderNumber] = useState<string | undefined>(undefined);
+  const [showEditCustomerModal, setShowEditCustomerModal] = useState(false);
+  const [formErrors, setFormErrors] = useState({});
+  const [duplicateError, setDuplicateError] = useState<string>('');
   
   // Database hooks
   const { categories, loading: categoriesLoading } = useCategories();
@@ -312,6 +318,11 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
     createOrder,
     generateOrderNumber
   } = useOrders();
+
+  const {
+    updateCustomer,
+    operationLoading
+  } = useCustomers();
 
   // Handle screen size changes
   useEffect(() => {
@@ -444,7 +455,49 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
 
   // Handle customer edit
   const handleEditCustomer = () => {
-    Alert.alert('Edit Customer', 'Customer editing will be implemented');
+    setFormErrors({});
+    setDuplicateError('');
+    setShowEditCustomerModal(true);
+  };
+
+  // Handle customer update
+  const handleUpdateCustomer = async (data: CustomerFormData) => {
+    setFormErrors({});
+    setDuplicateError('');
+
+    const result = await updateCustomer(customer.id, data);
+    
+    if (result.success && result.customer) {
+      // Update the local customer state with the new data
+      setCustomer({
+        id: result.customer.id,
+        firstName: result.customer.firstName,
+        lastName: result.customer.lastName,
+        phone: result.customer.phone,
+        email: result.customer.email || '',
+        address: result.customer.address || '',
+        city: result.customer.city || '',
+        state: result.customer.state || '',
+        zipCode: result.customer.zipCode || '',
+        notes: result.customer.notes || ''
+      });
+      setShowEditCustomerModal(false);
+      Alert.alert('Success', 'Customer updated successfully');
+    } else {
+      if (result.errors) {
+        setFormErrors(result.errors);
+      }
+      if (result.duplicateError) {
+        setDuplicateError(result.duplicateError);
+      }
+    }
+  };
+
+  // Handle close edit modal
+  const handleCloseEditModal = () => {
+    setShowEditCustomerModal(false);
+    setFormErrors({});
+    setDuplicateError('');
   };
 
   // Handle order completion
@@ -620,6 +673,34 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
         onClose={() => setShowReceiptPreview(false)}
         onComplete={handleOrderComplete}
       />
+
+      {/* Edit Customer Modal */}
+      <Modal
+        visible={showEditCustomerModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <DynamicForm
+          mode="edit"
+          entityType="customer"
+          initialData={{
+            firstName: customer.firstName,
+            lastName: customer.lastName,
+            email: customer.email || '',
+            phone: customer.phone,
+            address: customer.address || '',
+            city: customer.city || '',
+            state: customer.state || '',
+            zipCode: customer.zipCode || '',
+            notes: customer.notes || ''
+          }}
+          onSubmit={handleUpdateCustomer}
+          onCancel={handleCloseEditModal}
+          isLoading={operationLoading}
+          errors={formErrors}
+          duplicateError={duplicateError}
+        />
+      </Modal>
     </SafeAreaView>
   );
 }

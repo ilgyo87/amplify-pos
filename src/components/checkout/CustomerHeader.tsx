@@ -79,6 +79,19 @@ export function CustomerHeader({
             </View>
           )}
         </View>
+
+        {/* Notes in the open space */}
+        {customer.notes && customer.notes.trim() && (
+          <View style={styles.notesContainer}>
+            <View style={styles.notesHeader}>
+              <Ionicons name="document-text" size={14} color="#888" />
+              <Text style={styles.notesLabel}>Notes</Text>
+            </View>
+            <Text style={styles.notesText} numberOfLines={3}>
+              {customer.notes}
+            </Text>
+          </View>
+        )}
       </TouchableOpacity>
       
       {onDatePick && (
@@ -150,6 +163,32 @@ const styles = StyleSheet.create({
     color: '#666',
     marginLeft: 6,
     flex: 1,
+  },
+  notesContainer: {
+    flex: 1,
+    marginLeft: 16,
+    paddingLeft: 16,
+    borderLeftWidth: 1,
+    borderLeftColor: '#e5e5e5',
+    maxWidth: 200,
+  },
+  notesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  notesLabel: {
+    fontSize: 12,
+    color: '#888',
+    marginLeft: 4,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+  },
+  notesText: {
+    fontSize: 13,
+    color: '#666',
+    fontStyle: 'italic',
+    lineHeight: 16,
   },
   selectedDateText: {
     color: '#007AFF',

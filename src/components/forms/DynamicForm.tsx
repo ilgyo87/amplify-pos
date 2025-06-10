@@ -15,7 +15,7 @@ interface FormField {
   label: string;
   placeholder: string;
   required: boolean;
-  type: 'text' | 'email' | 'phone' | 'pin';
+  type: 'text' | 'email' | 'phone' | 'pin' | 'textarea';
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   keyboardType?: 'default' | 'email-address' | 'numeric' | 'phone-pad';
   secureTextEntry?: boolean;
@@ -120,6 +120,18 @@ const getFormFields = (entityType: 'customer' | 'employee'): FormField[] => {
     }
   );
 
+  // Add notes field for customers only
+  if (entityType === 'customer') {
+    fields.push({
+      name: 'notes',
+      label: 'Notes',
+      placeholder: 'Add any additional notes about the customer (optional)',
+      required: false,
+      type: 'textarea',
+      autoCapitalize: 'sentences'
+    });
+  }
+
   return fields;
 };
 
@@ -154,7 +166,8 @@ export function DynamicForm({
           address: initialData?.address || '',
           city: initialData?.city || '',
           state: initialData?.state || '',
-          zipCode: initialData?.zipCode || ''
+          zipCode: initialData?.zipCode || '',
+          notes: initialData?.notes || ''
         };
       } else if (entityType === 'employee') {
         return {
@@ -186,10 +199,6 @@ export function DynamicForm({
     mode: 'onChange'
   });
 
-  // Use 'any' type to bypass TypeScript constraints
-  const handleFormSubmit = (data: any) => {
-    onSubmit(data);
-  };
 
   const renderField = (field: FormField) => {
     const fieldError = (errors as any)[field.name];
@@ -229,7 +238,11 @@ export function DynamicForm({
               {field.required && <Text style={styles.required}> *</Text>}
             </Text>
             <TextInput
-              style={[styles.input, fieldError && styles.inputError]}
+              style={[
+                styles.input, 
+                fieldError && styles.inputError,
+                field.type === 'textarea' && styles.textareaInput
+              ]}
               value={value}
               onChangeText={onChange}
               placeholder={field.placeholder}
@@ -237,9 +250,12 @@ export function DynamicForm({
               autoCapitalize={field.autoCapitalize || 'none'}
               keyboardType={field.keyboardType || 'default'}
               editable={!isLoading}
-              autoCorrect={false}
+              autoCorrect={field.type === 'textarea'}
               autoComplete={field.type === 'email' ? 'email' : 'off'}
               secureTextEntry={field.secureTextEntry || false}
+              multiline={field.type === 'textarea'}
+              numberOfLines={field.type === 'textarea' ? 3 : 1}
+              textAlignVertical={field.type === 'textarea' ? 'top' : 'center'}
             />
             {fieldError && <Text style={styles.errorText}>{fieldError}</Text>}
           </View>
@@ -385,6 +401,10 @@ const styles = StyleSheet.create({
   },
   inputError: {
     borderColor: '#e74c3c',
+  },
+  textareaInput: {
+    height: 80,
+    paddingTop: 12,
   },
   errorText: {
     color: '#e74c3c',
