@@ -526,27 +526,30 @@ export default function OrdersScreen() {
     }
   };
 
-  const StatusFilter = () => (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScrollView}>
-      {(['all', 'pending', 'in_progress', 'ready', 'completed', 'cancelled'] as const).map((status) => (
-        <TouchableOpacity
-          key={status}
-          style={[
-            styles.filterButton,
-            selectedStatus === status && styles.filterButtonActive
-          ]}
-          onPress={() => setSelectedStatus(status)}
-        >
-          <Text style={[
-            styles.filterButtonText,
-            selectedStatus === status && styles.filterButtonTextActive
-          ]}>
-            {status === 'all' ? 'All Orders' : status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
-  );
+  const StatusFilter = () => {
+    console.log('StatusFilter rendering, selectedStatus:', selectedStatus);
+    return (
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScrollView}>
+        {(['all', 'pending', 'in_progress', 'ready', 'completed', 'cancelled'] as const).map((status) => (
+          <TouchableOpacity
+            key={status}
+            style={[
+              styles.filterButton,
+              selectedStatus === status && styles.filterButtonActive
+            ]}
+            onPress={() => setSelectedStatus(status)}
+          >
+            <Text style={[
+              styles.filterButtonText,
+              selectedStatus === status && styles.filterButtonTextActive
+            ]}>
+              {status === 'all' ? 'All Orders' : status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    );
+  };
 
   const OrderCard = ({ order }: { order: OrderDocument }) => (
     <View style={styles.orderCard}>
@@ -624,6 +627,7 @@ export default function OrdersScreen() {
         {/* Custom Header with Status Filters */}
         <View style={styles.customHeader}>
           <StatusFilter />
+          <Text style={{ color: 'red', fontSize: 12 }}>Debug: Loading Header should be here</Text>
         </View>
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Loading orders...</Text>
@@ -637,6 +641,7 @@ export default function OrdersScreen() {
       {/* Custom Header with Status Filters */}
       <View style={styles.customHeader}>
         <StatusFilter />
+        <Text style={{ color: 'red', fontSize: 12 }}>Debug: Header should be here</Text>
       </View>
       
       {/* Search and scan row */}
@@ -1016,8 +1021,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
-    paddingVertical: 12,
+    paddingVertical: 8,
     paddingHorizontal: 16,
+    minHeight: 50,
   },
   searchScanRow: {
     flexDirection: 'row',
@@ -1038,7 +1044,8 @@ const styles = StyleSheet.create({
     color: '#6b7280',
   },
   filterScrollView: {
-    flex: 1,
+    flexGrow: 1,
+    height: 40,
   },
   searchContainer: {
     flex: 1,
