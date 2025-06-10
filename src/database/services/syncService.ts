@@ -216,16 +216,33 @@ export class SyncService {
   /**
    * Convert product from local format to Amplify format
    */
-  private convertProductToAmplifyFormat(product: ProductDocument): any {
+  private async convertProductToAmplifyFormat(product: ProductDocument): Promise<any> {
     // Using type assertion to bypass type checking issues
     const doc = product as any;
+    
+    // Find the Amplify category ID for this product's category
+    let amplifyCategoryId = doc.categoryId; // Default to local ID
+    
+    try {
+      await categoryService.initialize();
+      const category = await categoryService.getCategoryById(doc.categoryId);
+      if (category && category.amplifyId) {
+        amplifyCategoryId = category.amplifyId;
+        console.log(`[PRODUCT UPLOAD] Mapped local category ${doc.categoryId} to Amplify category ${amplifyCategoryId} for product ${doc.name}`);
+      } else {
+        console.warn(`[PRODUCT UPLOAD] No Amplify ID found for category ${doc.categoryId} for product ${doc.name}`);
+      }
+    } catch (error) {
+      console.warn(`[PRODUCT UPLOAD] Error mapping category for product ${doc.name}:`, error);
+    }
+    
     return {
       name: doc.name,
       description: doc.description,
       sku: doc.sku,
       price: doc.price,
       cost: doc.cost,
-      categoryId: doc.categoryId,
+      categoryId: amplifyCategoryId,
       barcode: doc.barcode,
       quantity: doc.quantity,
       isActive: doc.isActive,
@@ -657,7 +674,7 @@ export class SyncService {
       for (const product of unsyncedProducts) {
         try {
           // Convert local product to Amplify format
-          const amplifyProduct = this.convertProductToAmplifyFormat(product);
+          const amplifyProduct = await this.convertProductToAmplifyFormat(product);
           
           // Create product in Amplify
           // Using 'as any' to bypass type checking issues with the client model types
@@ -667,7 +684,7 @@ export class SyncService {
             // Mark as synced in local database
             await productService.markAsSynced(product.id, response.data.id);
             uploadedCount++;
-            console.log(`Uploaded product: ${product.name} (imageName: ${product.imageName || 'none'})`);
+            console.log(`Uploaded product: ${product.name} (imageName: ${product.imageName || 'none'}, categoryId: ${amplifyProduct.categoryId})`);
           } else if (response.errors) {
             const error = `Failed to upload product ${product.name}: ${response.errors.map((e: any) => e.message).join(', ')}`;
             errors.push(error);
@@ -792,6 +809,7 @@ export class SyncService {
 
     try {
       await categoryService.initialize();
+      await productService.initialize();
       
       console.log('Starting download of categories from Amplify...');
 
@@ -812,7 +830,9 @@ export class SyncService {
       }
 
       const amplifyCategories = response.data || [];
+      const categoryIdMapping: { [amplifyId: string]: string } = {}; // Map Amplify ID to local ID
 
+      // First pass: Handle categories
       for (const amplifyCategory of amplifyCategories) {
         try {
           // Check if category already exists locally by amplifyId
@@ -823,6 +843,9 @@ export class SyncService {
             // Update existing category if Amplify version is newer
             const amplifyUpdatedAt = new Date(amplifyCategory.updatedAt);
             const localUpdatedAt = new Date(existingCategory.updatedAt);
+            
+            // Store the mapping regardless of update
+            categoryIdMapping[amplifyCategory.id] = existingCategory.id;
             
             if (amplifyUpdatedAt > localUpdatedAt) {
               const localFormat = this.convertCategoryToLocalFormat(amplifyCategory);
@@ -840,8 +863,9 @@ export class SyncService {
             if (result.category) {
               // Mark as synced since it came from Amplify
               await categoryService.markAsSynced(result.category.id, amplifyCategory.id);
+              categoryIdMapping[amplifyCategory.id] = result.category.id;
               downloadedCount++;
-              console.log(`Downloaded new category: ${amplifyCategory.name}`);
+              console.log(`Downloaded new category: ${amplifyCategory.name} with local ID: ${result.category.id}`);
             } else if (result.errors) {
               const errorMsg = Object.values(result.errors || {}).join(', ');
               errors.push(`Failed to create category ${amplifyCategory.name}: ${errorMsg}`);
@@ -851,6 +875,44 @@ export class SyncService {
           const errorMsg = `Error processing ${amplifyCategory.name}: ${error instanceof Error ? error.message : 'Unknown error'}`;
           errors.push(errorMsg);
           console.error(errorMsg);
+        }
+      }
+
+      // Second pass: Fix product category relationships
+      console.log('Fixing product category relationships after category sync...');
+      const allProducts = await productService.getAllProducts();
+      
+      for (const product of allProducts) {
+        try {
+          // If this product has an amplifyId, we need to find the correct category mapping
+          if (product.amplifyId && product.categoryId) {
+            // Find the amplify category ID that this product should reference
+            const amplifyResponse = await (client.models as any).Product.get({ id: product.amplifyId });
+            
+            if (amplifyResponse.data && amplifyResponse.data.categoryId) {
+              const amplifyCategoryId = amplifyResponse.data.categoryId;
+              const correctLocalCategoryId = categoryIdMapping[amplifyCategoryId];
+              
+              if (correctLocalCategoryId && correctLocalCategoryId !== product.categoryId) {
+                console.log(`Fixing product ${product.name}: updating categoryId from ${product.categoryId} to ${correctLocalCategoryId}`);
+                
+                // Update the product with correct category ID
+                await productService.updateProduct(product.id, {
+                  name: product.name,
+                  description: product.description || '',
+                  price: product.price,
+                  categoryId: correctLocalCategoryId,
+                  imageName: product.imageName || '',
+                  discount: product.discount || 0,
+                  additionalPrice: product.additionalPrice || 0,
+                  notes: product.notes || ''
+                });
+              }
+            }
+          }
+        } catch (error) {
+          console.warn(`Could not fix category relationship for product ${product.name}:`, error);
+          // Don't add to errors array as this is a best-effort fix
         }
       }
 
@@ -1170,6 +1232,7 @@ export class SyncService {
     
     try {
       await productService.initialize();
+      await categoryService.initialize();
       
       console.log('Starting download of products from Amplify...');
 
@@ -1193,13 +1256,40 @@ export class SyncService {
       // Get products from response
       const serverProducts = response.data || [];
       
-      console.log(`Processing ${serverProducts.length} products from server`);
+      // Build category mapping from Amplify ID to local ID
+      const categories = await categoryService.getAllCategories();
+      const categoryIdMapping: { [amplifyId: string]: string } = {};
+      categories.forEach(category => {
+        if (category.amplifyId) {
+          categoryIdMapping[category.amplifyId] = category.id;
+        }
+      });
+      
+      console.log(`Processing ${serverProducts.length} products from server with ${Object.keys(categoryIdMapping).length} category mappings`);
 
       for (const serverProduct of serverProducts) {
         try {
           // Convert server model to local model
           const productData = this.fromProductApiModel(serverProduct);
-          console.log(`[PRODUCT DOWNLOAD] Processing product: ${serverProduct.name} (imageName: ${serverProduct.imageName || 'none'})`);
+          
+          // Map the category ID from Amplify to local if available
+          if (serverProduct.categoryId && categoryIdMapping[serverProduct.categoryId]) {
+            productData.categoryId = categoryIdMapping[serverProduct.categoryId];
+            console.log(`[PRODUCT DOWNLOAD] Mapped category ID ${serverProduct.categoryId} to local ID ${productData.categoryId} for product ${serverProduct.name}`);
+          } else if (serverProduct.categoryId) {
+            console.warn(`[PRODUCT DOWNLOAD] No local category found for Amplify category ID ${serverProduct.categoryId} for product ${serverProduct.name}`);
+            // Try to find category by name as fallback
+            const categoryName = await this.getCategoryNameFromAmplify(serverProduct.categoryId);
+            if (categoryName) {
+              const localCategory = await categoryService.findByName(categoryName);
+              if (localCategory) {
+                productData.categoryId = localCategory.id;
+                console.log(`[PRODUCT DOWNLOAD] Found category by name: ${categoryName} -> ${localCategory.id}`);
+              }
+            }
+          }
+          
+          console.log(`[PRODUCT DOWNLOAD] Processing product: ${serverProduct.name} (imageName: ${serverProduct.imageName || 'none'}, categoryId: ${productData.categoryId})`);
 
           // Check if we already have this product locally
           let localProduct = null;
@@ -1264,6 +1354,98 @@ export class SyncService {
       };
     } finally {
       this.isDownloading = false;
+    }
+  }
+
+  /**
+   * Helper method to get category name from Amplify by ID
+   */
+  private async getCategoryNameFromAmplify(categoryId: string): Promise<string | null> {
+    try {
+      if (!client.models || !client.models.Category) {
+        return null;
+      }
+      const response = await (client.models as any).Category.get({ id: categoryId });
+      return response.data?.name || null;
+    } catch (error) {
+      console.warn(`Could not fetch category ${categoryId} from Amplify:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Fix category relationships for all products in the local database
+   * This should be called after category sync to ensure product-category links are correct
+   */
+  async fixProductCategoryRelationships(): Promise<{ fixed: number; errors: string[] }> {
+    const errors: string[] = [];
+    let fixedCount = 0;
+
+    try {
+      await productService.initialize();
+      await categoryService.initialize();
+
+      console.log('Fixing product-category relationships...');
+      
+      // Build category mapping from Amplify ID to local ID
+      const categories = await categoryService.getAllCategories();
+      const categoryIdMapping: { [amplifyId: string]: string } = {};
+      categories.forEach(category => {
+        if (category.amplifyId) {
+          categoryIdMapping[category.amplifyId] = category.id;
+        }
+      });
+
+      // Get all products and check their category relationships
+      const allProducts = await productService.getAllProducts();
+      
+      for (const product of allProducts) {
+        try {
+          // If this product has an amplifyId and a categoryId, verify the relationship is correct
+          if (product.amplifyId && product.categoryId) {
+            // Fetch the product from Amplify to get the correct category ID
+            const amplifyResponse = await (client.models as any).Product.get({ id: product.amplifyId });
+            
+            if (amplifyResponse.data && amplifyResponse.data.categoryId) {
+              const amplifyCategoryId = amplifyResponse.data.categoryId;
+              const correctLocalCategoryId = categoryIdMapping[amplifyCategoryId];
+              
+              if (correctLocalCategoryId && correctLocalCategoryId !== product.categoryId) {
+                console.log(`Fixing product ${product.name}: updating categoryId from ${product.categoryId} to ${correctLocalCategoryId}`);
+                
+                // Update the product with correct category ID
+                const result = await productService.updateProduct(product.id, {
+                  name: product.name,
+                  description: product.description || '',
+                  price: product.price,
+                  categoryId: correctLocalCategoryId,
+                  imageName: product.imageName || '',
+                  discount: product.discount || 0,
+                  additionalPrice: product.additionalPrice || 0,
+                  notes: product.notes || ''
+                });
+                
+                if (result.product) {
+                  fixedCount++;
+                } else if (result.errors) {
+                  errors.push(`Failed to fix category for product ${product.name}: ${JSON.stringify(result.errors)}`);
+                }
+              }
+            }
+          }
+        } catch (error) {
+          const errorMsg = `Error fixing category relationship for product ${product.name}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          console.warn(errorMsg);
+          errors.push(errorMsg);
+        }
+      }
+
+      console.log(`Fixed ${fixedCount} product-category relationships`);
+      return { fixed: fixedCount, errors };
+    } catch (error) {
+      const errorMsg = `Error during category relationship fix: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      console.error(errorMsg);
+      return { fixed: fixedCount, errors: [...errors, errorMsg] };
     }
   }
 }
