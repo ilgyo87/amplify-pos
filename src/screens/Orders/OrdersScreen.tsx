@@ -141,7 +141,8 @@ export default function OrdersScreen() {
     // Check if this is a valid item QR code (orderNumber-itemNumber format)
     if (selectedOrder && data.startsWith(selectedOrder.orderNumber + '-')) {
       const itemNumber = data.replace(selectedOrder.orderNumber + '-', '');
-      const itemIndex = parseInt(itemNumber) - 1; // Convert to 0-based index
+      const globalItemNumber = parseInt(itemNumber); // This is already the global item number
+      const itemIndex = globalItemNumber - 1; // Convert to 0-based index
       
       if (!isNaN(itemIndex) && itemIndex >= 0) {
         // Find which item this belongs to
@@ -154,7 +155,7 @@ export default function OrdersScreen() {
                 ...prev,
                 [itemId]: true
               }));
-              Alert.alert('Item Scanned', `${item.name} #${i + 1} has been scanned.`);
+              Alert.alert('Item Scanned', `${item.name} #${globalItemNumber} has been scanned.`);
               return;
             }
             currentIndex++;
@@ -347,27 +348,53 @@ export default function OrdersScreen() {
     });
   };
 
-  const printItemLabel = async (item: OrderItem, itemIndex: number, qrRef: React.RefObject<View | null>) => {
+  const printItemLabel = async (item: OrderItem, globalItemNumber: number, qrRef?: React.RefObject<View | null>) => {
     try {
-      if (!selectedOrder || !qrRef.current) return;
+      if (!selectedOrder) return;
       
-      // Capture the QR code as base64 image
-      const qrImageBase64 = await captureRef(qrRef.current, {
-        format: 'png',
-        quality: 1,
-        result: 'base64',
-      });
+      const qrData = `${selectedOrder.orderNumber}-${globalItemNumber}`;
+      
+      let qrImageBase64 = qrData; // Default to QR data
+      
+      // Try to capture QR code if ref is available
+      if (qrRef?.current) {
+        try {
+          console.log('Attempting to capture QR code...');
+          // Add a small delay to ensure QR code is fully rendered
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
+          const capturedBase64 = await captureRef(qrRef.current, {
+            format: 'png',
+            quality: 1,
+            result: 'base64',
+            width: 100,
+            height: 100,
+          });
+          
+          console.log('Captured QR code, base64 length:', capturedBase64.length);
+          
+          // Use captured image if it seems valid
+          if (capturedBase64.length > 1000) {
+            qrImageBase64 = capturedBase64;
+            console.log('Using captured QR code');
+          } else {
+            console.log('Captured QR seems invalid, using generated SVG');
+          }
+        } catch (captureError) {
+          console.warn('QR capture failed, using generated SVG:', captureError);
+        }
+      }
       
       const html = await generateLabelHTML({
         orderNumber: selectedOrder.orderNumber,
         customerName: selectedOrder.customerName,
-        garmentType: `${item.name} #${itemIndex + 1}`,
+        garmentType: `${item.name} #${globalItemNumber}`,
         notes: item.options?.notes || '',
-        qrImageBase64: qrImageBase64 // Pass the captured base64 image
+        qrImageBase64: qrImageBase64
       });
       
       await printLabel(html);
-      Alert.alert('Label Printed', `Label for ${item.name} #${itemIndex + 1} has been printed.`);
+      Alert.alert('Label Printed', `Label for ${item.name} #${globalItemNumber} has been printed.`);
     } catch (error) {
       console.error('Print error:', error);
       Alert.alert('Print Error', 'Failed to print label. Please try again.');
@@ -377,12 +404,12 @@ export default function OrdersScreen() {
   // Individual Item Component
   const IndividualItemComponent = ({ 
     item, 
-    itemIndex, 
+    globalItemNumber,
     isScanned, 
     qrData 
   }: {
     item: OrderItem;
-    itemIndex: number;
+    globalItemNumber: number;
     isScanned: boolean;
     qrData: string;
   }) => {
@@ -397,7 +424,7 @@ export default function OrdersScreen() {
             )}
           </View>
           <View style={styles.itemDetails}>
-            <Text style={styles.itemName}>{item.name} #{itemIndex + 1}</Text>
+            <Text style={styles.itemName}>{item.name} #{globalItemNumber}</Text>
             <Text style={styles.itemPrice}>${item.price.toFixed(2)}</Text>
             <Text style={styles.itemQRCode}>QR: {qrData}</Text>
             {item.options?.starch && item.options.starch !== 'none' && (
@@ -411,18 +438,18 @@ export default function OrdersScreen() {
             )}
           </View>
           {/* QR Code Preview */}
-          <View ref={qrRef} style={styles.qrPreviewContainer}>
+          <View ref={qrRef} style={styles.qrPreviewContainer} collapsable={false}>
             <QRCode
               value={qrData}
               size={40}
-              color="#000"
-              backgroundColor="#fff"
+              color="#000000"
+              backgroundColor="#FFFFFF"
             />
           </View>
         </View>
         <TouchableOpacity 
           style={styles.printButton}
-          onPress={() => printItemLabel(item, itemIndex, qrRef)}
+          onPress={() => printItemLabel(item, globalItemNumber, qrRef)}
         >
           <Ionicons name="print" size={16} color="#007AFF" />
           <Text style={styles.printButtonText}>Print</Text>
@@ -431,19 +458,20 @@ export default function OrdersScreen() {
     );
   };
 
-  const renderOrderItem = (item: OrderItem) => {
+  const renderOrderItem = (item: OrderItem, globalItemStartIndex: number) => {
     // Create individual items for each quantity
     const individualItems = [];
     for (let i = 0; i < item.quantity; i++) {
       const itemId = `${item.itemKey}-${i}`;
       const isScanned = scannedItems[itemId] || false;
-      const qrData = selectedOrder ? `${selectedOrder.orderNumber}-${i + 1}` : '';
+      const globalItemNumber = globalItemStartIndex + i + 1; // Global sequential numbering
+      const qrData = selectedOrder ? `${selectedOrder.orderNumber}-${globalItemNumber}` : '';
       
       individualItems.push(
         <IndividualItemComponent
           key={itemId}
           item={item}
-          itemIndex={i}
+          globalItemNumber={globalItemNumber}
           isScanned={isScanned}
           qrData={qrData}
         />
@@ -732,7 +760,13 @@ export default function OrdersScreen() {
                 <View style={styles.itemsSection}>
                   <Text style={styles.sectionTitle}>Order Items</Text>
                   <View style={styles.itemsList}>
-                    {selectedOrder.items.map((item) => renderOrderItem(item))}
+                    {selectedOrder.items.map((item, index) => {
+                      // Calculate the global item start index for this item group
+                      const globalItemStartIndex = selectedOrder.items
+                        .slice(0, index)
+                        .reduce((sum, prevItem) => sum + prevItem.quantity, 0);
+                      return renderOrderItem(item, globalItemStartIndex);
+                    })}
                   </View>
                   
                   {/* Item Scan Input */}
@@ -1311,13 +1345,15 @@ const styles = StyleSheet.create({
   },
   qrPreviewContainer: {
     marginLeft: 12,
-    padding: 4,
-    backgroundColor: '#fff',
+    padding: 6,
+    backgroundColor: '#FFFFFF',
     borderRadius: 4,
     borderWidth: 1,
     borderColor: '#e0e0e0',
     alignItems: 'center',
     justifyContent: 'center',
+    width: 52,
+    height: 52,
   },
   printButton: {
     flexDirection: 'row',
