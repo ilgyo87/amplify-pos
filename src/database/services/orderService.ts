@@ -128,6 +128,23 @@ export class OrderService {
     return repository.updateStatus(orderId, status);
   }
 
+  async updateOrderRack(orderId: string, rackNumber: string): Promise<OrderDocument | null> {
+    const repository = await this.getRepository();
+    return repository.update(orderId, { rackNumber, updatedAt: new Date().toISOString() });
+  }
+
+  async updateOrderStatusAndRack(orderId: string, status: OrderDocType['status'], rackNumber?: string): Promise<OrderDocument | null> {
+    const repository = await this.getRepository();
+    const updateData: Partial<OrderDocType> = { 
+      status, 
+      updatedAt: new Date().toISOString() 
+    };
+    if (rackNumber) {
+      updateData.rackNumber = rackNumber;
+    }
+    return repository.update(orderId, updateData);
+  }
+
   async deleteOrder(id: string): Promise<boolean> {
     const repository = await this.getRepository();
     return repository.delete(id);
@@ -163,5 +180,32 @@ export class OrderService {
   async generateOrderNumber(): Promise<string> {
     const repository = await this.getRepository();
     return repository.generateOrderNumber();
+  }
+
+  /**
+   * Mark an order as synced with the remote server
+   * @param localId The local order ID
+   * @param amplifyId The ID from Amplify
+   */
+  async markAsSynced(localId: string, amplifyId: string): Promise<void> {
+    const repository = await this.getRepository();
+    await repository.update(localId, { 
+      isLocalOnly: false, 
+      amplifyId,
+      updatedAt: new Date().toISOString() 
+    });
+  }
+
+  /**
+   * Update an order with new data
+   * @param id The order ID to update
+   * @param updateData The data to update
+   */
+  async updateOrder(id: string, updateData: Partial<OrderDocType>): Promise<OrderDocument | null> {
+    const repository = await this.getRepository();
+    return repository.update(id, {
+      ...updateData,
+      updatedAt: new Date().toISOString()
+    });
   }
 }

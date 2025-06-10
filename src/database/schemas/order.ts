@@ -27,6 +27,7 @@ export interface OrderDocType {
   status: 'pending' | 'in_progress' | 'ready' | 'completed' | 'cancelled';
   notes?: string;
   barcodeData?: string; // Barcode data for scanning
+  rackNumber?: string; // Rack number where order is stored
   // Local-only fields for sync management
   isLocalOnly: boolean;
   isDeleted?: boolean;
@@ -121,6 +122,10 @@ export const orderSchema: RxJsonSchema<OrderDocType> = {
     barcodeData: {
       type: 'string',
       maxLength: 200
+    },
+    rackNumber: {
+      type: 'string',
+      maxLength: 50
     },
     isLocalOnly: {
       type: 'boolean'

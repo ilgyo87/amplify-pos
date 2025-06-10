@@ -10,6 +10,10 @@ import { CategoryDocument } from '../schemas/category';
 import { productService } from './productService';
 import { ProductDocument } from '../schemas/product';
 import { businessService } from './businessService';
+import { OrderService } from './orderService';
+import { SerializableCustomer } from '../../navigation/types';
+
+const orderService = new OrderService();
 import { BusinessDocument } from '../schemas/business';
 
 const client = generateClient<Schema>();
@@ -31,6 +35,12 @@ export interface SyncStatus {
   totalUnsyncedEmployees: number;
   totalLocalBusinesses: number;
   totalUnsyncedBusinesses: number;
+  totalLocalOrders: number;
+  totalUnsyncedOrders: number;
+  totalLocalCategories: number;
+  totalUnsyncedCategories: number;
+  totalLocalProducts: number;
+  totalUnsyncedProducts: number;
   customersUploaded: number;
   customersDownloaded: number;
   employeesUploaded: number;
@@ -41,6 +51,8 @@ export interface SyncStatus {
   productsDownloaded: number;
   businessesUploaded: number;
   businessesDownloaded: number;
+  ordersUploaded: number;
+  ordersDownloaded: number;
   startTime: Date;
   endTime?: Date;
   success: boolean;
@@ -53,9 +65,32 @@ export class SyncService {
   private lastSyncDate?: Date;
 
   /**
+   * Convert order from local format to Amplify format
+   */
+  private convertOrderToAmplifyFormat(order: any): any {
+    return {
+      businessId: order.businessId || '',
+      customerId: order.customerId,
+      employeeId: order.employeeId || '',
+      items: order.items,
+      subtotal: order.subtotal,
+      tax: order.tax,
+      total: order.total,
+      paymentMethod: order.paymentMethod,
+      status: order.status || 'completed',
+      notes: order.notes || '',
+      barcodeData: order.barcodeData || '',
+      rackNumber: order.rackNumber || '',
+      orderNumber: order.orderNumber
+    };
+  }
+
+
+
+  /**
    * Convert customer from local format to Amplify format
    */
-  private convertToAmplifyFormat(customer: CustomerDocument): any {
+  private convertCustomerToAmplifyFormat(customer: CustomerDocument): any {
     // Using type assertion to bypass type checking issues
     const doc = customer as any;
     const amplifyData: any = {
@@ -78,7 +113,7 @@ export class SyncService {
   /**
    * Convert customer from Amplify format to local format
    */
-  private convertToLocalFormat(amplifyCustomer: any): any {
+  private convertCustomerToLocalFormat(amplifyCustomer: any): any {
     const localData: any = {
       firstName: amplifyCustomer.firstName,
       lastName: amplifyCustomer.lastName,
@@ -322,16 +357,38 @@ export class SyncService {
    */
   private convertBusinessToLocalFormat(amplifyBusiness: any): any {
     return {
-      name: amplifyBusiness.businessName, // Map 'businessName' to 'name' for local
+      id: amplifyBusiness.id,
+      name: amplifyBusiness.name,
       address: amplifyBusiness.address || '',
-      city: amplifyBusiness.city || '',
-      state: amplifyBusiness.state || '',
-      zipCode: amplifyBusiness.zipCode || '',
       phone: amplifyBusiness.phone || '',
       email: amplifyBusiness.email || '',
       taxId: '', // Not available in Amplify schema
       website: amplifyBusiness.website || '',
       // Don't set amplifyId and isLocalOnly here - let markBusinessSynced handle it
+    };
+  }
+
+  /**
+   * Convert order from Amplify format to local format
+   */
+  private convertOrderToLocalFormat(amplifyOrder: any): any {
+    return {
+      id: amplifyOrder.id,
+      orderNumber: amplifyOrder.orderNumber || `ORDER-${Date.now()}`,
+      customerId: amplifyOrder.customerId,
+      employeeId: amplifyOrder.employeeId,
+      items: amplifyOrder.items || [],
+      subtotal: amplifyOrder.subtotal || 0,
+      tax: amplifyOrder.tax || 0,
+      total: amplifyOrder.total || 0,
+      paymentMethod: amplifyOrder.paymentMethod || 'cash',
+      status: amplifyOrder.status || 'completed',
+      notes: amplifyOrder.notes || '',
+      barcodeData: amplifyOrder.barcodeData || '',
+      rackNumber: amplifyOrder.rackNumber || '',
+      selectedDate: amplifyOrder.selectedDate || new Date().toISOString(),
+      isLocalOnly: false,
+      lastSyncedAt: new Date().toISOString()
     };
   }
 
@@ -344,6 +401,7 @@ export class SyncService {
     await categoryService.initialize();
     await productService.initialize();
     await businessService.initialize();
+    await orderService.initialize();
     
     const totalLocalCustomers = await customerService.getCustomersCount();
     const unsyncedCustomers = await customerService.getUnsyncedCustomers();
@@ -352,11 +410,23 @@ export class SyncService {
     const allBusinesses = await businessService.getAllBusinesses();
     const totalLocalBusinesses = allBusinesses.length;
     const unsyncedBusinesses = await businessService.getUnsyncedBusinesses();
+    const allCategories = await categoryService.getAllCategories();
+    const totalLocalCategories = allCategories.length;
+    const unsyncedCategories = await categoryService.getUnsyncedCategories();
+    const allProducts = await productService.getAllProducts();
+    const totalLocalProducts = allProducts.length;
+    const unsyncedProducts = await productService.getUnsyncedProducts();
+    const allOrders = await orderService.getAllOrders();
+    const totalLocalOrders = allOrders.length;
+    const unsyncedOrders = allOrders.filter(order => order.isLocalOnly);
     
-    console.log(`[SYNC STATUS] Businesses - Total: ${totalLocalBusinesses}, Unsynced: ${unsyncedBusinesses.length}`);
-    allBusinesses.forEach(business => {
-      console.log(`[SYNC STATUS] Business: ${business.name}, isLocalOnly: ${business.isLocalOnly}, synced: ${!business.isLocalOnly}`);
-    });
+    console.log(`[SYNC STATUS] Summary:`);
+    console.log(`  Customers - Total: ${totalLocalCustomers}, Unsynced: ${unsyncedCustomers.length}`);
+    console.log(`  Employees - Total: ${totalLocalEmployees}, Unsynced: ${unsyncedEmployees.length}`);
+    console.log(`  Businesses - Total: ${totalLocalBusinesses}, Unsynced: ${unsyncedBusinesses.length}`);
+    console.log(`  Categories - Total: ${totalLocalCategories}, Unsynced: ${unsyncedCategories.length}`);
+    console.log(`  Products - Total: ${totalLocalProducts}, Unsynced: ${unsyncedProducts.length}`);
+    console.log(`  Orders - Total: ${totalLocalOrders}, Unsynced: ${unsyncedOrders.length}`);
     
     return {
       isUploading: this.isUploading,
@@ -368,6 +438,12 @@ export class SyncService {
       totalUnsyncedEmployees: unsyncedEmployees.length,
       totalLocalBusinesses,
       totalUnsyncedBusinesses: unsyncedBusinesses.length,
+      totalLocalCategories,
+      totalUnsyncedCategories: unsyncedCategories.length,
+      totalLocalProducts,
+      totalUnsyncedProducts: unsyncedProducts.length,
+      totalLocalOrders,
+      totalUnsyncedOrders: unsyncedOrders.length,
       customersUploaded: 0,
       customersDownloaded: 0,
       employeesUploaded: 0,
@@ -378,6 +454,8 @@ export class SyncService {
       productsDownloaded: 0,
       businessesUploaded: 0,
       businessesDownloaded: 0,
+      ordersUploaded: 0,
+      ordersDownloaded: 0,
       startTime: new Date(),
       endTime: undefined,
       success: false
@@ -405,7 +483,7 @@ export class SyncService {
       for (const customer of unsyncedCustomers) {
         try {
           // Convert local customer to Amplify format
-          const amplifyCustomer = this.convertToAmplifyFormat(customer);
+          const amplifyCustomer = this.convertCustomerToAmplifyFormat(customer);
           
           // Create customer in Amplify
           // Using 'as any' to bypass type checking issues with the client model types
@@ -491,7 +569,7 @@ export class SyncService {
             const localUpdatedAt = new Date(existingCustomer.updatedAt);
             
             if (amplifyUpdatedAt > localUpdatedAt) {
-              const localFormat = this.convertToLocalFormat(amplifyCustomer);
+              const localFormat = this.convertCustomerToLocalFormat(amplifyCustomer);
               const result = await customerService.updateCustomer(existingCustomer.id, localFormat);
               if (result.customer && !result.errors && !result.duplicateError) {
                 downloadedCount++;
@@ -500,7 +578,7 @@ export class SyncService {
             }
           } else {
             // Create new local customer
-            const localFormat = this.convertToLocalFormat(amplifyCustomer);
+            const localFormat = this.convertCustomerToLocalFormat(amplifyCustomer);
             const result = await customerService.createCustomer(localFormat);
             
             if (result.customer) {
@@ -692,6 +770,66 @@ export class SyncService {
           }
         } catch (error) {
           const errorMsg = `Error uploading product ${product.name}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          errors.push(errorMsg);
+          console.error(errorMsg);
+        }
+      }
+
+      this.lastSyncDate = new Date();
+      
+      return {
+        success: errors.length === 0,
+        uploadedCount,
+        downloadedCount: 0,
+        errors
+      };
+    } finally {
+      this.isUploading = false;
+    }
+  }
+
+  /**
+   * Upload all local orders to Amplify
+   */
+  async uploadOrders(): Promise<SyncResult> {
+    if (this.isUploading) {
+      throw new Error('Upload already in progress');
+    }
+
+    this.isUploading = true;
+    const errors: string[] = [];
+    let uploadedCount = 0;
+
+    try {
+      await orderService.initialize();
+      const allOrders = await orderService.getAllOrders();
+      const unsyncedOrders = allOrders.filter(order => order.isLocalOnly);
+
+      console.log(`Starting upload of ${unsyncedOrders.length} orders...`);
+
+      for (const order of unsyncedOrders) {
+        try {
+          // Convert local order to Amplify format
+          const amplifyOrder = this.convertOrderToAmplifyFormat(order);
+          
+          // Create order in Amplify
+          if (!client.models || !client.models.Order) {
+            throw new Error('Amplify Order model not configured. Please check your Amplify setup.');
+          }
+          const response = await (client.models as any).Order.create(amplifyOrder);
+          
+          if (response.data) {
+            // Mark as synced in local database
+            await orderService.updateOrderRack(order.id, order.rackNumber || '');
+            uploadedCount++;
+            console.log(`Uploaded order: ${order.orderNumber}`);
+          } else if (response.errors) {
+            const error = `Failed to upload order ${order.orderNumber}: ${response.errors.map((e: any) => e.message).join(', ')}`;
+            errors.push(error);
+            console.error(error);
+          }
+        } catch (error) {
+          const errorMsg = `Error uploading order ${order.orderNumber}: ${error instanceof Error ? error.message : 'Unknown error'}`;
           errors.push(errorMsg);
           console.error(errorMsg);
         }
@@ -1029,6 +1167,12 @@ export class SyncService {
       totalUnsyncedEmployees: 0,
       totalLocalBusinesses: 0,
       totalUnsyncedBusinesses: 0,
+      totalLocalProducts: 0,
+      totalUnsyncedProducts: 0,
+      totalLocalCategories: 0,
+      totalUnsyncedCategories: 0,
+      totalLocalOrders: 0,
+      totalUnsyncedOrders: 0,
       customersUploaded: 0,
       customersDownloaded: 0,
       employeesUploaded: 0,
@@ -1039,6 +1183,8 @@ export class SyncService {
       productsDownloaded: 0,
       businessesUploaded: 0,
       businessesDownloaded: 0,
+      ordersUploaded: 0,
+      ordersDownloaded: 0,
       startTime: new Date(),
       success: false,
       isUploading: false,
@@ -1052,6 +1198,7 @@ export class SyncService {
       await categoryService.initialize();
       await productService.initialize();
       await businessService.initialize();
+      await orderService.initialize();
       
       // Get the initial status
       const initialStatus = await this.getSyncStatus();
@@ -1061,6 +1208,12 @@ export class SyncService {
       syncStatus.totalUnsyncedEmployees = initialStatus.totalUnsyncedEmployees;
       syncStatus.totalLocalBusinesses = initialStatus.totalLocalBusinesses;
       syncStatus.totalUnsyncedBusinesses = initialStatus.totalUnsyncedBusinesses;
+      syncStatus.totalLocalProducts = initialStatus.totalLocalProducts;
+      syncStatus.totalUnsyncedProducts = initialStatus.totalUnsyncedProducts;
+      syncStatus.totalLocalCategories = initialStatus.totalLocalCategories;
+      syncStatus.totalUnsyncedCategories = initialStatus.totalUnsyncedCategories;
+      syncStatus.totalLocalOrders = initialStatus.totalLocalOrders;
+      syncStatus.totalUnsyncedOrders = initialStatus.totalUnsyncedOrders;
 
       // Upload phase
       console.log('Starting full sync - Upload phase');
@@ -1086,6 +1239,10 @@ export class SyncService {
       const uploadBusinessesResult = await this.uploadBusinesses();
       syncStatus.businessesUploaded = uploadBusinessesResult.uploadedCount;
       
+      // Upload orders
+      const uploadOrdersResult = await this.uploadOrders();
+      syncStatus.ordersUploaded = uploadOrdersResult.uploadedCount;
+      
       // Download phase
       console.log('Starting download phase');
       syncStatus.isUploading = false;
@@ -1110,6 +1267,10 @@ export class SyncService {
       // Download businesses
       const downloadBusinessesResult = await this.downloadBusinesses();
       syncStatus.businessesDownloaded = downloadBusinessesResult.downloadedCount;
+      
+      // Download orders
+      const downloadOrdersResult = await this.downloadOrders();
+      syncStatus.ordersDownloaded = downloadOrdersResult.downloadedCount;
       
       // Mark sync as complete
       this.lastSyncDate = new Date();
@@ -1207,6 +1368,102 @@ export class SyncService {
 
       console.log(`[BUSINESS DOWNLOAD] Download complete. ${downloadedCount} businesses synced successfully.`);
       
+      return {
+        success: errors.length === 0,
+        uploadedCount: 0,
+        downloadedCount,
+        errors
+      };
+    } finally {
+      this.isDownloading = false;
+    }
+  }
+
+  // Upload orders method is already defined earlier in the class
+
+  /**
+   * Download orders from Amplify and sync to local database
+   */
+  async downloadOrders(): Promise<SyncResult> {
+    if (this.isDownloading) {
+      throw new Error('Download already in progress');
+    }
+
+    this.isDownloading = true;
+    const errors: string[] = [];
+    let downloadedCount = 0;
+
+    try {
+      await orderService.initialize();
+      
+      console.log('Starting download of orders from Amplify...');
+
+      // Get all orders from Amplify
+      if (!client.models || !client.models.Order) {
+        throw new Error('Amplify Order model not configured. Please check your Amplify setup.');
+      }
+      const response = await (client.models as any).Order.list();
+      
+      if (response.errors) {
+        errors.push(`Failed to fetch orders: ${response.errors.map((e: any) => e.message).join(', ')}`);
+        return {
+          success: false,
+          uploadedCount: 0,
+          downloadedCount: 0,
+          errors
+        };
+      }
+
+      const amplifyOrders = response.data || [];
+
+      for (const amplifyOrder of amplifyOrders) {
+        try {
+          // Check if order already exists locally by amplifyId
+          const existingOrders = await orderService.getAllOrders();
+          const existingOrder = existingOrders.find(o => o.amplifyId === amplifyOrder.id);
+
+          if (existingOrder) {
+            // Update existing order if Amplify version is newer
+            const amplifyUpdatedAt = new Date(amplifyOrder.updatedAt);
+            const localUpdatedAt = new Date(existingOrder.updatedAt);
+            
+            if (amplifyUpdatedAt > localUpdatedAt) {
+              const localFormat = this.convertOrderToLocalFormat(amplifyOrder);
+              await orderService.updateOrder(existingOrder.id, localFormat);
+              downloadedCount++;
+              console.log(`Updated order: ${amplifyOrder.orderNumber}`);
+            }
+          } else {
+            // Create new local order
+            const localFormat = this.convertOrderToLocalFormat(amplifyOrder);
+            await orderService.createOrder({
+              customer: {
+                id: localFormat.customerId,
+                firstName: localFormat.customerName?.split(' ')[0] || 'Unknown',
+                lastName: localFormat.customerName?.split(' ').slice(1).join(' ') || 'Customer',
+                phone: localFormat.customerPhone || ''
+              } as SerializableCustomer,
+              items: localFormat.items,
+              paymentMethod: localFormat.paymentMethod,
+              selectedDate: localFormat.selectedDate,
+              notes: localFormat.notes,
+              barcodeData: localFormat.barcodeData
+            });
+            
+            // Mark as synced since it came from Amplify
+            await orderService.markAsSynced(localFormat.id, amplifyOrder.id);
+            downloadedCount++;
+            console.log(`Downloaded new order: ${localFormat.orderNumber}`);
+          }
+        } catch (error) {
+          const errorMsg = `Error processing order ${amplifyOrder.orderNumber}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          errors.push(errorMsg);
+          console.error(errorMsg);
+        }
+      }
+
+      this.lastSyncDate = new Date();
+
       return {
         success: errors.length === 0,
         uploadedCount: 0,
