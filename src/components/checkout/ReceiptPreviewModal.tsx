@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { OrderItem } from '../../types/order';
 import { SerializableCustomer } from '../../navigation/types';
 import { QRCode } from '../../utils/qrUtils';
+import { toPreciseAmount } from '../../utils/monetaryUtils';
 
 interface ReceiptPreviewModalProps {
   visible: boolean;
@@ -40,8 +41,9 @@ export function ReceiptPreviewModal({
   // Use the passed order number and generate QR data
   const qrData = orderNumber;
 
-  // Calculate totals
-  const subtotal = orderItems.reduce((sum, item) => {
+
+  // Calculate totals with precise handling of decimals
+  const rawSubtotal = orderItems.reduce((sum, item) => {
     const basePrice = Number(item.price) || 0;
     const additionalPrice = Number(item.additionalPrice) || 0;
     const itemPrice = basePrice + additionalPrice;
@@ -54,8 +56,10 @@ export function ReceiptPreviewModal({
     return sum + (discountedPrice * quantity);
   }, 0);
 
-  const tax = subtotal * 0.0875; // 8.75% tax
-  const total = subtotal + tax;
+  // Convert all monetary values using the cents-based approach
+  const subtotal = toPreciseAmount(rawSubtotal);
+  const tax = toPreciseAmount(subtotal * 0.0875); // 8.75% tax
+  const total = toPreciseAmount(subtotal + tax);
 
 
   const sendDirectToPrinter = async (printerIP: string, printerPort: string) => {
@@ -103,16 +107,20 @@ export function ReceiptPreviewModal({
         console.log('Printer responded with status:', response.status);
         return response.ok;
         
-      } catch (fetchError) {
+      } catch (error) {
         clearTimeout(timeoutId);
+        
+        // Type guard for the error object
+        const fetchError = error as { name?: string; message?: string };
         
         // If it's a timeout or network error, assume printing worked
         // Thermal printers often don't send proper HTTP responses
-        if (fetchError.name === 'AbortError' || fetchError.message.includes('Network request failed')) {
+        if (fetchError.name === 'AbortError' || 
+            (fetchError.message && fetchError.message.includes('Network request failed'))) {
           console.log('Printer connection timeout - assuming print succeeded (normal for thermal printers)');
           return true; // Assume success for thermal printers
         }
-        throw fetchError;
+        throw error;
       }
     } catch (error) {
       console.error('Failed to send raw data to printer:', error);
@@ -211,7 +219,7 @@ export function ReceiptPreviewModal({
       const quantity = Number(item.quantity) || 0;
       
       const discountedPrice = discount > 0 ? itemPrice * (1 - discount / 100) : itemPrice;
-      const totalPrice = discountedPrice * quantity;
+      const totalPrice = toPreciseAmount(discountedPrice * quantity);
       
       let itemName = item.name;
       if (item.options?.starch && item.options.starch !== 'none') {
@@ -473,7 +481,7 @@ export function ReceiptPreviewModal({
                 const quantity = Number(item.quantity) || 0;
                 
                 const discountedPrice = discount > 0 ? itemPrice * (1 - discount / 100) : itemPrice;
-                const totalPrice = discountedPrice * quantity;
+                const totalPrice = toPreciseAmount(discountedPrice * quantity);
                 
                 let itemName = item.name;
                 if (item.options?.starch && item.options.starch !== 'none') {

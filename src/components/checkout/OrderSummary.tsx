@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { OrderItem, OrderSummaryData, starchShortCode, TAX_RATE } from '../../types/order';
+import { toPreciseAmount } from '../../utils/monetaryUtils';
 
 interface OrderSummaryProps {
   items: OrderItem[];
@@ -30,7 +31,7 @@ export function OrderSummary({
   style
 }: OrderSummaryProps) {
   const calculateSummary = (): OrderSummaryData => {
-    const subtotal = items.reduce((sum, item) => {
+    const rawSubtotal = items.reduce((sum, item) => {
       const basePrice = Number(item.price) || 0;
       const additionalPrice = Number(item.additionalPrice) || 0;
       const itemPrice = basePrice + additionalPrice;
@@ -43,15 +44,16 @@ export function OrderSummary({
       return sum + (discountedPrice * quantity);
     }, 0);
 
-    const tax = subtotal * TAX_RATE;
-    const total = subtotal + tax;
+    const subtotal = toPreciseAmount(rawSubtotal);
+    const tax = toPreciseAmount(subtotal * TAX_RATE);
+    const total = toPreciseAmount(subtotal + tax);
     const itemCount = items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
 
     return {
-      subtotal: Number(subtotal) || 0,
-      tax: Number(tax) || 0,
-      total: Number(total) || 0,
-      itemCount: Number(itemCount) || 0
+      subtotal,
+      tax,
+      total,
+      itemCount
     };
   };
 
@@ -88,7 +90,7 @@ export function OrderSummary({
     const discountedPrice = discount > 0 
       ? itemPrice * (1 - discount / 100)
       : itemPrice;
-    const totalPrice = discountedPrice * quantity;
+    const totalPrice = toPreciseAmount(discountedPrice * quantity);
 
     return (
       <View style={styles.orderItem}>

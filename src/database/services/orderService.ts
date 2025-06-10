@@ -4,6 +4,7 @@ import { OrderItem } from '../../types/order';
 import { SerializableCustomer } from '../../navigation/types';
 import { getDatabaseInstance } from '../config';
 import { v4 as uuidv4 } from 'uuid';
+import { toPreciseAmount } from '../../utils/monetaryUtils';
 
 export class OrderService {
   private repository: OrderRepository | null = null;
@@ -43,7 +44,9 @@ export class OrderService {
     const now = new Date().toISOString();
     const orderNumber = await repository.generateOrderNumber();
     
-    // Calculate totals
+    // Using a more robust approach for monetary values to eliminate floating point errors
+    
+    // Calculate totals with precise handling of decimals
     const rawSubtotal = items.reduce((sum, item) => {
       const basePrice = Number(item.price) || 0;
       const additionalPrice = Number(item.additionalPrice) || 0;
@@ -57,9 +60,10 @@ export class OrderService {
       return sum + (discountedPrice * quantity);
     }, 0);
 
-    const subtotal = Math.round(rawSubtotal * 100) / 100; // Round subtotal to cents
-    const tax = Math.round(subtotal * 0.0875 * 100) / 100; // 8.75% tax, rounded to cents
-    const total = Math.round((subtotal + tax) * 100) / 100;
+    // Convert all monetary values using the cents-based approach
+    const subtotal = toPreciseAmount(rawSubtotal);
+    const tax = toPreciseAmount(subtotal * 0.0875); // 8.75% tax
+    const total = toPreciseAmount(subtotal + tax);
 
     const orderData: OrderDocType = {
       id: uuidv4(),
@@ -76,9 +80,11 @@ export class OrderService {
         options: item.options,
         itemKey: item.itemKey
       })),
-      subtotal,
-      tax,
-      total,
+      // Store the exact values calculated with our cents-based approach
+      // This ensures they're precisely what the schema expects (multiples of 0.01)
+      subtotal: subtotal,
+      tax: tax,
+      total: total,
       paymentMethod,
       selectedDate,
       status: 'pending',
