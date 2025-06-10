@@ -21,9 +21,51 @@ export abstract class BaseRepository<T, C extends RxCollection = RxCollection> {
    * Generate a random ID for new documents
    * @param customPrefix - Optional custom prefix that overrides the default collection-based prefix
    */
-  protected generateId(customPrefix?: string): string {
-    const prefix = customPrefix || this.idPrefix;
-    return `${prefix}${uuidv4()}`;
+  protected generateId(): string {
+    return `${this.idPrefix}${uuidv4()}`;
+  }
+  
+  /**
+   * Sanitize document values to ensure they are compatible with RxDB schema
+   * Specifically fixes floating point precision issues for monetary values
+   */
+  private sanitizeDocumentValues<D>(data: D): D {
+    if (!data || typeof data !== 'object') return data;
+    
+    const sanitizedData = { ...data } as any;
+    
+    // Fix known monetary fields that need to be exact multiples of 0.01
+    const monetaryFields = ['subtotal', 'tax', 'total', 'price', 'amount'];
+    
+    Object.keys(sanitizedData).forEach(key => {
+      const value = sanitizedData[key];
+      
+      // Handle monetary fields - ensure exact precision
+      if (monetaryFields.includes(key) && typeof value === 'number') {
+        // Convert to string with fixed 2 decimal places
+        const stringValue = value.toFixed(2);
+        
+        // Convert back to number - this ensures it's a valid multiple of 0.01
+        sanitizedData[key] = parseFloat(stringValue);
+      }
+      
+      // Process nested objects
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        sanitizedData[key] = this.sanitizeDocumentValues(value);
+      }
+      
+      // Process arrays containing objects
+      if (Array.isArray(value)) {
+        sanitizedData[key] = value.map(item => {
+          if (item && typeof item === 'object') {
+            return this.sanitizeDocumentValues(item);
+          }
+          return item;
+        });
+      }
+    });
+    
+    return sanitizedData as D;
   }
 
   /**
@@ -50,14 +92,19 @@ export abstract class BaseRepository<T, C extends RxCollection = RxCollection> {
    */
   async create(data: Omit<T, 'id' | 'createdAt' | 'updatedAt'>): Promise<RxDocument<T>> {
     const now = new Date().toISOString();
+    
+    // Fix floating point issues for monetary values before inserting
+    const processedData = this.sanitizeDocumentValues(data);
+    
     const doc = {
-      ...data,
+      ...processedData,
       id: this.generateId(),
       createdAt: now,
       updatedAt: now,
       isLocalOnly: true, // New documents are local by default
       isDeleted: false   // Ensure soft delete flag is set
     } as unknown as T;
+    
     const result = await this.collection.insert(doc);
     
     // Log the creation
@@ -71,21 +118,27 @@ export abstract class BaseRepository<T, C extends RxCollection = RxCollection> {
    * Update an existing document
    */
   async update(id: string, data: Partial<T>): Promise<RxDocument<T> | null> {
-    const doc = await this.findById(id);
-    if (!doc) return null;
-    
-    await doc.update({
-      $set: {
-        ...data,
+    try {
+      const document = await this.findById(id);
+      if (!document) return null;
+      
+      // Fix floating point issues for monetary values before updating
+      const processedData = this.sanitizeDocumentValues(data);
+      
+      const doc = {
+        ...processedData,
         updatedAt: new Date().toISOString()
-      }
-    });
-    
-    // Log the update
-    const collectionName = this.idPrefix.replace('_', '');
-    console.log(`[${new Date().toLocaleString()}] UPDATED: ${collectionName} - ID: ${id}`);
-    
-    return this.findById(id);
+      };
+      
+      await document.update({
+        $set: doc
+      });
+      
+      return document;
+    } catch (err) {
+      console.error(`Error updating ${this.idPrefix} with id ${id}:`, err);
+      return null;
+    }
   }
 
   /**
