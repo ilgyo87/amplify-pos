@@ -30,7 +30,7 @@ interface ProductFormProps {
   isLoading?: boolean;
 }
 
-export const ProductForm: React.FC<ProductFormProps> = ({
+export function ProductForm({
   title,
   initialData,
   categories,
@@ -38,7 +38,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   onCancel,
   submitButtonText = 'Save Product',
   isLoading = false,
-}) => {
+}: ProductFormProps) {
   const [formData, setFormData] = useState<ProductFormData>({
     name: initialData?.name || '',
     description: initialData?.description || '',
@@ -328,7 +328,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       </KeyboardAvoidingView>
     </Modal>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {

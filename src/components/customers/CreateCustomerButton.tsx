@@ -8,11 +8,11 @@ interface CreateCustomerButtonProps {
   style?: any;
 }
 
-export const CreateCustomerButton: React.FC<CreateCustomerButtonProps> = ({
+export function CreateCustomerButton({
   onPress,
   disabled = false,
   style
-}) => {
+}: CreateCustomerButtonProps) {
   return (
     <TouchableOpacity
       style={[
@@ -41,14 +41,14 @@ export const CreateCustomerButton: React.FC<CreateCustomerButtonProps> = ({
       </View>
     </TouchableOpacity>
   );
-};
+}
 
 // Floating Action Button variant
-export const CreateCustomerFAB: React.FC<CreateCustomerButtonProps> = ({
+export function CreateCustomerFAB({
   onPress,
   disabled = false,
   style
-}) => {
+}: CreateCustomerButtonProps) {
   return (
     <TouchableOpacity
       style={[
@@ -67,7 +67,7 @@ export const CreateCustomerFAB: React.FC<CreateCustomerButtonProps> = ({
       />
     </TouchableOpacity>
   );
-};
+}
 
 const styles = StyleSheet.create({
   button: {

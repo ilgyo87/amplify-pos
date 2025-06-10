@@ -1,4 +1,5 @@
 import { generateClient } from 'aws-amplify/data';
+import { getCurrentUser } from 'aws-amplify/auth';
 import type { Schema } from '../../../amplify/data/resource';
 import { customerService } from './customerService';
 import { CustomerDocument } from '../schemas/customer';
@@ -8,6 +9,8 @@ import { categoryService } from './categoryService';
 import { CategoryDocument } from '../schemas/category';
 import { productService } from './productService';
 import { ProductDocument } from '../schemas/product';
+import { businessService } from './businessService';
+import { BusinessDocument } from '../schemas/business';
 
 const client = generateClient<Schema>();
 
@@ -26,6 +29,8 @@ export interface SyncStatus {
   totalUnsyncedCustomers: number;
   totalLocalEmployees: number;
   totalUnsyncedEmployees: number;
+  totalLocalBusinesses: number;
+  totalUnsyncedBusinesses: number;
   customersUploaded: number;
   customersDownloaded: number;
   employeesUploaded: number;
@@ -34,6 +39,8 @@ export interface SyncStatus {
   categoriesDownloaded: number;
   productsUploaded: number;
   productsDownloaded: number;
+  businessesUploaded: number;
+  businessesDownloaded: number;
   startTime: Date;
   endTime?: Date;
   success: boolean;
@@ -222,6 +229,7 @@ export class SyncService {
       barcode: doc.barcode,
       quantity: doc.quantity,
       isActive: doc.isActive,
+      imageName: doc.imageName, // Include image reference for static assets
     };
   }
 
@@ -241,9 +249,72 @@ export class SyncService {
       barcode: amplifyProduct.barcode,
       quantity: amplifyProduct.quantity,
       isActive: amplifyProduct.isActive,
+      imageName: amplifyProduct.imageName, // Include image reference for static assets
       amplifyId: amplifyProduct.id,
       isLocalOnly: false,
       lastSyncedAt: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Convert business from local format to Amplify format
+   */
+  private async convertBusinessToAmplifyFormat(business: BusinessDocument): Promise<any> {
+    const doc = business as any;
+    
+    // Get current user email
+    let userEmail = '';
+    try {
+      const user = await getCurrentUser();
+      userEmail = user.signInDetails?.loginId || user.username || '';
+      console.log('Got user email for business sync:', userEmail);
+    } catch (error) {
+      console.error('Could not get current user email:', error);
+      userEmail = 'noemail@example.com'; // Fallback
+      console.log('Using fallback email:', userEmail);
+    }
+    
+    const amplifyData: any = {
+      businessName: doc.name, // Map 'name' to 'businessName' for Amplify
+      phone: doc.phone || '', // Required field in Amplify
+      email: userEmail, // Use current user's email
+    };
+
+    // Include optional fields only if they have values
+    if (doc.address && doc.address.trim()) {
+      amplifyData.address = doc.address;
+    }
+    if (doc.city && doc.city.trim()) {
+      amplifyData.city = doc.city;
+    }
+    if (doc.state && doc.state.trim()) {
+      amplifyData.state = doc.state;
+    }
+    if (doc.zipCode && doc.zipCode.trim()) {
+      amplifyData.zipCode = doc.zipCode;
+    }
+    if (doc.website && doc.website.trim()) {
+      amplifyData.website = doc.website;
+    }
+
+    return amplifyData;
+  }
+
+  /**
+   * Convert business from Amplify format to local format
+   */
+  private convertBusinessToLocalFormat(amplifyBusiness: any): any {
+    return {
+      name: amplifyBusiness.businessName, // Map 'businessName' to 'name' for local
+      address: amplifyBusiness.address || '',
+      city: amplifyBusiness.city || '',
+      state: amplifyBusiness.state || '',
+      zipCode: amplifyBusiness.zipCode || '',
+      phone: amplifyBusiness.phone || '',
+      email: amplifyBusiness.email || '',
+      taxId: '', // Not available in Amplify schema
+      website: amplifyBusiness.website || '',
+      // Don't set amplifyId and isLocalOnly here - let markBusinessSynced handle it
     };
   }
 
@@ -255,11 +326,20 @@ export class SyncService {
     await employeeService.initialize();
     await categoryService.initialize();
     await productService.initialize();
+    await businessService.initialize();
     
     const totalLocalCustomers = await customerService.getCustomersCount();
     const unsyncedCustomers = await customerService.getUnsyncedCustomers();
     const totalLocalEmployees = await employeeService.getEmployeesCount();
     const unsyncedEmployees = await employeeService.getUnsyncedEmployees();
+    const allBusinesses = await businessService.getAllBusinesses();
+    const totalLocalBusinesses = allBusinesses.length;
+    const unsyncedBusinesses = await businessService.getUnsyncedBusinesses();
+    
+    console.log(`[SYNC STATUS] Businesses - Total: ${totalLocalBusinesses}, Unsynced: ${unsyncedBusinesses.length}`);
+    allBusinesses.forEach(business => {
+      console.log(`[SYNC STATUS] Business: ${business.name}, isLocalOnly: ${business.isLocalOnly}, synced: ${!business.isLocalOnly}`);
+    });
     
     return {
       isUploading: this.isUploading,
@@ -269,6 +349,8 @@ export class SyncService {
       totalUnsyncedCustomers: unsyncedCustomers.length,
       totalLocalEmployees,
       totalUnsyncedEmployees: unsyncedEmployees.length,
+      totalLocalBusinesses,
+      totalUnsyncedBusinesses: unsyncedBusinesses.length,
       customersUploaded: 0,
       customersDownloaded: 0,
       employeesUploaded: 0,
@@ -277,6 +359,8 @@ export class SyncService {
       categoriesDownloaded: 0,
       productsUploaded: 0,
       productsDownloaded: 0,
+      businessesUploaded: 0,
+      businessesDownloaded: 0,
       startTime: new Date(),
       endTime: undefined,
       success: false
@@ -583,7 +667,7 @@ export class SyncService {
             // Mark as synced in local database
             await productService.markAsSynced(product.id, response.data.id);
             uploadedCount++;
-            console.log(`Uploaded product: ${product.name}`);
+            console.log(`Uploaded product: ${product.name} (imageName: ${product.imageName || 'none'})`);
           } else if (response.errors) {
             const error = `Failed to upload product ${product.name}: ${response.errors.map((e: any) => e.message).join(', ')}`;
             errors.push(error);
@@ -597,6 +681,91 @@ export class SyncService {
       }
 
       this.lastSyncDate = new Date();
+      
+      return {
+        success: errors.length === 0,
+        uploadedCount,
+        downloadedCount: 0,
+        errors
+      };
+    } finally {
+      this.isUploading = false;
+    }
+  }
+
+  /**
+   * Upload all local businesses to Amplify
+   */
+  async uploadBusinesses(): Promise<SyncResult> {
+    if (this.isUploading) {
+      throw new Error('Upload already in progress');
+    }
+
+    this.isUploading = true;
+    const errors: string[] = [];
+    let uploadedCount = 0;
+
+    try {
+      await businessService.initialize();
+      
+      // Debug: Get all businesses first to see their sync status
+      const allBusinesses = await businessService.getAllBusinesses();
+      console.log(`[BUSINESS UPLOAD] Total businesses in database: ${allBusinesses.length}`);
+      allBusinesses.forEach(business => {
+        console.log(`[BUSINESS UPLOAD] Business: ${business.name}, isLocalOnly: ${business.isLocalOnly}, amplifyId: ${business.amplifyId || 'NONE'}, isDeleted: ${business.isDeleted || false}`);
+      });
+      
+      const unsyncedBusinesses = await businessService.getUnsyncedBusinesses();
+      console.log(`[BUSINESS UPLOAD] Starting upload of ${unsyncedBusinesses.length} unsynced businesses...`);
+      
+      // Debug: Log all businesses to be synced
+      unsyncedBusinesses.forEach(business => {
+        console.log(`[BUSINESS UPLOAD] Business to sync: ${business.name}, phone: ${business.phone || 'MISSING'}, email: ${business.email || 'MISSING'}, isLocalOnly: ${business.isLocalOnly}`);
+      });
+
+      if (!client.models || !client.models.Business) {
+        throw new Error('Amplify Business model not configured. Please check your Amplify setup.');
+      }
+
+      for (const business of unsyncedBusinesses) {
+        try {
+          const amplifyData = await this.convertBusinessToAmplifyFormat(business);
+          
+          // Skip if required fields are missing
+          if (!amplifyData.phone || !amplifyData.email) {
+            console.log(`Skipping business ${business.name}: Missing required phone (${amplifyData.phone || 'MISSING'}) or email (${amplifyData.email || 'MISSING'}) for sync`);
+            errors.push(`Skipping business ${business.name}: Missing required phone or email for sync`);
+            continue;
+          }
+          
+          console.log(`[BUSINESS UPLOAD] Uploading business ${business.name} with data:`, amplifyData);
+          
+          const response = await (client.models as any).Business.create(amplifyData);
+          
+          if (response.errors) {
+            errors.push(`Failed to upload business ${business.name}: ${response.errors.map((e: any) => e.message).join(', ')}`);
+            continue;
+          }
+
+          if (response.data) {
+            // Mark as synced in local database
+            await businessService.markBusinessSynced(business.id, response.data.id);
+            uploadedCount++;
+            console.log(`[BUSINESS UPLOAD] ✓ Uploaded business: ${business.name} (ID: ${response.data.id})`);
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          errors.push(`Failed to upload business ${business.name}: ${errorMessage}`);
+          console.error(`[BUSINESS UPLOAD] Error uploading business ${business.name}:`, error);
+        }
+      }
+
+      console.log(`[BUSINESS UPLOAD] Upload complete. ${uploadedCount} businesses uploaded successfully.`);
+      
+      if (uploadedCount === 0 && unsyncedBusinesses.length === 0 && allBusinesses.length > 0) {
+        console.log(`[BUSINESS UPLOAD] ℹ️  All ${allBusinesses.length} businesses are already synced with the cloud.`);
+        console.log(`[BUSINESS UPLOAD] ℹ️  Use the 'Force Resync' button on individual businesses if you need to re-upload them.`);
+      }
       
       return {
         success: errors.length === 0,
@@ -796,6 +965,8 @@ export class SyncService {
       totalUnsyncedCustomers: 0,
       totalLocalEmployees: 0,
       totalUnsyncedEmployees: 0,
+      totalLocalBusinesses: 0,
+      totalUnsyncedBusinesses: 0,
       customersUploaded: 0,
       customersDownloaded: 0,
       employeesUploaded: 0,
@@ -804,6 +975,8 @@ export class SyncService {
       categoriesDownloaded: 0,
       productsUploaded: 0,
       productsDownloaded: 0,
+      businessesUploaded: 0,
+      businessesDownloaded: 0,
       startTime: new Date(),
       success: false,
       isUploading: false,
@@ -816,6 +989,7 @@ export class SyncService {
       await employeeService.initialize();
       await categoryService.initialize();
       await productService.initialize();
+      await businessService.initialize();
       
       // Get the initial status
       const initialStatus = await this.getSyncStatus();
@@ -823,6 +997,8 @@ export class SyncService {
       syncStatus.totalUnsyncedCustomers = initialStatus.totalUnsyncedCustomers;
       syncStatus.totalLocalEmployees = initialStatus.totalLocalEmployees;
       syncStatus.totalUnsyncedEmployees = initialStatus.totalUnsyncedEmployees;
+      syncStatus.totalLocalBusinesses = initialStatus.totalLocalBusinesses;
+      syncStatus.totalUnsyncedBusinesses = initialStatus.totalUnsyncedBusinesses;
 
       // Upload phase
       console.log('Starting full sync - Upload phase');
@@ -843,6 +1019,10 @@ export class SyncService {
       // Upload products
       const uploadProductsResult = await this.uploadProducts();
       syncStatus.productsUploaded = uploadProductsResult.uploadedCount;
+      
+      // Upload businesses
+      const uploadBusinessesResult = await this.uploadBusinesses();
+      syncStatus.businessesUploaded = uploadBusinessesResult.uploadedCount;
       
       // Download phase
       console.log('Starting download phase');
@@ -865,6 +1045,10 @@ export class SyncService {
       const downloadProductsResult = await this.downloadProducts();
       syncStatus.productsDownloaded = downloadProductsResult.downloadedCount;
       
+      // Download businesses
+      const downloadBusinessesResult = await this.downloadBusinesses();
+      syncStatus.businessesDownloaded = downloadBusinessesResult.downloadedCount;
+      
       // Mark sync as complete
       this.lastSyncDate = new Date();
       syncStatus.endTime = new Date();
@@ -883,6 +1067,95 @@ export class SyncService {
     }
   }
   
+  /**
+   * Download businesses from Amplify and sync to local database
+   */
+  async downloadBusinesses(): Promise<SyncResult> {
+    if (this.isDownloading) {
+      throw new Error('Download already in progress');
+    }
+
+    this.isDownloading = true;
+    const errors: string[] = [];
+    let downloadedCount = 0;
+
+    try {
+      await businessService.initialize();
+      
+      console.log('Starting download of businesses from Amplify...');
+
+      if (!client.models || !client.models.Business) {
+        throw new Error('Amplify Business model not configured. Please check your Amplify setup.');
+      }
+
+      // Get current user's email
+      let userEmail = '';
+      try {
+        const user = await getCurrentUser();
+        userEmail = user.signInDetails?.loginId || user.username || '';
+        console.log('Downloading businesses for user:', userEmail);
+      } catch (error) {
+        console.error('Error getting current user:', error);
+        throw new Error('Failed to get current user information');
+      }
+
+      if (!userEmail) {
+        throw new Error('User email is required to download businesses');
+      }
+
+      // Get businesses filtered by user's email
+      const response = await (client.models as any).Business.list({
+        filter: {
+          email: { eq: userEmail }
+        }
+      });
+      const amplifyBusinesses = response.data;
+      
+      console.log(`[BUSINESS DOWNLOAD] Found ${amplifyBusinesses.length} businesses in Amplify for user ${userEmail}`);
+
+      // Convert and save each business
+      for (const amplifyBusiness of amplifyBusinesses) {
+        try {
+          const localBusiness = this.convertBusinessToLocalFormat(amplifyBusiness);
+          
+          // Check if business already exists locally
+          const existingBusiness = await businessService.getBusinessByAmplifyId(amplifyBusiness.id);
+          
+          if (existingBusiness) {
+            // Update existing business and mark as synced
+            await businessService.updateBusiness(existingBusiness.id, localBusiness);
+            await businessService.markBusinessSynced(existingBusiness.id, amplifyBusiness.id);
+          } else {
+            // Create new business
+            const createResult = await businessService.createBusiness(localBusiness);
+            if (createResult.business) {
+              // Mark as synced since it came from Amplify
+              await businessService.markBusinessSynced(createResult.business.id, amplifyBusiness.id);
+            }
+          }
+          
+          downloadedCount++;
+          console.log(`[BUSINESS DOWNLOAD] ✓ Synced business: ${amplifyBusiness.businessName}`);
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          errors.push(`Failed to sync business ${amplifyBusiness.businessName || amplifyBusiness.id}: ${errorMessage}`);
+          console.error(`[BUSINESS DOWNLOAD] Error syncing business:`, error);
+        }
+      }
+
+      console.log(`[BUSINESS DOWNLOAD] Download complete. ${downloadedCount} businesses synced successfully.`);
+      
+      return {
+        success: errors.length === 0,
+        uploadedCount: 0,
+        downloadedCount,
+        errors
+      };
+    } finally {
+      this.isDownloading = false;
+    }
+  }
+
   /**
    * Download products from the server
    */
@@ -926,6 +1199,7 @@ export class SyncService {
         try {
           // Convert server model to local model
           const productData = this.fromProductApiModel(serverProduct);
+          console.log(`[PRODUCT DOWNLOAD] Processing product: ${serverProduct.name} (imageName: ${serverProduct.imageName || 'none'})`);
 
           // Check if we already have this product locally
           let localProduct = null;

@@ -8,11 +8,11 @@ interface CreateCategoryButtonProps {
   style?: any;
 }
 
-export const CreateCategoryButton: React.FC<CreateCategoryButtonProps> = ({
+export function CreateCategoryButton({
   onPress,
   disabled = false,
   style
-}) => {
+}: CreateCategoryButtonProps) {
   return (
     <TouchableOpacity
       style={[
@@ -41,14 +41,14 @@ export const CreateCategoryButton: React.FC<CreateCategoryButtonProps> = ({
       </View>
     </TouchableOpacity>
   );
-};
+}
 
 // Floating Action Button variant
-export const CreateCategoryFAB: React.FC<CreateCategoryButtonProps> = ({
+export function CreateCategoryFAB({
   onPress,
   disabled = false,
   style
-}) => {
+}: CreateCategoryButtonProps) {
   return (
     <TouchableOpacity
       style={[
@@ -67,14 +67,14 @@ export const CreateCategoryFAB: React.FC<CreateCategoryButtonProps> = ({
       />
     </TouchableOpacity>
   );
-};
+}
 
 // Compact button variant for toolbars
-export const CreateCategoryCompactButton: React.FC<CreateCategoryButtonProps> = ({
+export function CreateCategoryCompactButton({
   onPress,
   disabled = false,
   style
-}) => {
+}: CreateCategoryButtonProps) {
   return (
     <TouchableOpacity
       style={[
@@ -99,7 +99,7 @@ export const CreateCategoryCompactButton: React.FC<CreateCategoryButtonProps> = 
       </Text>
     </TouchableOpacity>
   );
-};
+}
 
 const styles = StyleSheet.create({
   button: {

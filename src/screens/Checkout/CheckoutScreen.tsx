@@ -6,23 +6,24 @@ import {
   StyleSheet,
   Dimensions,
   Alert,
-  Modal
+  Modal,
+  SafeAreaView
 } from 'react-native';
 import { RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { BaseScreen } from '../BaseScreen';
 import { CustomerHeader } from '../../components/checkout/CustomerHeader';
 import { ServiceTabBar } from '../../components/checkout/ServiceTabBar';
 import { ProductGrid } from '../../components/checkout/ProductGrid';
 import { OrderSummary } from '../../components/checkout/OrderSummary';
-import { PickupCalendar } from '../../components/checkout/PickupCalendar';
-import { PaymentModal } from '../../components/checkout/PaymentModal';
+import { ReceiptPreviewModal } from '../../components/checkout/ReceiptPreviewModal';
+import { DatePickerModal } from '../../components/checkout/DatePickerModal';
 import { useCategories } from '../../database/hooks/useCategories';
 import { useProducts } from '../../database/hooks/useProducts';
+import { useOrders } from '../../database/hooks/useOrders';
 import { SerializableCustomer } from '../../navigation/types';
 import { CategoryDocument } from '../../database/schemas/category';
 import { ProductDocument } from '../../database/schemas/product';
-import { OrderItem, OrderItemOptions, generateOrderItemKey, PaymentInfo } from '../../types/order';
+import { OrderItem, OrderItemOptions, generateOrderItemKey } from '../../types/order';
 import { RootStackParamList } from '../../navigation/types';
 
 type CheckoutScreenRouteProp = RouteProp<RootStackParamList, 'Checkout'>;
@@ -43,10 +44,9 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
   const [selectedCategory, setSelectedCategory] = useState<CategoryDocument | null>(null);
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [currentPage, setCurrentPage] = useState(0);
-  const [showPickupCalendar, setShowPickupCalendar] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showReceiptPreview, setShowReceiptPreview] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [selectedTime, setSelectedTime] = useState<string | null>(null);
   
   // Layout state for responsive design
   const [isSmallScreen, setIsSmallScreen] = useState(!isTablet);
@@ -61,6 +61,10 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
     products,
     loading: productsLoading,
   } = useProducts(selectedCategory?.id);
+
+  const {
+    createOrder
+  } = useOrders();
 
   // Handle screen size changes
   useEffect(() => {
@@ -155,40 +159,79 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
     );
   };
 
-  // Handle checkout flow
+  // Handle checkout flow - go to receipt preview
   const handleCheckout = () => {
     if (orderItems.length === 0) {
       Alert.alert('Error', 'Please add items to your order');
       return;
     }
-    setShowPickupCalendar(true);
+    setShowReceiptPreview(true);
   };
 
-  // Handle pickup date/time selection
-  const handlePickupComplete = () => {
-    if (!selectedDate || !selectedTime) {
-      Alert.alert('Error', 'Please select pickup date and time');
-      return;
-    }
-    setShowPickupCalendar(false);
-    setShowPaymentModal(true);
+  // Handle date picker
+  const handleDateSelect = (date: string) => {
+    setSelectedDate(date);
+    setShowDatePicker(false);
   };
 
-  // Handle payment completion
-  const handlePaymentComplete = (paymentInfo: PaymentInfo) => {
-    setShowPaymentModal(false);
+  // Handle opening date picker
+  const handleOpenDatePicker = () => {
+    setShowDatePicker(true);
+  };
+
+  // Handle customer edit
+  const handleEditCustomer = () => {
+    Alert.alert('Edit Customer', 'Customer editing will be implemented');
+  };
+
+  // Handle order completion
+  const handleOrderComplete = async (paymentMethod: 'cash' | 'card' | 'credit', qrData?: string) => {
+    setShowReceiptPreview(false);
     
-    // TODO: Save order to database and process payment
-    Alert.alert(
-      'Order Complete',
-      `Order has been placed successfully!\n\nPickup: ${selectedDate} at ${selectedTime}\nTotal: $${paymentInfo.amount.toFixed(2)}`,
-      [
-        {
-          text: 'OK',
-          onPress: () => navigation.goBack()
-        }
-      ]
-    );
+    try {
+      // Save order to database
+      const newOrder = await createOrder({
+        customer,
+        items: orderItems,
+        paymentMethod,
+        selectedDate: selectedDate || undefined,
+        notes: undefined,
+        barcodeData: qrData
+      });
+
+      // Calculate total for confirmation
+      const orderTotal = calculateOrderTotal();
+      const tax = orderTotal * 0.0875;
+      const finalTotal = orderTotal + tax;
+      
+      Alert.alert(
+        'Order Complete',
+        `Order #${newOrder.orderNumber} completed successfully!\n\nPayment Method: ${paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1)}\nTotal: $${finalTotal.toFixed(2)}\nDate: ${selectedDate ? new Date(selectedDate + 'T00:00:00').toLocaleDateString() : 'Today'}\n\nPrint receipt?`,
+        [
+          {
+            text: 'No Thanks',
+            style: 'cancel',
+            onPress: () => navigation.goBack()
+          },
+          {
+            text: 'Print Receipt',
+            onPress: () => {
+              // TODO: Implement receipt printing
+              Alert.alert('Receipt Printed', 'Receipt has been sent to printer', [
+                { text: 'OK', onPress: () => navigation.goBack() }
+              ]);
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error creating order:', error);
+      Alert.alert(
+        'Error',
+        'Failed to create order. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
   };
 
   // Calculate order total for payment
@@ -235,6 +278,7 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
               onRemoveItem={handleRemoveItem}
               onEditItem={handleEditItem}
               onCheckout={handleCheckout}
+              selectedDate={selectedDate}
             />
           </View>
         </View>
@@ -266,6 +310,7 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
               onRemoveItem={handleRemoveItem}
               onEditItem={handleEditItem}
               onCheckout={handleCheckout}
+              selectedDate={selectedDate}
             />
           </View>
         </View>
@@ -274,58 +319,34 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
   };
 
   return (
-    <BaseScreen 
-      title={`Checkout - ${customer.firstName} ${customer.lastName}`}
-      showBackButton
-    >
-      <View style={styles.container}>
-        <CustomerHeader 
-          customer={customer}
-          onEdit={() => {
-            // TODO: Navigate to customer edit screen
-            Alert.alert('Edit Customer', 'Customer editing will be implemented');
-          }}
-        />
-        
-        {renderContent()}
+    <SafeAreaView style={styles.container}>
+      <CustomerHeader 
+        customer={customer}
+        onEdit={handleEditCustomer}
+        onDatePick={handleOpenDatePicker}
+        selectedDate={selectedDate || undefined}
+      />
+      
+      {renderContent()}
 
-        {/* Pickup Calendar Modal */}
-        <Modal
-          visible={showPickupCalendar}
-          animationType="slide"
-          presentationStyle="pageSheet"
-          onRequestClose={() => setShowPickupCalendar(false)}
-        >
-          <View style={styles.modalContainer}>
-            <PickupCalendar
-              selectedDate={selectedDate}
-              selectedTime={selectedTime}
-              onSelectDate={setSelectedDate}
-              onSelectTime={setSelectedTime}
-            />
-            
-            {selectedDate && selectedTime && (
-              <View style={styles.modalFooter}>
-                <TouchableOpacity 
-                  style={styles.continueButton}
-                  onPress={handlePickupComplete}
-                >
-                  <Text style={styles.continueButtonText}>Continue to Payment</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        </Modal>
+      {/* Date Picker Modal */}
+      <DatePickerModal
+        visible={showDatePicker}
+        selectedDate={selectedDate || undefined}
+        onSelectDate={handleDateSelect}
+        onClose={() => setShowDatePicker(false)}
+      />
 
-        {/* Payment Modal */}
-        <PaymentModal
-          visible={showPaymentModal}
-          orderTotal={finalTotal}
-          onClose={() => setShowPaymentModal(false)}
-          onCompletePayment={handlePaymentComplete}
-        />
-      </View>
-    </BaseScreen>
+      {/* Receipt Preview Modal */}
+      <ReceiptPreviewModal
+        visible={showReceiptPreview}
+        customer={customer}
+        orderItems={orderItems}
+        selectedDate={selectedDate || undefined}
+        onClose={() => setShowReceiptPreview(false)}
+        onComplete={handleOrderComplete}
+      />
+    </SafeAreaView>
   );
 }
 

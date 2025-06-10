@@ -16,14 +16,13 @@ export class EmployeeService {
    * Initialize the service and database connection
    */
   public async initialize(): Promise<void> {
-    if (!this.db) {
-      try {
-        this.db = await getDatabaseInstance();
-        this.employeeRepository = new EmployeeRepository(this.db.employees);
-      } catch (error) {
-        console.error('Failed to initialize EmployeeService:', error);
-        throw new Error('Failed to initialize database connection');
-      }
+    try {
+      this.db = await getDatabaseInstance();
+      this.employeeRepository = new EmployeeRepository(this.db.employees);
+      console.log('EmployeeService initialized successfully');
+    } catch (error) {
+      console.error('Failed to initialize EmployeeService:', error);
+      throw new Error('Failed to initialize database connection');
     }
   }
   
@@ -83,6 +82,7 @@ export class EmployeeService {
     const employeeWithDefaults = {
       ...employeeData,
       phone: cleanPhoneNumber(employeeData.phone),
+      isActive: true,
       isLocalOnly: true,
       isDeleted: false
     };
@@ -107,7 +107,9 @@ export class EmployeeService {
    */
   async getAllEmployees(): Promise<EmployeeDocument[]> {
     const repository = this.getRepository();
-    return repository.findAll() as Promise<EmployeeDocument[]>;
+    const employees = await repository.findAll() as EmployeeDocument[];
+    console.log('getAllEmployees returned:', employees.length, 'employees');
+    return employees;
   }
 
   /**
@@ -159,7 +161,7 @@ export class EmployeeService {
     };
 
     const employee = await repository.update(id, updateData) as EmployeeDocument | null;
-    return { employee };
+    return { employee: employee || undefined };
   }
 
   /**

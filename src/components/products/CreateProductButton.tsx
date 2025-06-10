@@ -8,11 +8,11 @@ interface CreateProductButtonProps {
   style?: any;
 }
 
-export const CreateProductButton: React.FC<CreateProductButtonProps> = ({
+export function CreateProductButton({
   onPress,
   disabled = false,
   style
-}) => {
+}: CreateProductButtonProps) {
   return (
     <TouchableOpacity
       style={[
@@ -41,14 +41,14 @@ export const CreateProductButton: React.FC<CreateProductButtonProps> = ({
       </View>
     </TouchableOpacity>
   );
-};
+}
 
 // Floating Action Button variant
-export const CreateProductFAB: React.FC<CreateProductButtonProps> = ({
+export function CreateProductFAB({
   onPress,
   disabled = false,
   style
-}) => {
+}: CreateProductButtonProps) {
   return (
     <TouchableOpacity
       style={[
@@ -67,14 +67,14 @@ export const CreateProductFAB: React.FC<CreateProductButtonProps> = ({
       />
     </TouchableOpacity>
   );
-};
+}
 
 // Compact button variant for toolbars
-export const CreateProductCompactButton: React.FC<CreateProductButtonProps> = ({
+export function CreateProductCompactButton({
   onPress,
   disabled = false,
   style
-}) => {
+}: CreateProductButtonProps) {
   return (
     <TouchableOpacity
       style={[
@@ -99,14 +99,14 @@ export const CreateProductCompactButton: React.FC<CreateProductButtonProps> = ({
       </Text>
     </TouchableOpacity>
   );
-};
+}
 
 // Icon-only button variant
-export const CreateProductIconButton: React.FC<CreateProductButtonProps> = ({
+export function CreateProductIconButton({
   onPress,
   disabled = false,
   style
-}) => {
+}: CreateProductButtonProps) {
   return (
     <TouchableOpacity
       style={[
@@ -125,7 +125,7 @@ export const CreateProductIconButton: React.FC<CreateProductButtonProps> = ({
       />
     </TouchableOpacity>
   );
-};
+}
 
 const styles = StyleSheet.create({
   button: {

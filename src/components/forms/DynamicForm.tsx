@@ -123,7 +123,7 @@ const getFormFields = (entityType: 'customer' | 'employee'): FormField[] => {
   return fields;
 };
 
-export const DynamicForm: React.FC<DynamicFormProps> = ({
+export function DynamicForm({
   fields,
   initialData,
   onSubmit,
@@ -135,7 +135,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
   entityType,
   title,
   submitButtonText
-}) => {
+}: DynamicFormProps) {
   const formFields = fields || (entityType ? getFormFields(entityType) : []);
   
   const {
@@ -144,8 +144,13 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
     formState: { isValid }
   } = useForm<FormDataType>({
     defaultValues: {
-      firstName: initialData?.firstName || '',
-      lastName: initialData?.lastName || '',
+      // Handle different data types
+      ...(entityType === 'customer' || entityType === 'employee' ? {
+        firstName: (initialData as CustomerFormData | EmployeeFormData)?.firstName || '',
+        lastName: (initialData as CustomerFormData | EmployeeFormData)?.lastName || '',
+      } : {
+        name: (initialData as BusinessFormData)?.name || '',
+      }),
       phone: initialData?.phone || '',
       email: initialData?.email || '',
       address: initialData?.address || '',
@@ -154,6 +159,13 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
       zipCode: initialData?.zipCode || '',
       ...(entityType === 'employee' && { 
         pin: (initialData as EmployeeFormData)?.pin || '' 
+      }),
+      // Business-specific fields
+      ...((initialData as BusinessFormData)?.taxId && { 
+        taxId: (initialData as BusinessFormData).taxId 
+      }),
+      ...((initialData as BusinessFormData)?.website && { 
+        website: (initialData as BusinessFormData).website 
       })
     },
     mode: 'onChange'
@@ -279,7 +291,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
       </View>
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {

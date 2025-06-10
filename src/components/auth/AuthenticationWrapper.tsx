@@ -6,7 +6,7 @@ interface AuthenticationWrapperProps {
   children: React.ReactNode;
 }
 
-export const AuthenticationWrapper: React.FC<AuthenticationWrapperProps> = ({ children }) => {
+export function AuthenticationWrapper({ children }: AuthenticationWrapperProps) {
   const { isSignedIn } = useEmployeeAuth();
 
   if (!isSignedIn) {
@@ -14,4 +14,4 @@ export const AuthenticationWrapper: React.FC<AuthenticationWrapperProps> = ({ ch
   }
 
   return <>{children}</>;
-};
+}

@@ -6,11 +6,17 @@ import {
   StyleSheet, 
   ScrollView, 
   Alert,
-  ActivityIndicator 
+  ActivityIndicator,
+  Modal,
+  TextInput,
+  SafeAreaView 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BaseScreen } from '../BaseScreen';
-import { syncService, SyncStatus, SyncResult } from '../../database/services';
+import { syncService, SyncStatus, SyncResult, businessService } from '../../database/services';
+import { BusinessForm } from '../../components/forms/BusinessForm';
+import { BusinessDocument } from '../../database/schemas/business';
+import { BusinessFormData, BusinessValidationErrors } from '../../utils/businessValidation';
 
 export default function SettingsScreen() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
@@ -32,9 +38,51 @@ export default function SettingsScreen() {
     success: false
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [showBusinessModal, setShowBusinessModal] = useState(false);
+  const [editingBusiness, setEditingBusiness] = useState<BusinessDocument | null>(null);
+  const [businesses, setBusinesses] = useState<BusinessDocument[]>([]);
+  
+  // Printer settings state
+  const [showPrinterModal, setShowPrinterModal] = useState(false);
+  const [printerIP, setPrinterIP] = useState('');
+  const [printerPort, setPrinterPort] = useState('9100');
+  const [printerConnected, setPrinterConnected] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
 
   useEffect(() => {
-    loadSyncStatus();
+    let businessSubscription: any = null;
+
+    const initialize = async () => {
+      await loadSyncStatus();
+      await loadPrinterSettings();
+      
+      // Subscribe to business changes using RxDB reactive query
+      try {
+        const { getDatabaseInstance } = await import('../../database/config');
+        const database = await getDatabaseInstance();
+        
+        businessSubscription = database.businesses
+          .find({
+            selector: {
+              isDeleted: { $ne: true }
+            }
+          })
+          .$.subscribe((businessDocs: any[]) => {
+            setBusinesses(businessDocs);
+          });
+      } catch (error) {
+        console.error('Failed to subscribe to business changes:', error);
+      }
+    };
+
+    initialize();
+
+    // Cleanup subscription on unmount
+    return () => {
+      if (businessSubscription) {
+        businessSubscription.unsubscribe();
+      }
+    };
   }, []);
 
   const loadSyncStatus = async () => {
@@ -50,12 +98,128 @@ export default function SettingsScreen() {
     }
   };
 
+  const loadPrinterSettings = async () => {
+    try {
+      const AsyncStorage = await import('@react-native-async-storage/async-storage');
+      const settings = await AsyncStorage.default.getItem('printerSettings');
+      if (settings) {
+        const { ip, port } = JSON.parse(settings);
+        setPrinterIP(ip || '');
+        setPrinterPort(port || '9100');
+      }
+    } catch (error) {
+      console.error('Failed to load printer settings:', error);
+    }
+  };
+
+  const savePrinterSettings = async () => {
+    try {
+      const AsyncStorage = await import('@react-native-async-storage/async-storage');
+      const settings = {
+        ip: printerIP,
+        port: printerPort
+      };
+      await AsyncStorage.default.setItem('printerSettings', JSON.stringify(settings));
+      setShowPrinterModal(false);
+      Alert.alert('Success', 'Printer settings saved successfully');
+    } catch (error) {
+      console.error('Failed to save printer settings:', error);
+      Alert.alert('Error', 'Failed to save printer settings');
+    }
+  };
+
+  const testPrinterConnection = async () => {
+    if (!printerIP) {
+      Alert.alert('Error', 'Please enter a printer IP address');
+      return;
+    }
+
+    setTestingConnection(true);
+    try {
+      // Test connection using a simple HTTP request to the printer
+      const testUrl = `http://${printerIP}:${printerPort || '9100'}`;
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      const response = await fetch(testUrl, {
+        method: 'HEAD', // Simple HEAD request to test connectivity
+        signal: controller.signal,
+        timeout: 5000,
+      });
+
+      clearTimeout(timeoutId);
+      
+      // If we get any response (even error responses), the printer is reachable
+      setPrinterConnected(true);
+      Alert.alert('Success', 'Successfully connected to Munbyn ITPP047P printer!');
+      
+    } catch (error) {
+      // Check if it's a timeout or network error
+      if (error.name === 'AbortError') {
+        setPrinterConnected(false);
+        Alert.alert('Connection Timeout', 'Printer did not respond within 5 seconds. Please check the IP address and ensure the printer is powered on and connected to the network.');
+      } else {
+        // Network errors often indicate the printer is unreachable
+        setPrinterConnected(false);
+        Alert.alert('Connection Failed', 'Could not connect to printer. Please check the IP address and ensure the printer is on the same network.');
+      }
+    } finally {
+      setTestingConnection(false);
+    }
+  };
+
+
   const handleUpload = async () => {
     try {
       setSyncStatus(prev => ({ ...prev, isUploading: true }));
-      const result = await syncService.uploadCustomers();
+      
+      // Upload all entity types
+      console.log('[UPLOAD] Starting upload of all entity types...');
+      const results = {
+        customers: await syncService.uploadCustomers(),
+        employees: await syncService.uploadEmployees(),
+        categories: await syncService.uploadCategories(),
+        products: await syncService.uploadProducts(),
+        businesses: await syncService.uploadBusinesses()
+      };
+      console.log('[UPLOAD] Upload results:', {
+        customers: results.customers.uploadedCount,
+        employees: results.employees.uploadedCount,
+        categories: results.categories.uploadedCount,
+        products: results.products.uploadedCount,
+        businesses: results.businesses.uploadedCount
+      });
+      
+      // Log special message if businesses were already synced
+      if (results.businesses.uploadedCount === 0) {
+        console.log('[UPLOAD] ℹ️  Note: Businesses that are already synced will not be uploaded again unless modified or force-resynced.');
+      }
+      
+      // Combine results
+      const totalUploaded = results.customers.uploadedCount + 
+                           results.employees.uploadedCount + 
+                           results.categories.uploadedCount +
+                           results.products.uploadedCount +
+                           results.businesses.uploadedCount;
+      
+      const allErrors = [
+        ...results.customers.errors,
+        ...results.employees.errors,
+        ...results.categories.errors,
+        ...results.products.errors,
+        ...results.businesses.errors
+      ];
+      
+      const combinedResult = {
+        success: allErrors.length === 0,
+        uploadedCount: totalUploaded,
+        downloadedCount: 0,
+        errors: allErrors
+      };
+      
       await loadSyncStatus(); // Refresh status
-      showSyncResult('Upload', result);
+      showSyncResult('Upload', combinedResult);
     } catch (error) {
       Alert.alert('Upload Error', error instanceof Error ? error.message : 'Unknown error');
     } finally {
@@ -66,9 +230,40 @@ export default function SettingsScreen() {
   const handleDownload = async () => {
     try {
       setSyncStatus(prev => ({ ...prev, isDownloading: true }));
-      const result = await syncService.downloadCustomers();
+      
+      // Download all entity types
+      const results = {
+        customers: await syncService.downloadCustomers(),
+        employees: await syncService.downloadEmployees(),
+        categories: await syncService.downloadCategories(),
+        products: await syncService.downloadProducts(),
+        businesses: await syncService.downloadBusinesses()
+      };
+      
+      // Combine results
+      const totalDownloaded = results.customers.downloadedCount + 
+                             results.employees.downloadedCount + 
+                             results.categories.downloadedCount +
+                             results.products.downloadedCount +
+                             results.businesses.downloadedCount;
+      
+      const allErrors = [
+        ...results.customers.errors,
+        ...results.employees.errors,
+        ...results.categories.errors,
+        ...results.products.errors,
+        ...results.businesses.errors
+      ];
+      
+      const combinedResult = {
+        success: allErrors.length === 0,
+        uploadedCount: 0,
+        downloadedCount: totalDownloaded,
+        errors: allErrors
+      };
+      
       await loadSyncStatus(); // Refresh status
-      showSyncResult('Download', result);
+      showSyncResult('Download', combinedResult);
     } catch (error) {
       Alert.alert('Download Error', error instanceof Error ? error.message : 'Unknown error');
     } finally {
@@ -124,9 +319,11 @@ export default function SettingsScreen() {
     else {
       const syncStatus = result as SyncStatus;
       const totalUploaded = syncStatus.customersUploaded + syncStatus.employeesUploaded + 
-                           syncStatus.categoriesUploaded + syncStatus.productsUploaded;
+                           syncStatus.categoriesUploaded + syncStatus.productsUploaded + 
+                           (syncStatus.businessesUploaded || 0);
       const totalDownloaded = syncStatus.customersDownloaded + syncStatus.employeesDownloaded + 
-                             syncStatus.categoriesDownloaded + syncStatus.productsDownloaded;
+                             syncStatus.categoriesDownloaded + syncStatus.productsDownloaded + 
+                             (syncStatus.businessesDownloaded || 0);
       
       if (totalUploaded > 0) {
         message += `Uploaded: ${totalUploaded} items\n`;
@@ -144,6 +341,62 @@ export default function SettingsScreen() {
 
     Alert.alert(title, message.trim());
   };
+
+  const handleEditBusiness = (business: BusinessDocument) => {
+    setEditingBusiness(business);
+    setShowBusinessModal(true);
+  };
+
+  const handleForceResync = async (business: BusinessDocument) => {
+    Alert.alert(
+      'Force Resync Business',
+      `This will mark "${business.name}" as unsynced and it will be uploaded again on the next sync. Continue?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Force Resync',
+          style: 'default',
+          onPress: async () => {
+            try {
+              const result = await businessService.forceBusinessResync(business.id);
+              if (result) {
+                Alert.alert('Success', 'Business marked for resync');
+                await loadSyncStatus(); // Refresh sync status
+              } else {
+                Alert.alert('Error', 'Failed to mark business for resync');
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Failed to mark business for resync');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleBusinessSubmit = async (businessData: BusinessFormData): Promise<{ business?: any; errors?: BusinessValidationErrors }> => {
+    try {
+      if (editingBusiness) {
+        const result = await businessService.updateBusiness(editingBusiness.id, businessData);
+        if (result.business) {
+          Alert.alert('Success', 'Business updated successfully');
+          setShowBusinessModal(false);
+          return { business: result.business };
+        } else {
+          // Convert string array errors to BusinessValidationErrors format
+          const formattedErrors: BusinessValidationErrors = {};
+          if (result.errors && result.errors.length > 0) {
+            formattedErrors.name = result.errors.join('\n');
+          }
+          return { errors: formattedErrors };
+        }
+      }
+      return { errors: { name: 'No business selected for editing' } };
+    } catch (error) {
+      return { errors: { name: 'An unexpected error occurred' } };
+    }
+  };
+
 
   const formatDate = (date?: Date) => {
     if (!date) return 'Never';
@@ -222,12 +475,17 @@ export default function SettingsScreen() {
             </View>
             
             <View style={styles.statusRow}>
+              <Text style={styles.statusLabel}>Local Businesses:</Text>
+              <Text style={styles.statusValue}>{syncStatus.totalLocalBusinesses || 0}</Text>
+            </View>
+            
+            <View style={styles.statusRow}>
               <Text style={styles.statusLabel}>Unsynced Changes:</Text>
               <Text style={[
                 styles.statusValue,
-                (syncStatus.totalUnsyncedCustomers + syncStatus.totalUnsyncedEmployees) > 0 && styles.statusValueWarning
+                (syncStatus.totalUnsyncedCustomers + syncStatus.totalUnsyncedEmployees + (syncStatus.totalUnsyncedBusinesses || 0)) > 0 && styles.statusValueWarning
               ]}>
-                {syncStatus.totalUnsyncedCustomers + syncStatus.totalUnsyncedEmployees}
+                {syncStatus.totalUnsyncedCustomers + syncStatus.totalUnsyncedEmployees + (syncStatus.totalUnsyncedBusinesses || 0)}
               </Text>
             </View>
             
@@ -236,6 +494,94 @@ export default function SettingsScreen() {
               <Text style={styles.statusValue}>{formatDate(syncStatus.lastSyncDate)}</Text>
             </View>
           </View>
+        </View>
+
+        {/* Business Management Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Business Management</Text>
+          
+          {businesses.length > 0 ? (
+            <>
+              {businesses.map((business) => (
+                <View key={business.id} style={styles.businessCard}>
+                  <View style={styles.businessInfo}>
+                    <Text style={styles.businessName}>{business.name}</Text>
+                    {business.phone && (
+                      <Text style={styles.businessDetail}>{business.phone}</Text>
+                    )}
+                    {business.address && (
+                      <Text style={styles.businessDetail}>
+                        {business.address}
+                        {business.city && `, ${business.city}`}
+                        {business.state && `, ${business.state}`}
+                        {business.zipCode && ` ${business.zipCode}`}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={styles.businessActions}>
+                    <TouchableOpacity
+                      style={styles.businessActionButton}
+                      onPress={() => handleEditBusiness(business)}
+                    >
+                      <Ionicons name="pencil" size={18} color="#007AFF" />
+                    </TouchableOpacity>
+                    {!business.isLocalOnly && (
+                      <TouchableOpacity
+                        style={[styles.businessActionButton, { marginLeft: 8 }]}
+                        onPress={() => handleForceResync(business)}
+                      >
+                        <Ionicons name="refresh" size={18} color="#FF9500" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              ))}
+            </>
+          ) : (
+            <View style={styles.emptyBusinessCard}>
+              <Ionicons name="business" size={48} color="#ccc" />
+              <Text style={styles.emptyBusinessText}>No business configured</Text>
+              <Text style={styles.emptyBusinessSubtext}>
+                Create your business profile from the dashboard to get started
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Printer Settings Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Printer Settings</Text>
+          
+          <TouchableOpacity 
+            style={styles.printerCard}
+            onPress={() => setShowPrinterModal(true)}
+          >
+            <View style={styles.printerInfo}>
+              <View style={styles.printerHeader}>
+                <Ionicons name="print" size={24} color="#007AFF" />
+                <View style={styles.printerDetails}>
+                  <Text style={styles.printerName}>Munbyn ITPP047P</Text>
+                  <Text style={styles.printerModel}>Thermal Receipt Printer</Text>
+                </View>
+              </View>
+              
+              <View style={styles.printerStatus}>
+                {printerIP ? (
+                  <>
+                    <Text style={styles.printerIP}>IP: {printerIP}:{printerPort}</Text>
+                    <View style={[styles.statusIndicator, printerConnected && styles.statusConnected]}>
+                      <Text style={[styles.statusText, printerConnected && styles.statusTextConnected]}>
+                        {printerConnected ? 'Connected' : 'Not Tested'}
+                      </Text>
+                    </View>
+                  </>
+                ) : (
+                  <Text style={styles.printerNotConfigured}>Not configured</Text>
+                )}
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#666" />
+          </TouchableOpacity>
         </View>
 
         {/* Sync Actions Section */}
@@ -253,10 +599,14 @@ export default function SettingsScreen() {
           
           <SyncCard
             title="Upload to Cloud"
-            description={`Upload ${syncStatus.totalUnsyncedCustomers + syncStatus.totalUnsyncedEmployees} local changes to the cloud`}
+            description={
+              (syncStatus.totalUnsyncedCustomers + syncStatus.totalUnsyncedEmployees + (syncStatus.totalUnsyncedBusinesses || 0)) === 0
+                ? "All data is already synced to the cloud"
+                : `Upload ${syncStatus.totalUnsyncedCustomers + syncStatus.totalUnsyncedEmployees + (syncStatus.totalUnsyncedBusinesses || 0)} local changes to the cloud`
+            }
             onPress={handleUpload}
             loading={syncStatus.isUploading}
-            disabled={(syncStatus.totalUnsyncedCustomers + syncStatus.totalUnsyncedEmployees) === 0}
+            disabled={(syncStatus.totalUnsyncedCustomers + syncStatus.totalUnsyncedEmployees + (syncStatus.totalUnsyncedBusinesses || 0)) === 0}
             icon="cloud-upload"
             color="#007AFF"
           />
@@ -290,6 +640,116 @@ export default function SettingsScreen() {
           <Ionicons name="refresh" size={20} color="#007AFF" />
           <Text style={styles.refreshButtonText}>Refresh Status</Text>
         </TouchableOpacity>
+
+        {/* Business Modal */}
+        <BusinessForm
+          visible={showBusinessModal}
+          title="Edit Business"
+          initialData={editingBusiness ? {
+            name: editingBusiness.name,
+            address: editingBusiness.address,
+            city: editingBusiness.city,
+            state: editingBusiness.state,
+            zipCode: editingBusiness.zipCode,
+            phone: editingBusiness.phone || '',
+            taxId: editingBusiness.taxId,
+            website: editingBusiness.website
+          } : undefined}
+          onSubmit={handleBusinessSubmit}
+          onCancel={() => setShowBusinessModal(false)}
+        />
+
+        {/* Printer Settings Modal */}
+        <Modal visible={showPrinterModal} animationType="slide" presentationStyle="pageSheet">
+          <SafeAreaView style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setShowPrinterModal(false)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Printer Settings</Text>
+              <TouchableOpacity onPress={savePrinterSettings}>
+                <Text style={styles.modalSaveText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalContent}>
+              <View style={styles.printerInfoSection}>
+                <View style={styles.printerIconContainer}>
+                  <Ionicons name="print" size={48} color="#007AFF" />
+                </View>
+                <Text style={styles.printerModelTitle}>Munbyn ITPP047P</Text>
+                <Text style={styles.printerDescription}>
+                  Thermal Receipt Printer with Ethernet connectivity.
+                  Configure your printer's network settings, then it will appear in the system print dialog.
+                </Text>
+              </View>
+
+              <View style={styles.inputSection}>
+                <Text style={styles.inputLabel}>Printer IP Address</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={printerIP}
+                  onChangeText={setPrinterIP}
+                  placeholder="192.168.1.100"
+                  keyboardType="decimal-pad"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <Text style={styles.inputHint}>
+                  Find the IP address on your printer's network settings or configuration page
+                </Text>
+              </View>
+
+              <View style={styles.inputSection}>
+                <Text style={styles.inputLabel}>Port (Default: 9100)</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={printerPort}
+                  onChangeText={setPrinterPort}
+                  placeholder="9100"
+                  keyboardType="number-pad"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <Text style={styles.inputHint}>
+                  Standard port for most thermal printers is 9100
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.testButton, testingConnection && styles.testButtonDisabled]}
+                onPress={testPrinterConnection}
+                disabled={testingConnection || !printerIP}
+              >
+                {testingConnection ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Ionicons name="wifi" size={20} color="white" />
+                )}
+                <Text style={styles.testButtonText}>
+                  {testingConnection ? 'Testing Connection...' : 'Test Connection'}
+                </Text>
+              </TouchableOpacity>
+
+              <View style={styles.directPrintInfo}>
+                <Ionicons name="information-circle" size={20} color="#007AFF" />
+                <Text style={styles.directPrintText}>
+                  Receipts will print directly to your configured Munbyn printer without showing a print dialog.
+                </Text>
+              </View>
+
+              <View style={styles.setupInstructions}>
+                <Text style={styles.instructionsTitle}>Setup Instructions:</Text>
+                <Text style={styles.instructionText}>1. Connect your Munbyn ITPP047P to your network via Ethernet cable</Text>
+                <Text style={styles.instructionText}>2. Print a network configuration page from the printer's front panel menu</Text>
+                <Text style={styles.instructionText}>3. Find the IP address on the configuration page and enter it above</Text>
+                <Text style={styles.instructionText}>4. Test the connection to verify your printer is reachable</Text>
+                <Text style={styles.instructionText}>5. When printing receipts, select your Munbyn printer from the system dialog</Text>
+                <Text style={styles.instructionText}>6. The printer will remember your selection for future prints</Text>
+              </View>
+            </ScrollView>
+          </SafeAreaView>
+        </Modal>
       </ScrollView>
     </BaseScreen>
   );
@@ -426,5 +886,303 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#007AFF',
     marginLeft: 8,
+  },
+  businessCard: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  businessInfo: {
+    flex: 1,
+  },
+  businessName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  businessDetail: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 2,
+  },
+  businessActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  businessActionButton: {
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: '#f5f5f5',
+  },
+  emptyBusinessCard: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 12,
+    padding: 32,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+    alignItems: 'center',
+  },
+  emptyBusinessText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 4,
+  },
+  emptyBusinessSubtext: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+  
+  // Printer Settings Styles
+  printerCard: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  printerInfo: {
+    flex: 1,
+  },
+  printerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  printerDetails: {
+    marginLeft: 12,
+  },
+  printerName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+  },
+  printerModel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  printerStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  printerIP: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontFamily: 'monospace',
+  },
+  printerNotConfigured: {
+    fontSize: 14,
+    color: '#999',
+    fontStyle: 'italic',
+  },
+  statusIndicator: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#f0f0f0',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  statusConnected: {
+    backgroundColor: '#e8f5e8',
+    borderColor: '#4caf50',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+  },
+  statusTextConnected: {
+    color: '#4caf50',
+  },
+  
+  // Printer Modal Styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  modalCancelText: {
+    fontSize: 16,
+    color: '#666',
+  },
+  modalSaveText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  modalContent: {
+    flex: 1,
+    padding: 16,
+  },
+  printerInfoSection: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  printerIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#f0f7ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  printerModelTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 8,
+  },
+  printerDescription: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  inputSection: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  inputLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  textInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#333',
+    backgroundColor: '#fff',
+    marginBottom: 8,
+  },
+  inputHint: {
+    fontSize: 12,
+    color: '#999',
+    lineHeight: 16,
+  },
+  testButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#007AFF',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  testButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  testButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+    marginLeft: 8,
+  },
+  setupInstructions: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  instructionsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  instructionText: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  directPrintInfo: {
+    backgroundColor: '#e8f5e8',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#4caf50',
+  },
+  directPrintText: {
+    fontSize: 14,
+    color: '#2e7d32',
+    marginLeft: 12,
+    flex: 1,
+    lineHeight: 20,
+    fontWeight: '500',
   },
 });

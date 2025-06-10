@@ -8,11 +8,11 @@ interface CreateEmployeeButtonProps {
   style?: any;
 }
 
-export const CreateEmployeeButton: React.FC<CreateEmployeeButtonProps> = ({
+export function CreateEmployeeButton({
   onPress,
   disabled = false,
   style
-}) => {
+}: CreateEmployeeButtonProps) {
   return (
     <TouchableOpacity
       style={[
@@ -41,14 +41,14 @@ export const CreateEmployeeButton: React.FC<CreateEmployeeButtonProps> = ({
       </View>
     </TouchableOpacity>
   );
-};
+}
 
 // Floating Action Button variant
-export const CreateEmployeeFAB: React.FC<CreateEmployeeButtonProps> = ({
+export function CreateEmployeeFAB({
   onPress,
   disabled = false,
   style
-}) => {
+}: CreateEmployeeButtonProps) {
   return (
     <TouchableOpacity
       style={[
@@ -67,7 +67,7 @@ export const CreateEmployeeFAB: React.FC<CreateEmployeeButtonProps> = ({
       />
     </TouchableOpacity>
   );
-};
+}
 
 const styles = StyleSheet.create({
   button: {

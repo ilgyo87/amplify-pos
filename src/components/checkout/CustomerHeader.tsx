@@ -11,14 +11,18 @@ import { SerializableCustomer } from '../../navigation/types';
 interface CustomerHeaderProps {
   customer: SerializableCustomer;
   onEdit?: () => void;
+  onDatePick?: () => void;
+  selectedDate?: string;
   style?: any;
 }
 
-export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
+export function CustomerHeader({
   customer,
   onEdit,
+  onDatePick,
+  selectedDate,
   style
-}) => {
+}: CustomerHeaderProps) {
   const formatPhoneNumber = (phone: string): string => {
     const cleaned = phone.replace(/\D/g, '');
     if (cleaned.length === 10) {
@@ -38,7 +42,11 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
 
   return (
     <View style={[styles.container, style]}>
-      <View style={styles.customerInfo}>
+      <TouchableOpacity 
+        style={styles.customerInfo}
+        onPress={onEdit}
+        activeOpacity={0.7}
+      >
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>
             {customer.firstName.charAt(0)}{customer.lastName.charAt(0)}
@@ -71,17 +79,23 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
             </View>
           )}
         </View>
-      </View>
+      </TouchableOpacity>
       
-      {onEdit && (
-        <TouchableOpacity style={styles.editButton} onPress={onEdit}>
-          <Ionicons name="create-outline" size={20} color="#007AFF" />
-          <Text style={styles.editText}>Edit</Text>
-        </TouchableOpacity>
+      {onDatePick && (
+        <View style={styles.dateSection}>
+          <View style={styles.dateDisplay}>
+            <Text style={styles.dateLabel}>
+              {selectedDate ? new Date(selectedDate + 'T00:00:00').toLocaleDateString() : 'Select Date'}
+            </Text>
+          </View>
+          <TouchableOpacity style={styles.calendarButton} onPress={onDatePick}>
+            <Ionicons name="calendar" size={24} color="#007AFF" />
+          </TouchableOpacity>
+        </View>
       )}
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -137,20 +151,37 @@ const styles = StyleSheet.create({
     marginLeft: 6,
     flex: 1,
   },
-  editButton: {
+  selectedDateText: {
+    color: '#007AFF',
+    fontWeight: '500',
+  },
+  dateSection: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginLeft: 12,
+  },
+  dateDisplay: {
+    backgroundColor: '#f8f9fa',
     paddingHorizontal: 12,
     paddingVertical: 8,
+    borderRadius: 8,
+    marginRight: 8,
+    minWidth: 100,
+  },
+  dateLabel: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  calendarButton: {
+    width: 48,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: '#f0f7ff',
-    borderRadius: 6,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: '#007AFF',
-  },
-  editText: {
-    color: '#007AFF',
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 4,
   },
 });

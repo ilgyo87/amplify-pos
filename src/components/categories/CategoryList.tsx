@@ -34,14 +34,14 @@ interface CategoryItemProps {
   isSelected: boolean;
 }
 
-const CategoryItem: React.FC<CategoryItemProps> = ({ 
+function CategoryItem({ 
   category, 
   onEdit, 
   onDelete, 
   onSelect,
   showActions,
   isSelected
-}) => {
+}: CategoryItemProps) {
   const handleDelete = () => {
     Alert.alert(
       'Delete Category',
@@ -124,9 +124,9 @@ const CategoryItem: React.FC<CategoryItemProps> = ({
       )}
     </TouchableOpacity>
   );
-};
+}
 
-export const CategoryList: React.FC<CategoryListProps> = ({
+export function CategoryList({
   categories,
   onEdit,
   onDelete,
@@ -137,7 +137,7 @@ export const CategoryList: React.FC<CategoryListProps> = ({
   emptyMessage = 'No categories found',
   showActions = true,
   selectedCategoryId
-}) => {
+}: CategoryListProps) {
   const renderCategory = ({ item }: { item: CategoryDocument }) => (
     <CategoryItem
       category={item}
@@ -203,7 +203,7 @@ export const CategoryList: React.FC<CategoryListProps> = ({
       showsVerticalScrollIndicator={false}
     />
   );
-};
+}
 
 const styles = StyleSheet.create({
   list: {

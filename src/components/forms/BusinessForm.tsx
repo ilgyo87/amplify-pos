@@ -56,16 +56,8 @@ const BUSINESS_FORM_FIELDS = [
     name: 'phone',
     label: 'Phone',
     placeholder: 'Enter phone number',
-    required: false,
+    required: true,
     type: 'phone' as const,
-  },
-  {
-    name: 'email',
-    label: 'Email',
-    placeholder: 'Enter email address',
-    required: false,
-    type: 'email' as const,
-    autoCapitalize: 'none' as const,
   },
   {
     name: 'taxId',
@@ -84,13 +76,13 @@ const BUSINESS_FORM_FIELDS = [
   },
 ];
 
-export const BusinessForm: React.FC<BusinessFormProps> = ({
+export function BusinessForm({
   visible,
   onSubmit,
   onCancel,
   initialData,
   title = 'Create Business'
-}) => {
+}: BusinessFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<BusinessValidationErrors>({});
 
@@ -140,13 +132,13 @@ export const BusinessForm: React.FC<BusinessFormProps> = ({
           isLoading={isLoading}
           errors={errors}
           mode="create"
-          submitButtonText="Create Business"
+          submitButtonText={title}
           title={title}
         />
       </View>
     </Modal>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {

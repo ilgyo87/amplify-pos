@@ -12,7 +12,7 @@ interface SearchBarProps {
   showResultsCount?: boolean;
 }
 
-export const SearchBar: React.FC<SearchBarProps> = ({
+export function SearchBar({
   value,
   onChangeText,
   onClear,
@@ -20,7 +20,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   isLoading = false,
   resultsCount,
   showResultsCount = true
-}) => {
+}: SearchBarProps) {
   const [isFocused, setIsFocused] = useState(false);
 
   const handleClear = () => {
@@ -92,7 +92,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       )}
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {

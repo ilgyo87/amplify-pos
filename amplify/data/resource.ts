@@ -128,8 +128,11 @@ const schema = a.schema({
       categoryId: a.string(),
       category: a.belongsTo('Category', 'categoryId'),
       imageUrl: a.url(),
+      imageName: a.string(), // For static asset references
       isActive: a.boolean().default(true),
-      businessId: a.string()
+      businessId: a.string(),
+      cost: a.float(),
+      quantity: a.integer()
     })
     .authorization((allow) => [
       allow.authenticated().to(['read']),

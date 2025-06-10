@@ -21,12 +21,12 @@ interface PaymentModalProps {
   onCompletePayment: (paymentInfo: PaymentInfo) => void;
 }
 
-export const PaymentModal: React.FC<PaymentModalProps> = ({
+export function PaymentModal({
   visible,
   orderTotal,
   onClose,
   onCompletePayment
-}) => {
+}: PaymentModalProps) {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('cash');
   const [tipAmount, setTipAmount] = useState(0);
   const [cardLast4, setCardLast4] = useState('');
@@ -267,7 +267,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
       </KeyboardAvoidingView>
     </Modal>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {

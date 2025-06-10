@@ -16,7 +16,7 @@ interface EmployeeAuthProviderProps {
   children: ReactNode;
 }
 
-export const EmployeeAuthProvider: React.FC<EmployeeAuthProviderProps> = ({ children }) => {
+export function EmployeeAuthProvider({ children }: EmployeeAuthProviderProps) {
   const [currentEmployee, setCurrentEmployee] = useState<EmployeeDocument | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -41,11 +41,18 @@ export const EmployeeAuthProvider: React.FC<EmployeeAuthProviderProps> = ({ chil
     setIsLoading(true);
     
     try {
+      // Ensure service is properly initialized
+      await employeeService.initialize();
+      
       // Find employee by PIN
       const employees = await employeeService.getAllEmployees();
+      console.log('Found employees:', employees.length);
+      console.log('Looking for PIN:', pin);
+      console.log('Employee PINs:', employees.map(emp => ({ id: emp.id, pin: emp.pin, isDeleted: emp.isDeleted })));
       
       // If no employees exist, check for admin bypass PIN
       if (employees.length === 0) {
+        console.log('No employees found, checking admin PIN');
         if (pin === '9999') {
           // Create a temporary admin user for first-time setup
           const tempAdmin = {
@@ -80,15 +87,22 @@ export const EmployeeAuthProvider: React.FC<EmployeeAuthProviderProps> = ({ chil
         }
       }
       
-      const employee = employees.find(emp => emp.pin === pin && !emp.isDeleted);
+      const employee = employees.find(emp => {
+        const matches = emp.pin === pin && !emp.isDeleted;
+        console.log(`Checking employee ${emp.firstName} ${emp.lastName}: pin="${emp.pin}" vs input="${pin}", isDeleted=${emp.isDeleted}, matches=${matches}`);
+        return matches;
+      });
+      console.log('Found employee match:', employee ? `${employee.firstName} ${employee.lastName}` : 'none');
       
       if (!employee) {
         setIsLoading(false);
         return { success: false, error: 'Invalid PIN. Please try again.' };
       }
 
-      // Check if employee is active
-      if (!employee.isActive) {
+      // Check if employee is active (treat undefined as active for backward compatibility)
+      const isActive = employee.isActive !== false; // true unless explicitly set to false
+      console.log(`Employee ${employee.firstName} ${employee.lastName} isActive:`, employee.isActive, 'treated as:', isActive);
+      if (!isActive) {
         setIsLoading(false);
         return { success: false, error: 'Employee account is inactive. Please contact manager.' };
       }
@@ -111,6 +125,10 @@ export const EmployeeAuthProvider: React.FC<EmployeeAuthProviderProps> = ({ chil
       console.log(`Employee signed out: ${currentEmployee.firstName} ${currentEmployee.lastName}`);
     }
     setCurrentEmployee(null);
+    // Clear any potential cached state by reinitializing
+    employeeService.initialize().catch(error => {
+      console.error('Failed to reinitialize employee service after sign out:', error);
+    });
   };
 
   const value: EmployeeAuthContextType = {
@@ -126,7 +144,7 @@ export const EmployeeAuthProvider: React.FC<EmployeeAuthProviderProps> = ({ chil
       {children}
     </EmployeeAuthContext.Provider>
   );
-};
+}
 
 export const useEmployeeAuth = () => {
   const context = useContext(EmployeeAuthContext);

@@ -17,13 +17,13 @@ interface PickupCalendarProps {
   style?: any;
 }
 
-export const PickupCalendar: React.FC<PickupCalendarProps> = ({
+export function PickupCalendar({
   selectedDate,
   selectedTime,
   onSelectDate,
   onSelectTime,
   style
-}) => {
+}: PickupCalendarProps) {
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
 
   // Generate available dates (next 14 days, excluding Sundays)
@@ -209,7 +209,7 @@ export const PickupCalendar: React.FC<PickupCalendarProps> = ({
       )}
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {

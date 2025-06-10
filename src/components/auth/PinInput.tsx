@@ -17,12 +17,12 @@ interface PinInputProps {
   subtitle?: string;
 }
 
-export const PinInput: React.FC<PinInputProps> = ({
+export function PinInput({
   onSubmit,
   isLoading = false,
   title = 'Employee Sign In',
   subtitle = 'Enter your 4-digit PIN'
-}) => {
+}: PinInputProps) {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -168,7 +168,7 @@ export const PinInput: React.FC<PinInputProps> = ({
       </View>
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {

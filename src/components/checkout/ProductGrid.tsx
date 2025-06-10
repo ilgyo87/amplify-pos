@@ -28,7 +28,7 @@ const COLUMN_COUNT = width > 768 ? 4 : 3;
 // Reduce item width by 15%
 const ITEM_WIDTH = ((width - 80) / COLUMN_COUNT) * 0.85;
 
-export const ProductGrid: React.FC<ProductGridProps> = (props) => {
+export function ProductGrid(props: ProductGridProps) {
   const {
     products = [],
     onSelectProduct,
@@ -173,7 +173,7 @@ export const ProductGrid: React.FC<ProductGridProps> = (props) => {
       {renderPagination()}
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {

@@ -27,14 +27,14 @@ interface CategoryFormProps {
   isLoading?: boolean;
 }
 
-export const CategoryForm: React.FC<CategoryFormProps> = ({
+export function CategoryForm({
   title,
   initialData,
   onSubmit,
   onCancel,
   submitButtonText = 'Save Category',
   isLoading = false,
-}) => {
+}: CategoryFormProps) {
   const [formData, setFormData] = useState<CategoryFormData>({
     name: initialData?.name || '',
     description: initialData?.description || '',
@@ -209,7 +209,7 @@ export const CategoryForm: React.FC<CategoryFormProps> = ({
       </KeyboardAvoidingView>
     </Modal>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
