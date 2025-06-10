@@ -95,6 +95,7 @@ export default function OrdersScreen() {
     
     if (foundOrder) {
       setSelectedOrder(foundOrder);
+      setScannedItemsState({}); // Clear scanned items for new order
       setManualOrderInput('');
       console.log('Order found and modal opening');
     } else {
@@ -131,12 +132,13 @@ export default function OrdersScreen() {
     
     if (scannedOrder) {
       setSelectedOrder(scannedOrder);
+      setScannedItemsState({}); // Clear scanned items for new order
     } else {
       Alert.alert('Order Not Found', 'No order found with this QR code.');
     }
   };
 
-  const processItemScan = (data: string) => {
+  const processItemScan = async (data: string) => {
     // Check if this is a valid item QR code (orderNumber-itemNumber format)
     if (selectedOrder && data.startsWith(selectedOrder.orderNumber + '-')) {
       const itemNumber = data.replace(selectedOrder.orderNumber + '-', '');
@@ -150,10 +152,25 @@ export default function OrdersScreen() {
           for (let i = 0; i < item.quantity; i++) {
             if (currentIndex === itemIndex) {
               const itemId = `${item.itemKey}-${i}`;
+              
+              // Check if this is the first item being scanned
+              const isFirstItemScanned = Object.keys(scannedItemsState).length === 0;
+              
               setScannedItemsState(prev => ({
                 ...prev,
                 [itemId]: true
               }));
+              
+              // If this is the first item scanned and order is still pending, change status to in_progress
+              if (isFirstItemScanned && selectedOrder.status === 'pending') {
+                try {
+                  await updateOrderStatus(selectedOrder.id, 'in_progress');
+                  console.log('Order status changed to in_progress');
+                } catch (error) {
+                  console.error('Failed to update order status:', error);
+                }
+              }
+              
               Alert.alert('Item Scanned', `${item.name} #${globalItemNumber} has been scanned.`);
               return;
             }
@@ -526,30 +543,27 @@ export default function OrdersScreen() {
     }
   };
 
-  const StatusFilter = () => {
-    console.log('StatusFilter rendering, selectedStatus:', selectedStatus);
-    return (
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScrollView}>
-        {(['all', 'pending', 'in_progress', 'ready', 'completed', 'cancelled'] as const).map((status) => (
-          <TouchableOpacity
-            key={status}
-            style={[
-              styles.filterButton,
-              selectedStatus === status && styles.filterButtonActive
-            ]}
-            onPress={() => setSelectedStatus(status)}
-          >
-            <Text style={[
-              styles.filterButtonText,
-              selectedStatus === status && styles.filterButtonTextActive
-            ]}>
-              {status === 'all' ? 'All Orders' : status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    );
-  };
+  const StatusFilter = () => (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScrollView}>
+      {(['all', 'pending', 'in_progress', 'ready', 'completed', 'cancelled'] as const).map((status) => (
+        <TouchableOpacity
+          key={status}
+          style={[
+            styles.filterButton,
+            selectedStatus === status && styles.filterButtonActive
+          ]}
+          onPress={() => setSelectedStatus(status)}
+        >
+          <Text style={[
+            styles.filterButtonText,
+            selectedStatus === status && styles.filterButtonTextActive
+          ]}>
+            {status === 'all' ? 'All Orders' : status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  );
 
   const OrderCard = ({ order }: { order: OrderDocument }) => (
     <View style={styles.orderCard}>
@@ -627,7 +641,6 @@ export default function OrdersScreen() {
         {/* Custom Header with Status Filters */}
         <View style={styles.customHeader}>
           <StatusFilter />
-          <Text style={{ color: 'red', fontSize: 12 }}>Debug: Loading Header should be here</Text>
         </View>
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Loading orders...</Text>
@@ -641,7 +654,6 @@ export default function OrdersScreen() {
       {/* Custom Header with Status Filters */}
       <View style={styles.customHeader}>
         <StatusFilter />
-        <Text style={{ color: 'red', fontSize: 12 }}>Debug: Header should be here</Text>
       </View>
       
       {/* Search and scan row */}
@@ -736,7 +748,10 @@ export default function OrdersScreen() {
               <View style={styles.detailHeader}>
                 <TouchableOpacity 
                   style={styles.closeButton} 
-                  onPress={() => setSelectedOrder(null)}
+                  onPress={() => {
+                    setSelectedOrder(null);
+                    setScannedItemsState({});
+                  }}
                 >
                   <Ionicons name="close" size={24} color="#333" />
                 </TouchableOpacity>
@@ -832,6 +847,7 @@ export default function OrdersScreen() {
                     if (allItemsScanned) {
                       handleStatusChange(selectedOrder.id, 'ready');
                       setSelectedOrder(null);
+                      setScannedItemsState({});
                     }
                   }}
                   disabled={!allItemsScanned}
