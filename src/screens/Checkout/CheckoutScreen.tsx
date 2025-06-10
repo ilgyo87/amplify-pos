@@ -25,6 +25,7 @@ import { CategoryDocument } from '../../database/schemas/category';
 import { ProductDocument } from '../../database/schemas/product';
 import { OrderItem, OrderItemOptions, generateOrderItemKey } from '../../types/order';
 import { RootStackParamList } from '../../navigation/types';
+import { toPreciseAmount } from '../../utils/monetaryUtils';
 
 type CheckoutScreenRouteProp = RouteProp<RootStackParamList, 'Checkout'>;
 type CheckoutScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Checkout'>;
@@ -118,7 +119,7 @@ const generateThermalReceiptCommands = (order: any, paymentMethod: string, selec
     const quantity = Number(item.quantity) || 0;
     
     const discountedPrice = discount > 0 ? itemPrice * (1 - discount / 100) : itemPrice;
-    const totalPrice = discountedPrice * quantity;
+    const totalPrice = toPreciseAmount(discountedPrice * quantity);
     
     let itemName = item.name;
     if (item.options?.starch && item.options.starch !== 'none') {
@@ -358,9 +359,9 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
           discount: Number(product.discount) || 0,
           additionalPrice: Number(product.additionalPrice) || 0,
           notes: product.notes,
-          sku: product.sku,
-          cost: product.cost,
-          barcode: product.barcode,
+          sku: product.sku || undefined,
+          cost: product.cost || undefined,
+          barcode: product.barcode || undefined,
           quantity: 1,
           isActive: product.isActive,
           isLocalOnly: product.isLocalOnly,
@@ -499,20 +500,22 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
     }
   };
 
-  // Calculate order total for payment
+
+  // Calculate order total for payment with precise handling
   const calculateOrderTotal = () => {
-    return orderItems.reduce((sum, item) => {
+    const rawTotal = orderItems.reduce((sum, item) => {
       const itemPrice = item.price + (item.additionalPrice || 0);
       const discountedPrice = item.discount 
         ? itemPrice * (1 - item.discount / 100)
         : itemPrice;
       return sum + (discountedPrice * item.quantity);
     }, 0);
+    return toPreciseAmount(rawTotal);
   };
 
   const orderTotal = calculateOrderTotal();
-  const tax = orderTotal * 0.0875; // 8.75% tax
-  const finalTotal = orderTotal + tax;
+  const tax = toPreciseAmount(orderTotal * 0.0875); // 8.75% tax
+  const finalTotal = toPreciseAmount(orderTotal + tax);
 
   // Render content based on screen size
   const renderContent = () => {
