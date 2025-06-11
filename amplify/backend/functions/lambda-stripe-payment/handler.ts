@@ -39,7 +39,7 @@ export const handler = async (
     }
 
     const stripe = new Stripe(stripeSecretKey, {
-      apiVersion: '2024-06-20',
+      apiVersion: '2023-10-16',
     });
 
     const body = JSON.parse(event.body || '{}');

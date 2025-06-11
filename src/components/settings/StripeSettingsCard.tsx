@@ -13,6 +13,7 @@ import { stripeService } from '../../services/stripeService';
 
 export function StripeSettingsCard() {
   const [publishableKey, setPublishableKey] = useState('');
+  const [secretKey, setSecretKey] = useState('');
   const [merchantId, setMerchantId] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isConfigured, setIsConfigured] = useState(false);
@@ -26,6 +27,7 @@ export function StripeSettingsCard() {
       const settings = await stripeService.getStripeSettings();
       if (settings) {
         setPublishableKey(settings.publishableKey);
+        setSecretKey(settings.secretKey || '');
         setMerchantId(settings.merchantId || '');
         setIsConfigured(true);
       }
@@ -43,10 +45,16 @@ export function StripeSettingsCard() {
       return;
     }
 
+    if (!secretKey.trim()) {
+      Alert.alert('Error', 'Secret key is required for processing payments');
+      return;
+    }
+
     try {
       setIsLoading(true);
       await stripeService.saveStripeSettings({
         publishableKey: publishableKey.trim(),
+        secretKey: secretKey.trim(),
         merchantId: merchantId.trim() || undefined,
       });
       
@@ -101,6 +109,20 @@ export function StripeSettingsCard() {
             placeholderTextColor="#999"
             autoCapitalize="none"
             autoCorrect={false}
+          />
+        </View>
+
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Secret Key</Text>
+          <TextInput
+            style={styles.input}
+            value={secretKey}
+            onChangeText={setSecretKey}
+            placeholder="sk_test_..."
+            placeholderTextColor="#999"
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry={true}
           />
         </View>
 
