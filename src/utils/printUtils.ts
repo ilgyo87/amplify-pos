@@ -135,7 +135,7 @@ export async function generateLabelHTML({
   }
   
   // Build options line
-  const options = [];
+  const options: string[] = [];
   if (starch && starch !== 'none') {
     options.push(`${starch} starch`);
   }
