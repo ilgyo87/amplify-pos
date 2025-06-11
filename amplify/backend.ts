@@ -11,9 +11,3 @@ const backend = defineBackend({
   data,
   stripePaymentFunction,
 });
-
-// Create API Gateway for the Stripe payment function
-backend.stripePaymentFunction.addHttpApi({
-  path: '/payment/stripe',
-  methods: ['POST', 'OPTIONS']
-});
