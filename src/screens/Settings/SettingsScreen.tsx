@@ -13,6 +13,7 @@ import { syncService, SyncStatus } from '../../database/services';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
+import { TestNotificationButton } from '../../components/debug/TestNotificationButton';
 
 interface SettingsOption {
   id: string;
@@ -149,6 +150,10 @@ export default function SettingsScreen() {
 
         <View style={styles.settingsGrid}>
           {settingsOptions.map(renderSettingsOption)}
+        </View>
+
+        <View style={{ padding: 20 }}>
+          <TestNotificationButton />
         </View>
 
         <View style={styles.footer}>

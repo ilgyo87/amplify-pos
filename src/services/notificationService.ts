@@ -1,38 +1,58 @@
 import { CustomerDocument } from '../database/schemas/customer';
 import { OrderDocument } from '../database/schemas/order';
-import { post } from 'aws-amplify/api'; // Import the correct post method for v6
-import axios from 'axios';
 import { Alert } from 'react-native';
-import Config from 'react-native-config';
 
 export interface NotificationService {
   sendOrderCompletedNotification(customer: CustomerDocument, order: OrderDocument): Promise<void>;
 }
 
 class DefaultNotificationService implements NotificationService {
-  // API endpoints for notifications that would be defined in your Lambda functions
-  private EMAIL_API_URL = '/notifications/email';
-  private SMS_API_URL = '/notifications/sms';
   async sendOrderCompletedNotification(customer: CustomerDocument, order: OrderDocument): Promise<void> {
     try {
+      console.log('🔔 sendOrderCompletedNotification called for:', {
+        customerName: `${customer.firstName} ${customer.lastName}`,
+        customerEmail: customer.email,
+        customerPhone: customer.phone,
+        emailNotifications: customer.emailNotifications,
+        textNotifications: customer.textNotifications,
+        orderNumber: order.orderNumber
+      });
+
       const promises: Promise<void>[] = [];
 
       // Send email notification if enabled and email is available
       if (customer.emailNotifications && customer.email) {
+        console.log('📧 Email notification enabled, adding to queue');
         promises.push(this.sendEmailNotification(customer, order));
+      } else {
+        console.log('📧 Email notification skipped:', {
+          emailNotifications: customer.emailNotifications,
+          hasEmail: !!customer.email
+        });
       }
 
       // Send text notification if enabled and phone is available
       if (customer.textNotifications && customer.phone) {
+        console.log('📱 SMS notification enabled, adding to queue');
         promises.push(this.sendTextNotification(customer, order));
+      } else {
+        console.log('📱 SMS notification skipped:', {
+          textNotifications: customer.textNotifications,
+          hasPhone: !!customer.phone
+        });
+      }
+
+      if (promises.length === 0) {
+        console.log('⚠️ No notifications to send - customer has no notifications enabled or missing contact info');
+        return;
       }
 
       // Execute all notifications in parallel
       await Promise.all(promises);
       
-      console.log(`Notifications sent for order ${order.orderNumber} to customer ${customer.firstName} ${customer.lastName}`);
+      console.log(`✅ Notifications sent for order ${order.orderNumber} to customer ${customer.firstName} ${customer.lastName}`);
     } catch (error) {
-      console.error('Error sending notifications:', error);
+      console.error('❌ Error sending notifications:', error);
       // Don't throw - we don't want notification failures to break the order completion
     }
   }
@@ -45,49 +65,42 @@ class DefaultNotificationService implements NotificationService {
    */
   private async sendEmailNotification(customer: CustomerDocument, order: OrderDocument): Promise<void> {
     try {
+      console.log('📧 Starting email notification process...');
       const emailContent = this.generateEmailContent(customer, order);
       
       if (!customer.email) {
         throw new Error('Customer email is required for email notifications');
       }
       
-      // Using AWS Amplify API to call a Lambda function that will send the email via SES
-      try {
-        await post({
-          apiName: 'amplifyPosApi',
-          path: this.EMAIL_API_URL,
-          options: {
-            body: {
-              to: customer.email,
-              subject: emailContent.subject,
-              html: emailContent.html, 
-              text: emailContent.text,
-              customerName: `${customer.firstName} ${customer.lastName}`,
-              orderNumber: order.orderNumber
-            }
-          }
-        });
-        
-        console.log(`📧 Email notification sent to ${customer.email} for order ${order.orderNumber}`);
-      } catch (apiError) {
-        // Fallback to direct axios call if API gateway call fails
-        console.warn('API gateway call failed, falling back to direct axios call:', apiError);
-        
-        // Only use in development or with proper authentication
-        if (__DEV__ && Config.EMAIL_WEBHOOK_URL) {
-          await axios.post(Config.EMAIL_WEBHOOK_URL, {
-            to: customer.email,
-            subject: emailContent.subject,
-            html: emailContent.html,
-            text: emailContent.text,
-            customerName: `${customer.firstName} ${customer.lastName}`,
-            orderNumber: order.orderNumber
-          });
-          console.log(`📧 Email sent via webhook to ${customer.email}`);
-        } else {
-          throw new Error('Email sending failed and no fallback available');
-        }
+      console.log('📧 Sending email notification via Lambda to:', customer.email);
+      
+      // Use direct HTTP request to Lambda function URL
+      console.log('📧 Making HTTP request to Lambda function...');
+      
+      const functionUrl = 'https://qf6cws4uvrkamfb7op44m7yjby0xdgaw.lambda-url.us-east-1.on.aws/';
+      
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          to: customer.email,
+          subject: emailContent.subject,
+          html: emailContent.html, 
+          text: emailContent.text,
+          customerName: `${customer.firstName} ${customer.lastName}`,
+          orderNumber: order.orderNumber
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorData}`);
       }
+
+      const result = await response.json();
+      console.log(`📧 Email notification sent to ${customer.email} for order ${order.orderNumber}`, result.messageId);
     } catch (error) {
       console.error('Failed to send email notification:', error);
       throw error;
@@ -102,6 +115,7 @@ class DefaultNotificationService implements NotificationService {
    */
   private async sendTextNotification(customer: CustomerDocument, order: OrderDocument): Promise<void> {
     try {
+      console.log('📱 Starting SMS notification process...');
       const textContent = this.generateTextContent(customer, order);
       
       if (!customer.phone) {
@@ -109,42 +123,35 @@ class DefaultNotificationService implements NotificationService {
       }
       
       // Format phone number to E.164 format for AWS SNS
-      // This assumes US numbers - would need to be updated for international support
       const formattedPhone = this.formatPhoneNumberForSNS(customer.phone);
       
-      // Using AWS Amplify API to call a Lambda function that will send the SMS via SNS
-      try {
-        await post({
-          apiName: 'amplifyPosApi',
-          path: this.SMS_API_URL,
-          options: {
-            body: {
-              phoneNumber: formattedPhone,
-              message: textContent,
-              customerName: `${customer.firstName} ${customer.lastName}`,
-              orderNumber: order.orderNumber
-            }
-          }
-        });
-        
-        console.log(`📱 Text notification sent to ${customer.phone} for order ${order.orderNumber}`);
-      } catch (apiError) {
-        // Fallback to direct axios call if API gateway call fails
-        console.warn('API gateway call failed, falling back to direct axios call:', apiError);
-        
-        // Only use in development or with proper authentication
-        if (__DEV__ && Config.SMS_WEBHOOK_URL) {
-          await axios.post(Config.SMS_WEBHOOK_URL, {
-            phoneNumber: formattedPhone,
-            message: textContent,
-            customerName: `${customer.firstName} ${customer.lastName}`,
-            orderNumber: order.orderNumber
-          });
-          console.log(`📱 SMS sent via webhook to ${customer.phone}`);
-        } else {
-          throw new Error('SMS sending failed and no fallback available');
-        }
+      console.log('📱 Sending SMS notification via Lambda to:', formattedPhone);
+      
+      // Use direct HTTP request to Lambda function URL
+      console.log('📱 Making HTTP request to Lambda function...');
+      
+      const functionUrl = 'https://xdw5dlboiupjsvczusr2vcyaqe0rzlik.lambda-url.us-east-1.on.aws/';
+      
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          phoneNumber: formattedPhone,
+          message: textContent,
+          customerName: `${customer.firstName} ${customer.lastName}`,
+          orderNumber: order.orderNumber
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorData}`);
       }
+
+      const result = await response.json();
+      console.log(`📱 Text notification sent to ${customer.phone} for order ${order.orderNumber}`, result.messageId);
     } catch (error) {
       console.error('Failed to send text notification:', error);
       throw error;
