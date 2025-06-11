@@ -1,0 +1,23 @@
+module.exports = {
+  preset: 'react-native',
+  setupFiles: ['./jest.setup.js'],
+  setupFilesAfterEnv: ['@testing-library/jest-native/extend-expect'],
+  transformIgnorePatterns: [
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|@stripe/stripe-react-native)/'
+  ],
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/src/$1',
+    '^react-native$': '<rootDir>/node_modules/react-native',
+    '^react-native/(.*)': '<rootDir>/node_modules/react-native/$1'
+  },
+  testPathIgnorePatterns: ['/node_modules/', '/ios/', '/android/'],
+  transform: {
+    '^.+\.(js|jsx|ts|tsx)$': 'babel-jest'
+  },
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
+  testEnvironment: 'jsdom',
+  globals: {
+    __DEV__: true
+  },
+  verbose: true
+};

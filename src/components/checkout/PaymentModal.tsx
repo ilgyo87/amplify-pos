@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,14 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  ScrollView
+  ScrollView,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { PaymentMethod, PaymentInfo } from '../../types/order';
+import { CardFieldInput, useStripe } from '@stripe/stripe-react-native';
+import { stripeService } from '../../services/stripeService';
+import { StripeCardForm } from './StripeCardForm';
 
 interface PaymentModalProps {
   visible: boolean;
@@ -29,7 +33,10 @@ export function PaymentModal({
 }: PaymentModalProps) {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('cash');
   const [tipAmount, setTipAmount] = useState(0);
-  const [cardLast4, setCardLast4] = useState('');
+  const [cardDetails, setCardDetails] = useState<CardFieldInput.Details | null>(null);
+  const [isStripeEnabled, setIsStripeEnabled] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const { createToken } = useStripe();
   const [checkNumber, setCheckNumber] = useState('');
   const [accountId, setAccountId] = useState('');
   const [customTip, setCustomTip] = useState('');
@@ -43,15 +50,47 @@ export function PaymentModal({
   };
 
   const handleCustomTipChange = (value: string) => {
-    setCustomTip(value);
     const numValue = parseFloat(value) || 0;
     setTipAmount(numValue);
+    setCustomTip(value);
   };
 
+  useEffect(() => {
+    const checkStripeConfig = async () => {
+      const isConfigured = stripeService.isInitialized();
+      setIsStripeEnabled(isConfigured);
+    };
+
+    checkStripeConfig();
+
+    // Subscribe to Stripe settings changes
+    const unsubscribe = stripeService.onSettingsChange((settings) => {
+      setIsStripeEnabled(!!settings?.publishableKey);
+    });
+
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    let businessSubscription: any = null;
+
+    const initialize = async () => {
+      // Initialize Stripe
+    };
+
+    initialize();
+  }, []);
+
   const validatePayment = (): boolean => {
-    if (selectedMethod === 'card' && (!cardLast4 || cardLast4.length !== 4)) {
-      Alert.alert('Error', 'Please enter the last 4 digits of the card');
-      return false;
+    if (selectedMethod === 'card') {
+      if (!isStripeEnabled) {
+        Alert.alert('Error', 'Stripe is not configured. Please configure Stripe in settings.');
+        return false;
+      }
+      if (!cardDetails?.complete) {
+        Alert.alert('Error', 'Please enter valid card details');
+        return false;
+      }
     }
     
     if (selectedMethod === 'check' && !checkNumber.trim()) {
@@ -67,19 +106,78 @@ export function PaymentModal({
     return true;
   };
 
-  const handleCompletePayment = () => {
+  const handleCompletePayment = async () => {
+    if (isProcessingPayment) return;
     if (!validatePayment()) return;
 
-    const paymentInfo: PaymentInfo = {
-      method: selectedMethod,
-      amount: totalWithTip,
-      tip: tipAmount > 0 ? tipAmount : undefined,
-      cardLast4: selectedMethod === 'card' ? cardLast4 : undefined,
-      checkNumber: selectedMethod === 'check' ? checkNumber : undefined,
-      accountId: selectedMethod === 'account' ? accountId : undefined,
-    };
+    try {
+      setIsProcessingPayment(true);
 
-    onCompletePayment(paymentInfo);
+      let stripeToken;
+      let stripeChargeId;
+      
+      if (selectedMethod === 'card' && cardDetails?.complete) {
+        if (!stripeService.isInitialized()) {
+          Alert.alert('Error', 'Stripe is not properly initialized. Please check your Stripe configuration in settings.');
+          return;
+        }
+
+        const { error, token } = await createToken({
+          type: 'Card',
+        });
+        if (error) {
+          console.error('Stripe token creation error:', error);
+          Alert.alert('Payment Error', error.message || 'Failed to process card payment. Please check your card details and try again.');
+          return;
+        }
+        
+        if (!token) {
+          Alert.alert('Error', 'Failed to create payment token. Please try again.');
+          return;
+        }
+        
+        stripeToken = token;
+
+        // Process the actual payment through backend
+        try {
+          const paymentResult = await stripeService.processPayment(
+            token.id,
+            totalWithTip,
+            `POS Order Payment - Amount: $${totalWithTip.toFixed(2)}`,
+            {
+              tip_amount: tipAmount || 0,
+              order_total: orderTotal
+            }
+          );
+          
+          stripeChargeId = paymentResult.chargeId;
+          console.log('Payment processed successfully:', stripeChargeId);
+          
+        } catch (paymentError: any) {
+          console.error('Payment processing failed:', paymentError);
+          Alert.alert('Payment Failed', paymentError.message || 'Payment could not be processed. Please try again.');
+          return;
+        }
+      }
+
+      const paymentInfo: PaymentInfo = {
+        method: selectedMethod,
+        amount: totalWithTip,
+        tip: tipAmount > 0 ? tipAmount : undefined,
+        cardLast4: selectedMethod === 'card' ? cardDetails?.last4 : undefined,
+        checkNumber: selectedMethod === 'check' ? checkNumber : undefined,
+        accountId: selectedMethod === 'account' ? accountId : undefined,
+        stripeToken: stripeToken?.id,
+        stripeChargeId: stripeChargeId, // Add the actual charge ID
+      };
+
+      onCompletePayment(paymentInfo);
+    } catch (error) {
+      console.error('Payment processing error:', error);
+      Alert.alert('Payment Error', 'Failed to process payment. Please check your connection and try again.');
+    } finally {
+      setIsProcessingPayment(false);
+    }
   };
 
   const renderPaymentMethod = (method: PaymentMethod, icon: string, label: string) => {
@@ -115,17 +213,20 @@ export function PaymentModal({
   const renderPaymentDetails = () => {
     switch (selectedMethod) {
       case 'card':
+        if (!isStripeEnabled) {
+          return (
+            <View style={styles.detailsContainer}>
+              <Text style={styles.detailsLabel}>Stripe is not configured</Text>
+              <Text style={styles.detailsHint}>
+                Please configure Stripe in the settings to accept card payments.
+              </Text>
+            </View>
+          );
+        }
         return (
           <View style={styles.detailsContainer}>
-            <Text style={styles.detailsLabel}>Last 4 digits of card:</Text>
-            <TextInput
-              style={styles.textInput}
-              value={cardLast4}
-              onChangeText={setCardLast4}
-              placeholder="1234"
-              keyboardType="numeric"
-              maxLength={4}
-            />
+            <Text style={styles.detailsLabel}>Enter card details:</Text>
+            <StripeCardForm onCardChange={setCardDetails} />
           </View>
         );
       
@@ -256,13 +357,18 @@ export function PaymentModal({
 
         {/* Complete Payment Button */}
         <View style={styles.footer}>
-          <TouchableOpacity 
-            style={styles.completeButton}
+          <TouchableOpacity
+            style={[styles.completeButton, isProcessingPayment && styles.completeButtonDisabled]}
             onPress={handleCompletePayment}
+            disabled={isProcessingPayment}
           >
-            <Text style={styles.completeButtonText}>
-              Complete Payment - ${totalWithTip.toFixed(2)}
-            </Text>
+            {isProcessingPayment ? (
+              <ActivityIndicator color="#fff" style={styles.buttonLoader} />
+            ) : (
+              <Text style={styles.completeButtonText}>
+                Complete Payment - ${totalWithTip.toFixed(2)}
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -464,5 +570,16 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 18,
     fontWeight: '600',
+  },
+  completeButtonDisabled: {
+    opacity: 0.7,
+  },
+  buttonLoader: {
+    marginRight: 8,
+  },
+  detailsHint: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4,
   },
 });

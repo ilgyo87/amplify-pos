@@ -10,10 +10,11 @@ import {
   Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { OrderItem } from '../../types/order';
+import { OrderItem, PaymentInfo, PaymentMethod } from '../../types/order';
 import { SerializableCustomer } from '../../navigation/types';
 import { QRCode } from '../../utils/qrUtils';
 import { toPreciseAmount } from '../../utils/monetaryUtils';
+import { PaymentModal } from './PaymentModal';
 
 interface ReceiptPreviewModalProps {
   visible: boolean;
@@ -23,7 +24,7 @@ interface ReceiptPreviewModalProps {
   orderNumber: string;
   employeeName?: string;
   onClose: () => void;
-  onComplete: (paymentMethod: 'cash' | 'card' | 'credit', qrData?: string) => void;
+  onComplete: (paymentInfo: PaymentInfo, qrData?: string) => void;
 }
 
 export function ReceiptPreviewModal({
@@ -36,7 +37,7 @@ export function ReceiptPreviewModal({
   onClose,
   onComplete
 }: ReceiptPreviewModalProps) {
-  const [selectedPayment, setSelectedPayment] = useState<'cash' | 'card' | 'credit' | null>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const receiptRef = useRef<View>(null);
   
@@ -64,12 +65,12 @@ export function ReceiptPreviewModal({
   const total = toPreciseAmount(subtotal + tax);
 
 
-  const sendDirectToPrinter = async (printerIP: string, printerPort: string) => {
+  const sendDirectToPrinter = async (printerIP: string, printerPort: string, paymentMethod: PaymentMethod) => {
     try {
       console.log(`Printing receipt directly to Munbyn printer at ${printerIP}:${printerPort}`);
       
       // Generate ESC/POS commands for thermal printing
-      const escPosCommands = generateThermalReceiptCommands();
+      const escPosCommands = generateThermalReceiptCommands(paymentMethod);
       
       // Send commands directly to thermal printer via raw socket connection
       const success = await sendRawDataToPrinter(printerIP, printerPort, escPosCommands);
@@ -130,7 +131,7 @@ export function ReceiptPreviewModal({
     }
   };
 
-  const generateThermalReceiptCommands = (): Uint8Array => {
+  const generateThermalReceiptCommands = (paymentMethod?: PaymentMethod): Uint8Array => {
     const currentDate = new Date().toLocaleDateString();
     const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
@@ -268,8 +269,8 @@ export function ReceiptPreviewModal({
     addLF();
     
     // Payment method
-    if (selectedPayment) {
-      addText(formatTwoColumns('Payment:', selectedPayment.charAt(0).toUpperCase() + selectedPayment.slice(1), 32));
+    if (paymentMethod) {
+      addText(formatTwoColumns('Payment:', paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1), 32));
       addLF();
     }
     addLF();
@@ -325,11 +326,8 @@ export function ReceiptPreviewModal({
   };
 
 
-  const handleComplete = async () => {
-    if (!selectedPayment) {
-      Alert.alert('Payment Method Required', 'Please select a payment method to complete the order.');
-      return;
-    }
+  const handlePaymentComplete = async (paymentInfo: PaymentInfo) => {
+    setShowPaymentModal(false);
     
     setIsPrinting(true);
     try {
@@ -343,7 +341,7 @@ export function ReceiptPreviewModal({
         if (ip) {
           // Send directly to thermal printer - NO AirPrint dialog
           console.log(`Printing directly to Munbyn printer at ${ip}:${port || '9100'}`);
-          await sendDirectToPrinter(ip, port || '9100');
+          await sendDirectToPrinter(ip, port || '9100', paymentInfo.method);
           console.log('Receipt printed directly to thermal printer');
         } else {
           // No IP configured, show error
@@ -359,49 +357,20 @@ export function ReceiptPreviewModal({
       }
       
       // Complete the order
-      onComplete(selectedPayment, qrData);
+      onComplete(paymentInfo, qrData);
     } catch (error) {
       console.error('Print error:', error);
       Alert.alert('Print Error', 'Failed to print to Munbyn printer. Please check printer connection and try again.');
       // Still complete the order
-      onComplete(selectedPayment, qrData);
+      onComplete(paymentInfo, qrData);
     } finally {
       setIsPrinting(false);
     }
   };
 
-  const PaymentButton = ({ 
-    method, 
-    label, 
-    icon 
-  }: { 
-    method: 'cash' | 'card' | 'credit'; 
-    label: string; 
-    icon: string; 
-  }) => (
-    <TouchableOpacity
-      style={[
-        styles.paymentButton,
-        selectedPayment === method && styles.selectedPaymentButton
-      ]}
-      onPress={() => setSelectedPayment(method)}
-    >
-      <Ionicons 
-        name={icon as any} 
-        size={24} 
-        color={selectedPayment === method ? '#007AFF' : '#666'} 
-      />
-      <Text style={[
-        styles.paymentButtonText,
-        selectedPayment === method && styles.selectedPaymentButtonText
-      ]}>
-        {label}
-      </Text>
-      {selectedPayment === method && (
-        <Ionicons name="checkmark-circle" size={20} color="#007AFF" />
-      )}
-    </TouchableOpacity>
-  );
+  const handleProceedToPayment = () => {
+    setShowPaymentModal(true);
+  };
 
   return (
     <Modal
@@ -532,14 +501,6 @@ export function ReceiptPreviewModal({
                 <Text style={styles.grandTotalLabel}>TOTAL:</Text>
                 <Text style={styles.grandTotalValue}>${total.toFixed(2)}</Text>
               </View>
-              {selectedPayment && (
-                <View style={styles.totalRow}>
-                  <Text style={styles.totalLabel}>Payment:</Text>
-                  <Text style={styles.totalValue}>
-                    {selectedPayment.charAt(0).toUpperCase()}{selectedPayment.slice(1)}
-                  </Text>
-                </View>
-              )}
             </View>
 
             {/* Footer */}
@@ -565,38 +526,59 @@ export function ReceiptPreviewModal({
             </View>
           </View>
 
-          {/* Payment Method Selection */}
-          <View style={styles.paymentSection}>
-            <Text style={styles.sectionTitle}>Select Payment Method</Text>
-            <PaymentButton method="cash" label="Cash" icon="cash" />
-            <PaymentButton method="card" label="Debit Card" icon="card" />
-            <PaymentButton method="credit" label="Credit Card" icon="card-outline" />
+          {/* Order Summary */}
+          <View style={styles.summarySection}>
+            <Text style={styles.sectionTitle}>Order Summary</Text>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Items:</Text>
+              <Text style={styles.summaryValue}>{orderItems.length}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Subtotal:</Text>
+              <Text style={styles.summaryValue}>${subtotal.toFixed(2)}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Tax:</Text>
+              <Text style={styles.summaryValue}>${tax.toFixed(2)}</Text>
+            </View>
+            <View style={[styles.summaryRow, styles.totalRow]}>
+              <Text style={styles.totalLabel}>TOTAL:</Text>
+              <Text style={styles.totalValue}>${total.toFixed(2)}</Text>
+            </View>
           </View>
         </ScrollView>
 
-        {/* Complete Button */}
+        {/* Proceed to Payment Button */}
         <View style={styles.footer}>
           <TouchableOpacity 
             style={[
               styles.completeButton,
-              (!selectedPayment || isPrinting) && styles.completeButtonDisabled
+              isPrinting && styles.completeButtonDisabled
             ]} 
-            onPress={handleComplete}
-            disabled={!selectedPayment || isPrinting}
+            onPress={handleProceedToPayment}
+            disabled={isPrinting}
           >
             <Text style={[
               styles.completeButtonText,
-              (!selectedPayment || isPrinting) && styles.completeButtonTextDisabled
+              isPrinting && styles.completeButtonTextDisabled
             ]}>
-              {isPrinting ? 'Printing & Processing...' : `Complete Order - $${total.toFixed(2)}`}
+              {isPrinting ? 'Processing...' : `Proceed to Payment - $${total.toFixed(2)}`}
             </Text>
             <Ionicons 
-              name={isPrinting ? "print" : "checkmark-circle"}
+              name={isPrinting ? "time" : "card"}
               size={20} 
-              color={selectedPayment && !isPrinting ? "white" : "#ccc"} 
+              color={!isPrinting ? "white" : "#ccc"} 
             />
           </TouchableOpacity>
         </View>
+
+        {/* Payment Modal */}
+        <PaymentModal
+          visible={showPaymentModal}
+          orderTotal={total}
+          onClose={() => setShowPaymentModal(false)}
+          onCompletePayment={handlePaymentComplete}
+        />
       </SafeAreaView>
     </Modal>
   );
@@ -810,8 +792,8 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
   },
   
-  // Payment Section
-  paymentSection: {
+  // Summary Section
+  summarySection: {
     backgroundColor: 'white',
     padding: 16,
     margin: 16,
@@ -830,30 +812,20 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     textAlign: 'center',
   },
-  paymentButton: {
+  summaryRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    paddingVertical: 4,
   },
-  selectedPaymentButton: {
-    backgroundColor: '#f0f7ff',
-    borderColor: '#007AFF',
-  },
-  paymentButtonText: {
-    fontSize: 16,
-    fontWeight: '500',
+  summaryLabel: {
+    fontSize: 14,
     color: '#666',
-    marginLeft: 12,
-    flex: 1,
   },
-  selectedPaymentButtonText: {
-    color: '#007AFF',
-    fontWeight: '600',
+  summaryValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
   },
   
   // Footer

@@ -28,6 +28,16 @@ export interface OrderDocType {
   tax: number;
   total: number;
   paymentMethod: 'cash' | 'card' | 'credit';
+  paymentInfo?: {
+    method: 'cash' | 'card' | 'check' | 'account';
+    amount: number;
+    tip?: number;
+    cardLast4?: string;
+    checkNumber?: string;
+    accountId?: string;
+    stripeToken?: string;
+    stripeChargeId?: string;
+  };
   selectedDate?: string; // Optional pickup/service date
   status: 'pending' | 'in_progress' | 'ready' | 'completed' | 'cancelled' | 'picked_up';
   notes?: string;
@@ -44,7 +54,7 @@ export interface OrderDocType {
 }
 
 export const orderSchema: RxJsonSchema<OrderDocType> = {
-  version: 4,
+  version: 0,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -124,6 +134,47 @@ export const orderSchema: RxJsonSchema<OrderDocType> = {
       type: 'string',
       enum: ['cash', 'card', 'credit'],
       maxLength: 10
+    },
+    paymentInfo: {
+      type: 'object',
+      properties: {
+        method: {
+          type: 'string',
+          enum: ['cash', 'card', 'check', 'account'],
+          maxLength: 10
+        },
+        amount: {
+          type: 'number',
+          minimum: 0,
+          maximum: 999999.99
+        },
+        tip: {
+          type: 'number',
+          minimum: 0,
+          maximum: 999999.99
+        },
+        cardLast4: {
+          type: 'string',
+          maxLength: 4
+        },
+        checkNumber: {
+          type: 'string',
+          maxLength: 50
+        },
+        accountId: {
+          type: 'string',
+          maxLength: 100
+        },
+        stripeToken: {
+          type: 'string',
+          maxLength: 200
+        },
+        stripeChargeId: {
+          type: 'string',
+          maxLength: 200
+        }
+      },
+      required: ['method', 'amount']
     },
     selectedDate: {
       type: 'string',

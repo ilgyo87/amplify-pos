@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { OrderDocument, OrderDocType } from '../schemas/order';
 import { OrderService } from '../services/orderService';
+import { PaymentInfo } from '../../types/order';
 
 let orderService: OrderService | null = null;
 
@@ -64,7 +65,7 @@ export const useOrders = (status?: OrderDocType['status']) => {
   const createOrder = async (orderData: {
     customer: any;
     items: any[];
-    paymentMethod: 'cash' | 'card' | 'credit';
+    paymentInfo: PaymentInfo;
     selectedDate?: string;
     notes?: string;
     barcodeData?: string;

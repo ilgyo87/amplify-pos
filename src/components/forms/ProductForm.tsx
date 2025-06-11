@@ -54,6 +54,11 @@ export function ProductForm({
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showImagePicker, setShowImagePicker] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  
+  // Store raw string values for price fields during editing
+  const [priceText, setPriceText] = useState(initialData?.price?.toString() || '');
+  const [discountText, setDiscountText] = useState(initialData?.discount?.toString() || '');
+  const [additionalPriceText, setAdditionalPriceText] = useState(initialData?.additionalPrice?.toString() || '');
 
   useEffect(() => {
     if (initialData) {
@@ -67,6 +72,9 @@ export function ProductForm({
         additionalPrice: initialData.additionalPrice || 0,
         notes: initialData.notes || '',
       });
+      setPriceText(initialData.price?.toString() || '');
+      setDiscountText(initialData.discount?.toString() || '');
+      setAdditionalPriceText(initialData.additionalPrice?.toString() || '');
     }
   }, [initialData]);
 
@@ -176,10 +184,14 @@ export function ProductForm({
             </Text>
             <TextInput
               style={[styles.input, errors.price && styles.inputError]}
-              value={formData.price.toString()}
+              value={priceText}
               onChangeText={(value) => {
-                const numValue = parseFloat(value) || 0;
-                updateField('price', numValue);
+                // Allow decimal point and digits only
+                if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                  setPriceText(value);
+                  const numValue = value === '' ? 0 : parseFloat(value) || 0;
+                  updateField('price', numValue);
+                }
               }}
               placeholder="0.00"
               keyboardType="decimal-pad"
@@ -217,10 +229,14 @@ export function ProductForm({
             <Text style={styles.label}>Discount (%)</Text>
             <TextInput
               style={[styles.input, errors.discount && styles.inputError]}
-              value={formData.discount?.toString() || ''}
+              value={discountText}
               onChangeText={(value) => {
-                const numValue = parseFloat(value) || 0;
-                updateField('discount', Math.min(100, Math.max(0, numValue)));
+                // Allow decimal point and digits only
+                if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                  setDiscountText(value);
+                  const numValue = parseFloat(value) || 0;
+                  updateField('discount', Math.min(100, Math.max(0, numValue)));
+                }
               }}
               placeholder="0"
               keyboardType="decimal-pad"
@@ -233,10 +249,14 @@ export function ProductForm({
             <Text style={styles.label}>Additional Price</Text>
             <TextInput
               style={[styles.input, errors.additionalPrice && styles.inputError]}
-              value={formData.additionalPrice?.toString() || ''}
+              value={additionalPriceText}
               onChangeText={(value) => {
-                const numValue = parseFloat(value) || 0;
-                updateField('additionalPrice', numValue);
+                // Allow decimal point and digits only
+                if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                  setAdditionalPriceText(value);
+                  const numValue = parseFloat(value) || 0;
+                  updateField('additionalPrice', numValue);
+                }
               }}
               placeholder="0.00"
               keyboardType="decimal-pad"

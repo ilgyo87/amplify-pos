@@ -452,6 +452,11 @@ export class SyncService {
       tax: amplifyOrder.total * 0.1, // Estimate tax (10% of total)
       total: amplifyOrder.total || 0,
       paymentMethod: amplifyOrder.paymentMethod || 'cash',
+      paymentInfo: {
+        method: amplifyOrder.paymentMethod || 'cash',
+        amount: amplifyOrder.total || 0,
+        tip: 0
+      },
       status: amplifyOrder.status || 'completed',
       notes: '', // Notes not available in Amplify Order model
       barcodeData: '', // Not available in Amplify Order model
@@ -1571,7 +1576,7 @@ export class SyncService {
                 phone: localFormat.customerPhone || ''
               } as SerializableCustomer,
               items: localFormat.items,
-              paymentMethod: localFormat.paymentMethod,
+              paymentInfo: localFormat.paymentInfo,
               selectedDate: localFormat.selectedDate,
               notes: localFormat.notes,
               barcodeData: localFormat.barcodeData

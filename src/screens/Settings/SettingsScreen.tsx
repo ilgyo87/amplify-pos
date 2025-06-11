@@ -19,6 +19,8 @@ import { syncService, SyncStatus, SyncResult, businessService } from '../../data
 import { BusinessForm } from '../../components/forms/BusinessForm';
 import { BusinessDocument } from '../../database/schemas/business';
 import { BusinessFormData, BusinessValidationErrors } from '../../utils/businessValidation';
+import { StripeSettingsCard } from '../../components/settings/StripeSettingsCard';
+import { LoginSettingsCard } from '../../components/settings/LoginSettingsCard';
 
 export default function SettingsScreen() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
@@ -595,6 +597,8 @@ export default function SettingsScreen() {
   return (
     <BaseScreen title="Settings">
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        <LoginSettingsCard />
+        <StripeSettingsCard />
         {/* Sync Status Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Data Sync</Text>

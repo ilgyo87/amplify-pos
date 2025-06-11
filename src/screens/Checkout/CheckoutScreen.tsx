@@ -31,7 +31,7 @@ import { OrderItemSettingsModal } from '../../components/checkout/OrderItemSetti
 import { PickupModal } from '../../components/checkout/PickupModal';
 import { CategoryDocument } from '../../database/schemas/category';
 import { ProductDocument } from '../../database/schemas/product';
-import { OrderItem, OrderItemOptions, generateOrderItemKey } from '../../types/order';
+import { OrderItem, OrderItemOptions, generateOrderItemKey, PaymentInfo } from '../../types/order';
 import { RootStackParamList } from '../../navigation/types';
 import { toPreciseAmount } from '../../utils/monetaryUtils';
 import { useEmployeeAuth } from '../../context/EmployeeAuthContext';
@@ -619,7 +619,7 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
   };
 
   // Handle order completion
-  const handleOrderComplete = async (paymentMethod: 'cash' | 'card' | 'credit', qrData?: string) => {
+  const handleOrderComplete = async (paymentInfo: PaymentInfo, qrData?: string) => {
     setShowReceiptPreview(false);
     
     try {
@@ -629,7 +629,7 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
       const newOrder = await createOrder({
         customer,
         items: orderItems,
-        paymentMethod,
+        paymentInfo,
         selectedDate: selectedDate || undefined,
         notes: undefined,
         barcodeData: qrData,
@@ -644,9 +644,18 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
       const tax = orderTotal * 0.0875;
       const finalTotal = orderTotal + tax;
       
+      // Format payment info for display
+      let paymentDisplay = paymentInfo.method.charAt(0).toUpperCase() + paymentInfo.method.slice(1);
+      if (paymentInfo.method === 'card' && paymentInfo.cardLast4) {
+        paymentDisplay += ` ****${paymentInfo.cardLast4}`;
+      }
+      if (paymentInfo.tip && paymentInfo.tip > 0) {
+        paymentDisplay += ` (includes $${paymentInfo.tip.toFixed(2)} tip)`;
+      }
+
       Alert.alert(
         'Order Complete',
-        `Order #${newOrder.orderNumber} completed successfully!\n\nPayment Method: ${paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1)}\nTotal: $${finalTotal.toFixed(2)}\nDate: ${selectedDate ? new Date(selectedDate + 'T00:00:00').toLocaleDateString() : 'Today'}\n\nPrint receipt?`,
+        `Order #${newOrder.orderNumber} completed successfully!\n\nPayment: ${paymentDisplay}\nAmount: $${paymentInfo.amount.toFixed(2)}\nDate: ${selectedDate ? new Date(selectedDate + 'T00:00:00').toLocaleDateString() : 'Today'}\n\nPrint receipt?`,
         [
           {
             text: 'No Thanks',
@@ -661,7 +670,7 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
             text: 'Print Receipt',
             onPress: async () => {
               try {
-                await printReceiptToThermalPrinter(newOrder, paymentMethod, selectedDate);
+                await printReceiptToThermalPrinter(newOrder, paymentInfo.method, selectedDate);
                 Alert.alert('Receipt Printed', 'Receipt has been sent to your Munbyn printer', [
                   { 
                     text: 'OK', 

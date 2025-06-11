@@ -57,6 +57,8 @@ export interface PaymentInfo {
   cardLast4?: string;
   checkNumber?: string;
   accountId?: string;
+  stripeToken?: string; // Stripe payment token for card payments
+  stripeChargeId?: string; // Stripe charge ID for successful payments
 }
 
 export interface Order {
