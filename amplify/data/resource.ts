@@ -44,6 +44,8 @@ const schema = a.schema({
       email: a.email(),
       businessId: a.string(),
       cognitoId: a.string(),
+      emailNotifications: a.boolean(),
+      textNotifications: a.boolean(),
     })
     .authorization((allow) => [
       allow.authenticated().to(['read']),
@@ -60,6 +62,7 @@ const schema = a.schema({
       total: a.float().required(),
       status: a.string().required(),
       rackNumber: a.string(),
+      statusHistory: a.string().array(),
     })
     .authorization((allow) => [
       allow.authenticated().to(['read']),

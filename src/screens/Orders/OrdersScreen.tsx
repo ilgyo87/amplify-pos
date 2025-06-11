@@ -457,7 +457,9 @@ export default function OrdersScreen() {
           customerName: selectedOrder.customerName,
           garmentType: `${orderItem.name} #${globalItemNumber}`,
           notes: orderItem.options?.notes || '',
-          qrImageBase64: qrImageBase64
+          qrImageBase64: qrImageBase64,
+          starch: orderItem.options?.starch,
+          pressOnly: orderItem.options?.pressOnly
         });
         
         // Add page break after each label except the last one
@@ -533,7 +535,9 @@ export default function OrdersScreen() {
         customerName: selectedOrder.customerName,
         garmentType: `${item.name} #${globalItemNumber}`,
         notes: item.options?.notes || '',
-        qrImageBase64: qrImageBase64
+        qrImageBase64: qrImageBase64,
+        starch: item.options?.starch,
+        pressOnly: item.options?.pressOnly
       });
       
       console.log('📋 Generated HTML, length:', html.length);
@@ -996,10 +1000,7 @@ export default function OrdersScreen() {
                 <View style={styles.placeholder} />
               </View>
               
-              <ScrollView 
-                style={styles.detailContent}
-                contentContainerStyle={styles.detailContentContainer}
-              >
+              <View style={styles.detailContent}>
                 <View style={styles.orderInfoSection}>
                   <View style={styles.orderInfoRow}>
                     <Ionicons name="person-outline" size={20} color="#6b7280" />
@@ -1023,7 +1024,7 @@ export default function OrdersScreen() {
                   <View style={styles.sectionTitleContainer}>
                     <Text style={styles.sectionTitle}>Order Items</Text>
                     {/* Print button for pending and in_progress orders */}
-                    {selectedOrder.status !== 'ready' && selectedOrder.status !== 'completed' && selectedOrder.status !== 'cancelled' && (
+                    {selectedOrder.status !== 'ready' && selectedOrder.status !== 'completed' && selectedOrder.status !== 'cancelled' && selectedOrder.status !== 'picked_up' && (
                       <TouchableOpacity 
                         style={styles.headerPrintButton}
                         onPress={printSelectedItems}
@@ -1033,9 +1034,88 @@ export default function OrdersScreen() {
                       </TouchableOpacity>
                     )}
                   </View>
+
+                  {/* Item Scan Section - moved below print button and disabled for ready and completed orders */}
+                  {selectedOrder.status !== 'ready' && selectedOrder.status !== 'completed' && selectedOrder.status !== 'picked_up' && (
+                    <View style={styles.itemScanContainer}>
+                      <Text style={styles.scanSectionTitle}>Scan Item Labels</Text>
+                      {/* Search and scan row - same as main screen */}
+                      <View style={styles.searchScanRow}>
+                        <View style={styles.searchContainer}>
+                          <TextInput
+                            style={styles.searchInput}
+                            placeholder={`${selectedOrder.orderNumber}-1, ${selectedOrder.orderNumber}-2, etc.`}
+                            value={itemScanInput}
+                            onChangeText={handleItemInputChange}
+                            onSubmitEditing={handleManualItemScan}
+                            returnKeyType="search"
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            clearButtonMode="while-editing"
+                          />
+                          <TouchableOpacity 
+                            style={styles.searchButton} 
+                            onPress={handleManualItemScan}
+                            disabled={!itemScanInput.trim()}
+                          >
+                            <Ionicons name="search" size={20} color="#fff" />
+                          </TouchableOpacity>
+                        </View>
+                        <TouchableOpacity 
+                          style={styles.scanButton} 
+                          onPress={() => setShowItemScanner(true)}
+                        >
+                          <Ionicons name="qr-code" size={24} color="#007AFF" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
                   
                   {/* Handle different order statuses */}
-                  {selectedOrder.status === 'completed' ? (
+                  {selectedOrder.status === 'picked_up' ? (
+                    <View style={styles.pickedUpOrderContainer}>
+                      <View style={styles.pickedUpHeaderContainer}>
+                        <Ionicons name="checkmark-circle" size={32} color="#059669" />
+                        <Text style={styles.pickedUpOrderText}>
+                          Order Picked Up
+                        </Text>
+                      </View>
+                      <Text style={styles.pickedUpOrderDetails}>
+                        This order has been collected by the customer.
+                      </Text>
+                      
+                      {/* Status History */}
+                      {selectedOrder.statusHistory && selectedOrder.statusHistory.length > 0 && (
+                        <View style={styles.statusHistoryContainer}>
+                          <Text style={styles.statusHistoryTitle}>Order History</Text>
+                          <ScrollView style={styles.statusHistoryList} showsVerticalScrollIndicator={false}>
+                            {selectedOrder.statusHistory.map((entry, index) => (
+                              <View key={index} style={styles.statusHistoryEntry}>
+                                <View style={styles.statusHistoryDot} />
+                                <Text style={styles.statusHistoryText}>{entry}</Text>
+                              </View>
+                            ))}
+                          </ScrollView>
+                        </View>
+                      )}
+                      
+                      {/* Basic Order Info */}
+                      <View style={styles.pickedUpOrderSummary}>
+                        <Text style={styles.pickedUpSummaryTitle}>Order Summary</Text>
+                        <Text style={styles.pickedUpSummaryText}>
+                          Items: {selectedOrder.items.reduce((total, item) => total + item.quantity, 0)}
+                        </Text>
+                        <Text style={styles.pickedUpSummaryText}>
+                          Total: ${selectedOrder.total.toFixed(2)}
+                        </Text>
+                        {selectedOrder.rackNumber && (
+                          <Text style={styles.pickedUpSummaryText}>
+                            Rack: {selectedOrder.rackNumber}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  ) : selectedOrder.status === 'completed' ? (
                     <View style={styles.completedOrderContainer}>
                       <Text style={styles.completedOrderText}>
                         Order completed and ready for pickup.
@@ -1099,50 +1179,19 @@ export default function OrdersScreen() {
                       </TouchableOpacity>
                     </View>
                   ) : (
-                    <View style={styles.itemsList}>
-                      {selectedOrder.items.map((item, index) => {
-                        // Calculate the global item start index for this item group
-                        const globalItemStartIndex = selectedOrder.items
-                          .slice(0, index)
-                          .reduce((sum, prevItem) => sum + prevItem.quantity, 0);
-                        return renderOrderItem(item, globalItemStartIndex);
-                      })}
-                    </View>
-                  )}
-                  
-                  {/* Item Scan Section - disabled for ready and completed orders */}
-                  {selectedOrder.status !== 'ready' && selectedOrder.status !== 'completed' && (
-                    <View style={styles.itemScanContainer}>
-                      <Text style={styles.scanSectionTitle}>Scan Item Labels</Text>
-                      {/* Search and scan row - same as main screen */}
-                      <View style={styles.searchScanRow}>
-                        <View style={styles.searchContainer}>
-                          <TextInput
-                            style={styles.searchInput}
-                            placeholder={`${selectedOrder.orderNumber}-1, ${selectedOrder.orderNumber}-2, etc.`}
-                            value={itemScanInput}
-                            onChangeText={handleItemInputChange}
-                            onSubmitEditing={handleManualItemScan}
-                            returnKeyType="search"
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                            clearButtonMode="while-editing"
-                          />
-                          <TouchableOpacity 
-                            style={styles.searchButton} 
-                            onPress={handleManualItemScan}
-                            disabled={!itemScanInput.trim()}
-                          >
-                            <Ionicons name="search" size={20} color="#fff" />
-                          </TouchableOpacity>
-                        </View>
-                        <TouchableOpacity 
-                          style={styles.scanButton} 
-                          onPress={() => setShowItemScanner(true)}
-                        >
-                          <Ionicons name="qr-code" size={24} color="#007AFF" />
-                        </TouchableOpacity>
-                      </View>
+                    <View style={styles.itemsListContainer}>
+                      <ScrollView 
+                        style={styles.itemsList}
+                        showsVerticalScrollIndicator={false}
+                      >
+                        {selectedOrder.items.map((item, index) => {
+                          // Calculate the global item start index for this item group
+                          const globalItemStartIndex = selectedOrder.items
+                            .slice(0, index)
+                            .reduce((sum, prevItem) => sum + prevItem.quantity, 0);
+                          return renderOrderItem(item, globalItemStartIndex);
+                        })}
+                      </ScrollView>
                     </View>
                   )}
                 </View>
@@ -1191,7 +1240,7 @@ export default function OrdersScreen() {
                     </View>
                   </View>
                 )}
-              </ScrollView>
+              </View>
 
               {/* Only show action bar for ready orders (rack scanning) */}
               {selectedOrder.status === 'ready' && (
@@ -1327,7 +1376,8 @@ const styles = StyleSheet.create({
   // Detail Modal Styles
   detailContainer: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9fafb',
+    overflow: 'hidden', // Prevent content from overflowing container
   },
   detailHeader: {
     flexDirection: 'row',
@@ -1386,8 +1436,12 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 12,
   },
-  itemsList: {
+  itemsListContainer: {
+    flex: 1,
     marginTop: 8,
+  },
+  itemsList: {
+    maxHeight: 400, // Fixed height for scroll container
   },
   
   // Completion Styles
@@ -1585,7 +1639,10 @@ const styles = StyleSheet.create({
     color: '#6b7280',
   },
   itemsSection: {
-    marginBottom: 16,
+    marginTop: 16,
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
   },
   itemsLabel: {
     fontSize: 14,
@@ -2031,5 +2088,84 @@ const styles = StyleSheet.create({
     color: '#92400e',
     fontWeight: '500',
     flex: 1,
+  },
+  // Picked up order styles
+  pickedUpOrderContainer: {
+    padding: 20,
+    backgroundColor: '#f0fdf4',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  pickedUpHeaderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 12,
+  },
+  pickedUpOrderText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#059669',
+  },
+  pickedUpOrderDetails: {
+    fontSize: 16,
+    color: '#6b7280',
+    marginBottom: 20,
+    lineHeight: 22,
+  },
+  statusHistoryContainer: {
+    backgroundColor: 'white',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  statusHistoryTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 12,
+  },
+  statusHistoryList: {
+    maxHeight: 200,
+  },
+  statusHistoryEntry: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+    gap: 12,
+  },
+  statusHistoryDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#059669',
+    marginTop: 6,
+  },
+  statusHistoryText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#6b7280',
+    lineHeight: 20,
+  },
+  pickedUpOrderSummary: {
+    backgroundColor: 'white',
+    borderRadius: 8,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  pickedUpSummaryTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  pickedUpSummaryText: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 4,
   },
 });

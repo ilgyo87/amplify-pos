@@ -107,14 +107,18 @@ export async function generateLabelHTML({
   garmentType,
   notes,
   qrImageBase64,
-  employeeName
+  employeeName,
+  starch,
+  pressOnly
 }: {
   orderNumber: string,
   customerName: string,
   garmentType: string,
   notes: string,
   qrImageBase64: string,
-  employeeName?: string
+  employeeName?: string,
+  starch?: string,
+  pressOnly?: boolean
 }): Promise<string> {
   // Check if qrImageBase64 is a captured image or just the QR data
   let imageUri: string;
@@ -130,6 +134,16 @@ export async function generateLabelHTML({
     imageUri = await generateQRCodeSVG(qrImageBase64);
   }
   
+  // Build options line
+  const options = [];
+  if (starch && starch !== 'none') {
+    options.push(`${starch} starch`);
+  }
+  if (pressOnly) {
+    options.push('Press Only');
+  }
+  const optionsLine = options.length > 0 ? options.join(', ') : '';
+
   return `
     <div class="label-container">
       <div class="qr-container">
@@ -139,6 +153,7 @@ export async function generateLabelHTML({
         <div class="order-number">Order #: ${orderNumber}</div>
         <div class="info-line">Name: ${customerName}</div>
         <div class="info-line">Garment: ${garmentType}</div>
+        ${optionsLine ? `<div class="info-line">Options: ${optionsLine}</div>` : ''}
         <div class="info-line">Notes: ${notes || 'None'}</div>
         ${employeeName ? `<div class="info-line">Served by: ${employeeName}</div>` : ''}
       </div>
@@ -168,7 +183,7 @@ export const printLabel = async (html: string) => {
               width: 100%;
               height: 100%;
               font-family: Arial, sans-serif;
-              font-size: 9px;
+              font-size: 18px;
             }
             .label-container {
               width: 29mm;
@@ -183,42 +198,42 @@ export const printLabel = async (html: string) => {
             }
             .qr-container {
               width: 100%;
-              height: 45mm;
+              height: 32mm;
               display: flex;
               justify-content: center;
               align-items: center;
               margin-bottom: 2mm;
             }
             .qr-code {
-              max-width: 100%;
-              max-height: 100%;
+              max-width: 70%;
+              max-height: 70%;
               object-fit: contain;
             }
             .order-info {
               width: 100%;
-              height: 40mm;
+              height: 53mm;
               writing-mode: vertical-rl;
               text-orientation: mixed;
               transform: rotate(180deg);
               padding: 2mm 0;
               display: flex;
               flex-direction: column;
-              justify-content: space-between;
+              justify-content: flex-start;
               align-items: flex-start;
-              gap: 3mm;
+              gap: 1mm;
             }
             .order-info div {
               margin: 0;
               padding: 0;
               white-space: nowrap;
-              line-height: 1.2;
+              line-height: 1.0;
             }
             .order-number {
               font-weight: bold;
-              font-size: 10px;
+              font-size: 15px;
             }
             .info-line {
-              font-size: 9px;
+              font-size: 15px;
             }
           </style>
         </head>

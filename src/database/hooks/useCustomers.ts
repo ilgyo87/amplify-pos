@@ -10,6 +10,58 @@ interface CustomerOperationResult {
   duplicateError?: string;
 }
 
+/**
+ * Custom hook for watching a specific customer for real-time updates
+ * @param customerId The ID of the customer to watch
+ * @returns The customer data that automatically updates when changed
+ */
+export const useCustomer = (customerId: string) => {
+  const [customer, setCustomer] = useState<CustomerDocument | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+
+    const initializeAndSubscribe = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Initialize service
+        await customerService.initialize();
+        
+        // Get initial customer data
+        const initialCustomer = await customerService.getCustomerById(customerId);
+        setCustomer(initialCustomer);
+        
+        // Subscribe to changes for this specific customer
+        unsubscribe = customerService.subscribeToCustomerChanges(customerId, (updatedCustomer) => {
+          setCustomer(updatedCustomer);
+        });
+        
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load customer');
+        console.error('Error in useCustomer:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (customerId) {
+      initializeAndSubscribe();
+    }
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [customerId]);
+
+  return { customer, loading, error };
+};
+
 export const useCustomers = () => {
   const [allCustomers, setAllCustomers] = useState<CustomerDocument[]>([]);
   const [filteredCustomers, setFilteredCustomers] = useState<CustomerDocument[]>([]);

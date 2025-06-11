@@ -6,6 +6,7 @@ export interface OrderDocType {
   customerId: string;
   customerName: string; // Denormalized for easy display
   customerPhone?: string; // Denormalized for easy display
+  businessId?: string; // Business ID for multi-tenant support
   employeeId?: string; // ID of the employee who created the order
   employeeName?: string; // Denormalized employee name for easy display
   items: Array<{
@@ -14,6 +15,8 @@ export interface OrderDocType {
     description?: string;
     price: number;
     quantity: number;
+    categoryId?: string; // Add categoryId for sync purposes
+    discount?: number; // Add discount for sync purposes
     options?: {
       starch?: 'none' | 'light' | 'medium' | 'heavy';
       pressOnly?: boolean;
@@ -26,10 +29,11 @@ export interface OrderDocType {
   total: number;
   paymentMethod: 'cash' | 'card' | 'credit';
   selectedDate?: string; // Optional pickup/service date
-  status: 'pending' | 'in_progress' | 'ready' | 'completed' | 'cancelled';
+  status: 'pending' | 'in_progress' | 'ready' | 'completed' | 'cancelled' | 'picked_up';
   notes?: string;
   barcodeData?: string; // Barcode data for scanning
   rackNumber?: string; // Rack number where order is stored
+  statusHistory?: string[]; // Array of status changes with timestamps
   // Local-only fields for sync management
   isLocalOnly: boolean;
   isDeleted?: boolean;
@@ -40,7 +44,7 @@ export interface OrderDocType {
 }
 
 export const orderSchema: RxJsonSchema<OrderDocType> = {
-  version: 1,
+  version: 4,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -64,6 +68,10 @@ export const orderSchema: RxJsonSchema<OrderDocType> = {
       type: 'string',
       maxLength: 50
     },
+    businessId: {
+      type: 'string',
+      maxLength: 100
+    },
     employeeId: {
       type: 'string',
       maxLength: 100
@@ -82,6 +90,8 @@ export const orderSchema: RxJsonSchema<OrderDocType> = {
           description: { type: 'string', maxLength: 500 },
           price: { type: 'number', minimum: 0, maximum: 999999.99 },
           quantity: { type: 'number', minimum: 1, maximum: 999999, multipleOf: 1 },
+          categoryId: { type: 'string', maxLength: 100 },
+          discount: { type: 'number', minimum: 0, maximum: 100 },
           options: {
             type: 'object',
             properties: {
@@ -121,7 +131,7 @@ export const orderSchema: RxJsonSchema<OrderDocType> = {
     },
     status: {
       type: 'string',
-      enum: ['pending', 'in_progress', 'ready', 'completed', 'cancelled'],
+      enum: ['pending', 'in_progress', 'ready', 'completed', 'cancelled', 'picked_up'],
       maxLength: 20,
       default: 'pending'
     },
@@ -136,6 +146,13 @@ export const orderSchema: RxJsonSchema<OrderDocType> = {
     rackNumber: {
       type: 'string',
       maxLength: 50
+    },
+    statusHistory: {
+      type: 'array',
+      items: {
+        type: 'string',
+        maxLength: 200
+      }
     },
     isLocalOnly: {
       type: 'boolean'
@@ -165,6 +182,7 @@ export const orderSchema: RxJsonSchema<OrderDocType> = {
   indexes: [
     'orderNumber',
     'customerId',
+    'businessId',
     'status',
     'createdAt',
     'isLocalOnly',

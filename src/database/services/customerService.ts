@@ -67,10 +67,25 @@ export class CustomerService {
       return { duplicateError: `A customer with this ${field} already exists` };
     }
 
+    // Get a valid businessId for the customer
+    let businessId = '';
+    try {
+      const { businessService } = await import('./businessService');
+      await businessService.initialize();
+      const businesses = await businessService.getAllBusinesses();
+      if (businesses.length > 0) {
+        businessId = businesses[0].id;
+        console.log(`[CUSTOMER CREATE] Using business ID ${businessId} for new customer`);
+      }
+    } catch (error) {
+      console.error('Error getting business for new customer:', error);
+    }
+
     // Set default values for new customers
     const customerWithDefaults = {
       ...customerData,
       phone: cleanPhoneNumber(customerData.phone),
+      businessId: businessId,
       isLocalOnly: true,
       isDeleted: false
     };
@@ -258,6 +273,33 @@ export class CustomerService {
       return () => {};
     }
     return this.customerRepository.subscribeToChanges(callback);
+  }
+
+  /**
+   * Subscribe to changes for a specific customer
+   * @param customerId Customer ID to watch for changes
+   * @param callback Function to call when the customer changes
+   * @returns Unsubscribe function
+   */
+  subscribeToCustomerChanges(customerId: string, callback: (customer: CustomerDocument | null) => void): () => void {
+    if (!this.customerRepository) {
+      console.error('Customer repository not initialized');
+      return () => {};
+    }
+
+    return this.customerRepository.subscribeToChanges(async (change: any) => {
+      // Check if the change affects our specific customer
+      if (change.documentId === customerId || 
+          (change.documentData && change.documentData.id === customerId)) {
+        try {
+          const updatedCustomer = await this.getCustomerById(customerId);
+          callback(updatedCustomer);
+        } catch (error) {
+          console.error('Error fetching updated customer:', error);
+          callback(null);
+        }
+      }
+    });
   }
 
   // Bulk upsert customers

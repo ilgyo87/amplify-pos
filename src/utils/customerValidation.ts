@@ -9,6 +9,8 @@ export interface CustomerFormData {
   city?: string;
   state?: string;
   zipCode?: string;
+  emailNotifications?: boolean;
+  textNotifications?: boolean;
 }
 
 export interface ValidationErrors {

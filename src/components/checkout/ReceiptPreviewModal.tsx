@@ -230,6 +230,9 @@ export function ReceiptPreviewModal({
       if (item.options?.pressOnly) {
         itemName += ' - Press Only';
       }
+      if (item.options?.notes && item.options.notes.trim()) {
+        itemName += ` - ${item.options.notes.trim()}`;
+      }
       
       // Truncate long item names
       if (itemName.length > 20) {
@@ -497,6 +500,9 @@ export function ReceiptPreviewModal({
                 }
                 if (item.options?.pressOnly) {
                   itemName += ' - Press Only';
+                }
+                if (item.options?.notes && item.options.notes.trim()) {
+                  itemName += ` - ${item.options.notes.trim()}`;
                 }
 
                 return (

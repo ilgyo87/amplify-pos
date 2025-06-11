@@ -20,6 +20,8 @@ export interface CustomerDocType {
   cognitoId?: string;
   notes?: string; // Customer notes
   joinDate?: string; // Date customer joined
+  emailNotifications?: boolean; // Toggle for email notifications
+  textNotifications?: boolean; // Toggle for text notifications
   // Local-only fields for sync management
   isLocalOnly: boolean;
   isDeleted?: boolean; // For soft deletes
@@ -30,7 +32,7 @@ export interface CustomerDocType {
 }
 
 export const customerSchema: RxJsonSchema<CustomerDocType> = {
-  version: 3,
+  version: 4,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -96,6 +98,14 @@ export const customerSchema: RxJsonSchema<CustomerDocType> = {
     joinDate: {
       type: ['string', 'null'],
       maxLength: 50
+    },
+    emailNotifications: {
+      type: 'boolean',
+      default: false
+    },
+    textNotifications: {
+      type: 'boolean',
+      default: false
     },
     isLocalOnly: {
       type: 'boolean'
