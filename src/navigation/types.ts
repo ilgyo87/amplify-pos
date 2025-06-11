@@ -33,6 +33,11 @@ export type RootStackParamList = {
   Employees: undefined;
   Settings: undefined;
   Reports: undefined;
+  // Settings screens
+  BusinessSettings: undefined;
+  PaymentSettings: undefined;
+  PrinterSettings: undefined;
+  DataSync: undefined;
   // Checkout flow
   Checkout: {
     customer: SerializableCustomer;

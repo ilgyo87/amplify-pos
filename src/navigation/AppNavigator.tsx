@@ -16,6 +16,10 @@ import ProductsScreen from '../screens/Products/ProductsScreen';
 import OrdersScreen from '../screens/Orders/OrdersScreen';
 import EmployeesScreen from '../screens/Employees/EmployeesScreen';
 import SettingsScreen from '../screens/Settings/SettingsScreen';
+import BusinessSettingsScreen from '../screens/Settings/BusinessSettingsScreen';
+import PaymentSettingsScreen from '../screens/Settings/PaymentSettingsScreen';
+import PrinterSettingsScreen from '../screens/Settings/PrinterSettingsScreen';
+import DataSyncScreen from '../screens/Settings/DataSyncScreen';
 import ReportsScreen from '../screens/Reports/ReportsScreen';
 import CheckoutScreen from '../screens/Checkout/CheckoutScreen';
 
@@ -250,6 +254,62 @@ const AppNavigator = () => {
             {() => (
               <AuthenticationWrapper>
                 <SettingsScreen />
+              </AuthenticationWrapper>
+            )}
+          </Stack.Screen>
+          <Stack.Screen 
+            name="BusinessSettings"
+            options={{ 
+              title: 'Business Profile',
+              headerLeft: () => <EmployeeHeaderLeft showBackButton={true} />,
+              headerRight: () => <SignOutButton /> 
+            }}
+          >
+            {() => (
+              <AuthenticationWrapper>
+                <BusinessSettingsScreen />
+              </AuthenticationWrapper>
+            )}
+          </Stack.Screen>
+          <Stack.Screen 
+            name="PaymentSettings"
+            options={{ 
+              title: 'Payment Settings',
+              headerLeft: () => <EmployeeHeaderLeft showBackButton={true} />,
+              headerRight: () => <SignOutButton /> 
+            }}
+          >
+            {() => (
+              <AuthenticationWrapper>
+                <PaymentSettingsScreen />
+              </AuthenticationWrapper>
+            )}
+          </Stack.Screen>
+          <Stack.Screen 
+            name="PrinterSettings"
+            options={{ 
+              title: 'Printer Settings',
+              headerLeft: () => <EmployeeHeaderLeft showBackButton={true} />,
+              headerRight: () => <SignOutButton /> 
+            }}
+          >
+            {() => (
+              <AuthenticationWrapper>
+                <PrinterSettingsScreen />
+              </AuthenticationWrapper>
+            )}
+          </Stack.Screen>
+          <Stack.Screen 
+            name="DataSync"
+            options={{ 
+              title: 'Data Sync',
+              headerLeft: () => <EmployeeHeaderLeft showBackButton={true} />,
+              headerRight: () => <SignOutButton /> 
+            }}
+          >
+            {() => (
+              <AuthenticationWrapper>
+                <DataSyncScreen />
               </AuthenticationWrapper>
             )}
           </Stack.Screen>
