@@ -12,9 +12,9 @@ import { ProductDocument } from '../schemas/product';
 import { businessService } from './businessService';
 import { OrderService } from './orderService';
 import { SerializableCustomer } from '../../navigation/types';
+import { BusinessDocument } from '../schemas/business';
 
 const orderService = new OrderService();
-import { BusinessDocument } from '../schemas/business';
 
 const client = generateClient<Schema>();
 
@@ -67,21 +67,33 @@ export class SyncService {
   /**
    * Convert order from local format to Amplify format
    */
-  private convertOrderToAmplifyFormat(order: any): any {
+  private async convertOrderToAmplifyFormat(order: any): Promise<any> {
+    // Get a valid businessId if the order doesn't have one
+    let businessId = order.businessId;
+    if (!businessId || businessId.trim() === '') {
+      try {
+        await businessService.initialize();
+        const businesses = await businessService.getAllBusinesses();
+        if (businesses.length > 0) {
+          businessId = businesses[0].id; // Use the first business
+          console.log(`[ORDER UPLOAD] Using business ID ${businessId} for order ${order.orderNumber}`);
+        } else {
+          throw new Error('No businesses found. Please create a business first.');
+        }
+      } catch (error) {
+        console.error('Error getting business for order:', error);
+        throw new Error('Failed to get business ID for order upload');
+      }
+    }
+
     return {
-      businessId: order.businessId || '',
+      businessId: businessId,
       customerId: order.customerId,
       employeeId: order.employeeId || '',
-      items: order.items,
-      subtotal: order.subtotal,
-      tax: order.tax,
-      total: order.total,
       paymentMethod: order.paymentMethod,
+      total: order.total,
       status: order.status || 'completed',
-      notes: order.notes || '',
-      barcodeData: order.barcodeData || '',
-      rackNumber: order.rackNumber || '',
-      orderNumber: order.orderNumber
+      rackNumber: order.rackNumber || undefined
     };
   }
 
@@ -374,24 +386,82 @@ export class SyncService {
   /**
    * Convert order from Amplify format to local format
    */
-  private convertOrderToLocalFormat(amplifyOrder: any): any {
+  private convertOrderToLocalFormat(amplifyOrder: any, orderItems: any[] = []): any {
+    // Group OrderItems by name and options to combine quantities
+    const itemGroups = new Map<string, any>();
+    
+    orderItems.forEach(item => {
+      const starch = item.starch || 'none';
+      const pressOnly = item.pressOnly || false;
+      const notes = Array.isArray(item.notes) ? item.notes.join(', ') : (item.notes || '');
+      
+      // Create a unique key based on name and options
+      const groupKey = `${item.name}_${starch}_${pressOnly}_${notes}`;
+      
+      if (itemGroups.has(groupKey)) {
+        // Increment quantity for existing group
+        itemGroups.get(groupKey).quantity += 1;
+      } else {
+        // Create new group with all required OrderItem fields
+        itemGroups.set(groupKey, {
+          id: item.id || '',
+          name: item.name || '',
+          description: item.description || '',
+          price: item.price || 0,
+          categoryId: item.category || '',
+          businessId: item.businessId || amplifyOrder.businessId || '',
+          imageName: undefined,
+          discount: item.discount || 0,
+          additionalPrice: 0,
+          notes: item.description || '',
+          sku: undefined,
+          cost: undefined,
+          barcode: undefined,
+          isActive: true,
+          isLocalOnly: false,
+          isDeleted: false,
+          lastSyncedAt: new Date().toISOString(),
+          amplifyId: item.id,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          quantity: 1,
+          options: {
+            starch: starch,
+            pressOnly: pressOnly,
+            notes: notes
+          },
+          itemKey: groupKey
+        });
+      }
+    });
+    
+    // Convert map to array
+    const localItems = Array.from(itemGroups.values());
+
     return {
       id: amplifyOrder.id,
-      orderNumber: amplifyOrder.orderNumber || `ORDER-${Date.now()}`,
+      orderNumber: `SYNC-${amplifyOrder.id.slice(-6)}`, // Generate order number from ID
       customerId: amplifyOrder.customerId,
+      customerName: 'Downloaded Customer', // We don't have customer name from Order
+      customerPhone: '', // We don't have customer phone from Order
+      businessId: amplifyOrder.businessId,
       employeeId: amplifyOrder.employeeId,
-      items: amplifyOrder.items || [],
-      subtotal: amplifyOrder.subtotal || 0,
-      tax: amplifyOrder.tax || 0,
+      employeeName: '', // We don't have employee name from Order
+      items: localItems,
+      subtotal: amplifyOrder.total * 0.9, // Estimate subtotal (90% of total)
+      tax: amplifyOrder.total * 0.1, // Estimate tax (10% of total)
       total: amplifyOrder.total || 0,
       paymentMethod: amplifyOrder.paymentMethod || 'cash',
       status: amplifyOrder.status || 'completed',
-      notes: amplifyOrder.notes || '',
-      barcodeData: amplifyOrder.barcodeData || '',
+      notes: '', // Notes not available in Amplify Order model
+      barcodeData: '', // Not available in Amplify Order model
       rackNumber: amplifyOrder.rackNumber || '',
-      selectedDate: amplifyOrder.selectedDate || new Date().toISOString(),
+      selectedDate: new Date().toISOString(), // Not available, use current date
       isLocalOnly: false,
-      lastSyncedAt: new Date().toISOString()
+      lastSyncedAt: new Date().toISOString(),
+      amplifyId: amplifyOrder.id,
+      createdAt: amplifyOrder.createdAt || new Date().toISOString(),
+      updatedAt: amplifyOrder.updatedAt || new Date().toISOString()
     };
   }
 
@@ -813,21 +883,58 @@ export class SyncService {
       for (const order of unsyncedOrders) {
         try {
           // Convert local order to Amplify format
-          const amplifyOrder = this.convertOrderToAmplifyFormat(order);
+          const amplifyOrder = await this.convertOrderToAmplifyFormat(order);
           
           // Create order in Amplify
           if (!client.models || !client.models.Order) {
             throw new Error('Amplify Order model not configured. Please check your Amplify setup.');
           }
-          const response = await (client.models as any).Order.create(amplifyOrder);
+          const orderResponse = await (client.models as any).Order.create(amplifyOrder);
           
-          if (response.data) {
+          if (orderResponse.data) {
+            const amplifyOrderId = orderResponse.data.id;
+            
+            // Create OrderItems for this order
+            if (order.items && order.items.length > 0) {
+              for (let i = 0; i < order.items.length; i++) {
+                const item = order.items[i];
+                // Create multiple OrderItem records for each quantity
+                for (let q = 0; q < item.quantity; q++) {
+                  try {
+                    const amplifyOrderItem = {
+                      name: item.name,
+                      description: item.description || '',
+                      price: item.price || 0,
+                      discount: item.discount || 0,
+                      category: item.categoryId || '', // Use categoryId from item
+                      businessId: amplifyOrder.businessId,
+                      customerId: order.customerId,
+                      employeeId: order.employeeId || '',
+                      orderId: amplifyOrderId,
+                      starch: item.options?.starch || 'none',
+                      pressOnly: item.options?.pressOnly || false,
+                      notes: item.options?.notes ? [item.options.notes] : []
+                    };
+                  
+                    if (!client.models.OrderItem) {
+                      throw new Error('Amplify OrderItem model not configured.');
+                    }
+                    
+                    await (client.models as any).OrderItem.create(amplifyOrderItem);
+                    console.log(`Created OrderItem: ${item.name} (${q + 1}/${item.quantity}) for order ${order.orderNumber}`);
+                  } catch (itemError) {
+                    console.error(`Error creating OrderItem ${item.name} for order ${order.orderNumber}:`, itemError);
+                  }
+                }
+              }
+            }
+            
             // Mark as synced in local database
-            await orderService.updateOrderRack(order.id, order.rackNumber || '');
+            await orderService.markAsSynced(order.id, amplifyOrderId);
             uploadedCount++;
             console.log(`Uploaded order: ${order.orderNumber}`);
-          } else if (response.errors) {
-            const error = `Failed to upload order ${order.orderNumber}: ${response.errors.map((e: any) => e.message).join(', ')}`;
+          } else if (orderResponse.errors) {
+            const error = `Failed to upload order ${order.orderNumber}: ${orderResponse.errors.map((e: any) => e.message).join(', ')}`;
             errors.push(error);
             console.error(error);
           }
@@ -1421,6 +1528,23 @@ export class SyncService {
 
       for (const amplifyOrder of amplifyOrders) {
         try {
+          // Fetch OrderItems for this order
+          let orderItems: any[] = [];
+          try {
+            if (client.models.OrderItem) {
+              const itemsResponse = await (client.models as any).OrderItem.list({
+                filter: { orderId: { eq: amplifyOrder.id } }
+              });
+              
+              if (itemsResponse.data) {
+                orderItems = itemsResponse.data;
+              }
+            }
+          } catch (itemError) {
+            console.warn(`Failed to fetch items for order ${amplifyOrder.id}:`, itemError);
+            // Continue without items rather than failing the whole order
+          }
+
           // Check if order already exists locally by amplifyId
           const existingOrders = await orderService.getAllOrders();
           const existingOrder = existingOrders.find(o => o.amplifyId === amplifyOrder.id);
@@ -1431,14 +1555,14 @@ export class SyncService {
             const localUpdatedAt = new Date(existingOrder.updatedAt);
             
             if (amplifyUpdatedAt > localUpdatedAt) {
-              const localFormat = this.convertOrderToLocalFormat(amplifyOrder);
+              const localFormat = this.convertOrderToLocalFormat(amplifyOrder, orderItems);
               await orderService.updateOrder(existingOrder.id, localFormat);
               downloadedCount++;
-              console.log(`Updated order: ${amplifyOrder.orderNumber}`);
+              console.log(`Updated order: ${amplifyOrder.id} with ${orderItems.length} items`);
             }
           } else {
             // Create new local order
-            const localFormat = this.convertOrderToLocalFormat(amplifyOrder);
+            const localFormat = this.convertOrderToLocalFormat(amplifyOrder, orderItems);
             await orderService.createOrder({
               customer: {
                 id: localFormat.customerId,
@@ -1456,10 +1580,10 @@ export class SyncService {
             // Mark as synced since it came from Amplify
             await orderService.markAsSynced(localFormat.id, amplifyOrder.id);
             downloadedCount++;
-            console.log(`Downloaded new order: ${localFormat.orderNumber}`);
+            console.log(`Downloaded new order: ${amplifyOrder.id} with ${orderItems.length} items`);
           }
         } catch (error) {
-          const errorMsg = `Error processing order ${amplifyOrder.orderNumber}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          const errorMsg = `Error processing order ${amplifyOrder.id}: ${error instanceof Error ? error.message : 'Unknown error'}`;
           errors.push(errorMsg);
           console.error(errorMsg);
         }

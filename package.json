@@ -12,6 +12,7 @@
     "clean:ios": "rm -rf ios/build && rm -rf ios/Pods ios/Podfile.lock && rm -rf ~/Library/Developer/Xcode/DerivedData/* && cd ios && pod install --repo-update && cd .."
   },
   "dependencies": {
+    "@aws-amplify/api": "^6.3.12",
     "@aws-amplify/react-native": "^1.1.10",
     "@aws-amplify/rtn-web-browser": "^1.1.4",
     "@aws-amplify/ui-react-native": "^2.5.3",
@@ -22,6 +23,7 @@
     "@react-navigation/native-stack": "^7.3.14",
     "@types/react-native-vector-icons": "^6.4.18",
     "aws-amplify": "^6.15.0",
+    "axios": "^1.9.0",
     "expo": "~53.0.10",
     "expo-camera": "~16.1.7",
     "expo-print": "~14.1.4",
@@ -32,6 +34,7 @@
     "react": "19.0.0",
     "react-hook-form": "^7.57.0",
     "react-native": "0.79.3",
+    "react-native-config": "^1.5.5",
     "react-native-get-random-values": "^1.11.0",
     "react-native-qrcode-svg": "^6.3.15",
     "react-native-quick-crypto": "^0.7.14",

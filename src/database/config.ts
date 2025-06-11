@@ -65,7 +65,7 @@ const createDatabase = async (): Promise<AppDatabase> => {
 
   try {
     const database = await createRxDatabase<DatabaseCollections>({
-      name: `amplifyposdb_${Date.now()}`,
+      name: 'amplifyposdb',
       storage,
       multiInstance: false, // Set to false in React Native
       ignoreDuplicate: true,
@@ -102,6 +102,14 @@ const createDatabase = async (): Promise<AppDatabase> => {
             3: function(oldDoc: any) {
               // No data transformation needed, just index change
               return oldDoc;
+            },
+            // Migration from version 3 to 4 - add notification toggles
+            4: function(oldDoc: any) {
+              return {
+                ...oldDoc,
+                emailNotifications: oldDoc.emailNotifications || false,
+                textNotifications: oldDoc.textNotifications || false
+              };
             }
           }
         },
@@ -136,6 +144,35 @@ const createDatabase = async (): Promise<AppDatabase> => {
             // Migration from version 0 to 1 - initial creation
             1: function(oldDoc: any) {
               return oldDoc;
+            },
+            // Migration from version 1 to 2 - add businessId field
+            2: function(oldDoc: any) {
+              return {
+                ...oldDoc,
+                businessId: oldDoc.businessId || ''
+              };
+            },
+            // Migration from version 2 to 3 - add categoryId and discount to items
+            3: function(oldDoc: any) {
+              return {
+                ...oldDoc,
+                items: oldDoc.items ? oldDoc.items.map((item: any) => ({
+                  ...item,
+                  categoryId: item.categoryId || '', // Add categoryId if missing
+                  discount: item.discount || 0 // Add discount if missing
+                })) : []
+              };
+            },
+            // Migration from version 3 to 4 - add statusHistory and picked_up status
+            4: function(oldDoc: any) {
+              // Create initial status history for existing orders
+              const timestamp = new Date(oldDoc.createdAt || new Date()).toLocaleString();
+              const initialStatusHistory = oldDoc.statusHistory || [`${timestamp}: Order created with status '${oldDoc.status || 'pending'}'`];
+              
+              return {
+                ...oldDoc,
+                statusHistory: initialStatusHistory
+              };
             }
           }
         }

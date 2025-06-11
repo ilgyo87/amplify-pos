@@ -94,23 +94,38 @@ export function OrderSummary({
 
     return (
       <View style={styles.orderItem}>
-        {/* Top row: Name + Price + Action Buttons */}
+        {/* Top row: Name + Action Buttons */}
         <View style={styles.topRow}>
           <View style={styles.itemNameContainer}>
             <Text style={styles.itemName} numberOfLines={1}>
               {item.name}
-              {item.options?.starch && item.options.starch !== 'none' && (
-                <Text style={styles.optionText}>
-                  {' '}({starchShortCode(item.options.starch)})
-                </Text>
-              )}
-              {item.options?.pressOnly && (
-                <Text style={styles.optionText}> PO</Text>
-              )}
             </Text>
           </View>
 
           <View style={styles.actionButtons}>
+            {/* Item options display next to settings button */}
+            {(item.options?.starch !== 'none' || item.options?.pressOnly || item.options?.notes) && (
+              <View style={styles.optionsContainer}>
+                {item.options?.starch && item.options.starch !== 'none' && (
+                  <View style={styles.optionBadge}>
+                    <Text style={styles.optionBadgeText}>
+                      {starchShortCode(item.options.starch)}
+                    </Text>
+                  </View>
+                )}
+                {item.options?.pressOnly && (
+                  <View style={[styles.optionBadge, styles.pressOnlyBadge]}>
+                    <Text style={styles.optionBadgeText}>PO</Text>
+                  </View>
+                )}
+                {item.options?.notes && item.options.notes.trim() && (
+                  <View style={[styles.optionBadge, styles.notesBadge]}>
+                    <Ionicons name="document-text" size={10} color="#666" />
+                  </View>
+                )}
+              </View>
+            )}
+
             <TouchableOpacity 
               style={styles.editButton}
               onPress={() => onEditItem(item)}
@@ -472,5 +487,35 @@ const styles = StyleSheet.create({
   },
   checkoutButtonTextDisabled: {
     color: '#ccc',
+  },
+  optionsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  optionBadge: {
+    backgroundColor: '#e8f4f8',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#b3d9e6',
+  },
+  pressOnlyBadge: {
+    backgroundColor: '#fff3cd',
+    borderColor: '#ffc107',
+  },
+  notesBadge: {
+    backgroundColor: '#f8f9fa',
+    borderColor: '#dee2e6',
+    paddingHorizontal: 4,
+  },
+  optionBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#333',
+    textTransform: 'uppercase',
   },
 });

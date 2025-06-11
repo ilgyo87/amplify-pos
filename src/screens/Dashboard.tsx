@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, SafeAreaView, Text, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, SafeAreaView, Text, FlatList, TouchableOpacity, ActivityIndicator, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { InputBox } from '../components/ui/InputBox';
 import { DashboardMenu, MenuItem } from '../components/ui/DashboardMenu';
 import { BusinessForm } from '../components/forms/BusinessForm';
 import { customerService } from '../database/services/customerService';
 import { businessService } from '../database/services/businessService';
+import { OrderService } from '../database/services/orderService';
 import { CustomerDocument } from '../database/schemas/customer';
 import { BusinessDocument } from '../database/schemas/business';
 import { BusinessFormData, BusinessValidationErrors } from '../utils/businessValidation';
@@ -22,15 +23,20 @@ export default function Dashboard() {
   const [customers, setCustomers] = useState<CustomerDocument[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showResults, setShowResults] = useState(false);
+  const [orderService] = useState(() => new OrderService());
+  const [hasReadyOrders, setHasReadyOrders] = useState(false);
+  const [blinkAnimation] = useState(new Animated.Value(1));
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   
   useEffect(() => {
     let businessSubscription: any = null;
+    let readyOrdersSubscription: any = null;
 
     const initialize = async () => {
       try {
         await customerService.initialize();
         await businessService.initialize();
+        await orderService.initialize();
         
         // Subscribe to business changes using RxDB reactive query
         const { getDatabaseInstance } = await import('../database/config');
@@ -52,6 +58,19 @@ export default function Dashboard() {
               setBusinessName('No Business');
             }
           });
+
+        // Subscribe to completed orders for notification
+        readyOrdersSubscription = database.orders
+          .find({
+            selector: {
+              status: 'completed',
+              isDeleted: { $ne: true }
+            }
+          })
+          .$.subscribe((completedOrders: any[]) => {
+            setHasReadyOrders(completedOrders.length > 0);
+          });
+
       } catch (error) {
         console.error('Failed to initialize services:', error);
       }
@@ -64,8 +83,36 @@ export default function Dashboard() {
       if (businessSubscription) {
         businessSubscription.unsubscribe();
       }
+      if (readyOrdersSubscription) {
+        readyOrdersSubscription.unsubscribe();
+      }
     };
   }, []);
+
+  // Handle blinking animation for ready orders notification
+  useEffect(() => {
+    if (hasReadyOrders) {
+      const blinkLoop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(blinkAnimation, {
+            toValue: 0.3,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(blinkAnimation, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ]),
+        { iterations: -1 }
+      );
+      blinkLoop.start();
+      return () => blinkLoop.stop();
+    } else {
+      blinkAnimation.setValue(1);
+    }
+  }, [hasReadyOrders]);
   
   const searchCustomers = useDebouncedCallback(async (term: string) => {
     if (!term.trim()) {
@@ -76,7 +123,34 @@ export default function Dashboard() {
 
     setIsLoading(true);
     try {
-      const results = await customerService.searchCustomers(term, 10);
+      let results: CustomerDocument[] = [];
+      
+      // First, search for customers by name, phone, email
+      const customerResults = await customerService.searchCustomers(term, 10);
+      results = [...customerResults];
+      
+      // Also search for orders by order number
+      try {
+        const order = await orderService.getOrderByNumber(term);
+        if (order) {
+          // Get the customer for this order
+          const orderCustomer = await customerService.getCustomerById(order.customerId);
+          if (orderCustomer) {
+            // Check if customer is not already in results
+            const isAlreadyInResults = results.some(c => c.id === orderCustomer.id);
+            if (!isAlreadyInResults) {
+              // Add a marker to indicate this was found via order search
+              (orderCustomer as any).fromOrderSearch = true;
+              (orderCustomer as any).orderNumber = order.orderNumber;
+              results.unshift(orderCustomer); // Add to beginning of list
+            }
+          }
+        }
+      } catch (orderError) {
+        // Order search failed, but continue with customer results
+        console.log('Order search failed:', orderError);
+      }
+      
       setCustomers(results);
       setShowResults(true);
     } catch (error) {
@@ -92,7 +166,7 @@ export default function Dashboard() {
     searchCustomers(text);
   };
 
-  const handleSelectCustomer = (customer: CustomerDocument) => {
+  const handleSelectCustomer = (customer: CustomerDocument & { fromOrderSearch?: boolean }) => {
     setSearchTerm('');
     setShowResults(false);
     setCustomers([]);
@@ -120,7 +194,11 @@ export default function Dashboard() {
       updatedAt: customer.updatedAt,
     };
     
-    navigation.navigate('Checkout', { customer: serializableCustomer });
+    // If the customer was found via order search, automatically go to checkout
+    // Otherwise, also navigate to checkout as that's where customer details are shown
+    navigation.navigate('Checkout', { 
+      customer: serializableCustomer 
+    });
   };
 
   const handleCreateBusiness = async (data: BusinessFormData): Promise<{ business?: any; errors?: BusinessValidationErrors }> => {
@@ -167,6 +245,17 @@ export default function Dashboard() {
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <Text style={styles.headerText}>{businessName}</Text>
+          {hasReadyOrders && (
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Orders')}
+              activeOpacity={0.7}
+            >
+              <Animated.View style={[styles.readyOrdersNotification, { opacity: blinkAnimation }]}>
+                <Ionicons name="notifications" size={24} color="#FF6B35" />
+                <Text style={styles.readyOrdersText}>Orders Ready!</Text>
+              </Animated.View>
+            </TouchableOpacity>
+          )}
           {businessName === 'No Business' && (
             <TouchableOpacity 
               style={styles.createBusinessButton}
@@ -182,7 +271,7 @@ export default function Dashboard() {
       <View style={styles.content}>
         <View style={styles.searchContainer}>
           <InputBox
-            placeholder="Customer Search"
+            placeholder="Search customers or order number"
             value={searchTerm}
             onChangeText={handleSearchChange}
             onFocus={() => searchTerm.trim() && setShowResults(true)}
@@ -199,16 +288,26 @@ export default function Dashboard() {
                   keyExtractor={(item) => item.id}
                   renderItem={({ item }) => (
                     <TouchableOpacity 
-                      style={styles.customerItem} 
+                      key={`customer-${item.id}`}
+                      style={[
+                        styles.customerItem,
+                        (item as any).fromOrderSearch && styles.orderSearchItem
+                      ]} 
                       onPress={() => handleSelectCustomer(item)}
                       activeOpacity={0.7}
                     >
                       <View style={styles.customerItemContent}>
-                        <Text style={styles.customerName}>
+                        {(item as any).fromOrderSearch && (
+                          <View style={styles.orderIndicator}>
+                            <Ionicons name="document" size={16} color="#007AFF" />
+                            <Text style={styles.orderNumber}>Order: {(item as any).orderNumber}</Text>
+                          </View>
+                        )}
+                        <Text key={`name-${item.id}`} style={styles.customerName}>
                           {item.firstName} {item.lastName}
                         </Text>
-                        {item.email && <Text style={styles.customerDetail}>{item.email}</Text>}
-                        {item.phone && <Text style={styles.customerDetail}>{item.phone}</Text>}
+                        {item.email && <Text key={`email-${item.id}`} style={styles.customerDetail}>{item.email}</Text>}
+                        {item.phone && <Text key={`phone-${item.id}`} style={styles.customerDetail}>{item.phone}</Text>}
                       </View>
                     </TouchableOpacity>
                   )}
@@ -259,6 +358,23 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
   },
+  readyOrdersNotification: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 16,
+    backgroundColor: '#FFF4F1',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#FF6B35',
+  },
+  readyOrdersText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FF6B35',
+    marginLeft: 6,
+  },
   createBusinessButton: {
     marginLeft: 12,
     padding: 8,
@@ -297,8 +413,24 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
+  orderSearchItem: {
+    backgroundColor: '#f0f7ff',
+    borderLeftWidth: 3,
+    borderLeftColor: '#007AFF',
+  },
   customerItemContent: {
     flex: 1,
+  },
+  orderIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  orderNumber: {
+    fontSize: 12,
+    color: '#007AFF',
+    fontWeight: '600',
+    marginLeft: 4,
   },
   customerName: {
     fontSize: 16,

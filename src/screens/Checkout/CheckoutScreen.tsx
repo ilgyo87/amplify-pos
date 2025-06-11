@@ -7,8 +7,10 @@ import {
   Dimensions,
   Alert,
   Modal,
-  SafeAreaView
+  SafeAreaView,
+  Animated
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { CustomerHeader } from '../../components/checkout/CustomerHeader';
@@ -20,10 +22,13 @@ import { DatePickerModal } from '../../components/checkout/DatePickerModal';
 import { useCategories } from '../../database/hooks/useCategories';
 import { useProducts } from '../../database/hooks/useProducts';
 import { useOrders } from '../../database/hooks/useOrders';
-import { useCustomers } from '../../database/hooks/useCustomers';
+import { useCustomers, useCustomer } from '../../database/hooks/useCustomers';
+import { OrderService } from '../../database/services/orderService';
 import { SerializableCustomer } from '../../navigation/types';
 import { DynamicForm } from '../../components/forms/DynamicForm';
 import { CustomerFormData } from '../../utils/customerValidation';
+import { OrderItemSettingsModal } from '../../components/checkout/OrderItemSettingsModal';
+import { PickupModal } from '../../components/checkout/PickupModal';
 import { CategoryDocument } from '../../database/schemas/category';
 import { ProductDocument } from '../../database/schemas/product';
 import { OrderItem, OrderItemOptions, generateOrderItemKey } from '../../types/order';
@@ -137,6 +142,9 @@ const generateThermalReceiptCommands = (order: any, paymentMethod: string, selec
     }
     if (item.options?.pressOnly) {
       itemName += ' - Press Only';
+    }
+    if (item.options?.notes && item.options.notes.trim()) {
+      itemName += ` - ${item.options.notes.trim()}`;
     }
     
     // Truncate long item names
@@ -297,7 +305,12 @@ const printReceiptToThermalPrinter = async (order: any, paymentMethod: string, s
 
 export default function CheckoutScreen({ route, navigation }: CheckoutScreenProps) {
   const { customer: routeCustomer } = route.params;
-  const [customer, setCustomer] = useState(routeCustomer);
+  
+  // Use reactive customer hook for automatic updates
+  const { customer: reactiveCustomer, loading: customerLoading } = useCustomer(routeCustomer.id);
+  
+  // Use reactive customer data if available, fallback to route customer
+  const customer = reactiveCustomer || routeCustomer;
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [showReceiptPreview, setShowReceiptPreview] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -307,6 +320,14 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
   const [showEditCustomerModal, setShowEditCustomerModal] = useState(false);
   const [formErrors, setFormErrors] = useState({});
   const [duplicateError, setDuplicateError] = useState<string>('');
+  const [showItemSettingsModal, setShowItemSettingsModal] = useState(false);
+  const [editingItem, setEditingItem] = useState<OrderItem | null>(null);
+  const [customerOrders, setCustomerOrders] = useState<any[]>([]);
+  const [orderService] = useState(() => new OrderService());
+  const [hasReadyOrders, setHasReadyOrders] = useState(false);
+  const [showPickupModal, setShowPickupModal] = useState(false);
+  const [blinkAnimation] = useState(new Animated.Value(1));
+  const [customerHasReadyOrders, setCustomerHasReadyOrders] = useState(false);
   
   // Database hooks
   const { categories, loading: categoriesLoading } = useCategories();
@@ -341,6 +362,68 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
       setSelectedCategory(categories[0]);
     }
   }, [categories, selectedCategory]);
+
+  // Remove customer orders subscription since we don't want to show recent orders
+
+  // Monitor ready orders globally for blinking icon
+  useEffect(() => {
+    let subscription: any = null;
+
+    const initializeReadyOrdersSubscription = async () => {
+      try {
+        await orderService.initialize();
+        
+        subscription = await orderService.subscribeToOrdersByStatus('completed', (orders) => {
+          setHasReadyOrders(orders.length > 0);
+          
+          // Check if current customer has completed orders
+          const customerCompletedOrders = orders.filter(order => order.customerId === customer.id);
+          setCustomerHasReadyOrders(customerCompletedOrders.length > 0);
+        });
+
+        // Get initial completed orders
+        const completedOrders = await orderService.getOrdersByStatus('completed');
+        setHasReadyOrders(completedOrders.length > 0);
+        const customerCompletedOrders = completedOrders.filter(order => order.customerId === customer.id);
+        setCustomerHasReadyOrders(customerCompletedOrders.length > 0);
+      } catch (error) {
+        console.error('Error setting up ready orders subscription:', error);
+      }
+    };
+
+    initializeReadyOrdersSubscription();
+
+    return () => {
+      if (subscription) {
+        subscription();
+      }
+    };
+  }, [orderService, customer.id]);
+
+  // Handle blinking animation for ready orders
+  useEffect(() => {
+    if (hasReadyOrders) {
+      const blinkLoop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(blinkAnimation, {
+            toValue: 0.3,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(blinkAnimation, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ]),
+        { iterations: -1 }
+      );
+      blinkLoop.start();
+      return () => blinkLoop.stop();
+    } else {
+      blinkAnimation.setValue(1);
+    }
+  }, [hasReadyOrders]);
 
   // Handle product selection
   const handleAddItem = (product: ProductDocument, options?: OrderItemOptions) => {
@@ -416,12 +499,59 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
 
   // Handle item editing (options)
   const handleEditItem = (item: OrderItem) => {
-    // TODO: Implement options modal
-    Alert.alert(
-      'Edit Item Options',
-      'Options editing modal will be implemented here',
-      [{ text: 'OK' }]
-    );
+    setEditingItem(item);
+    setShowItemSettingsModal(true);
+  };
+
+  // Handle item settings save
+  const handleSaveItemSettings = (item: OrderItem, options: OrderItemOptions) => {
+    setOrderItems(prevItems => {
+      return prevItems.map(orderItem => {
+        if (orderItem.itemKey === item.itemKey) {
+          // Create new item key with updated options
+          const baseProduct = {
+            id: item.id,
+            name: item.name,
+            description: item.description,
+            price: item.price,
+            categoryId: item.categoryId,
+            businessId: item.businessId,
+            imageName: item.imageName,
+            discount: item.discount,
+            additionalPrice: item.additionalPrice,
+            notes: item.notes,
+            sku: item.sku,
+            cost: item.cost,
+            barcode: item.barcode,
+            isActive: item.isActive,
+            isLocalOnly: item.isLocalOnly,
+            isDeleted: item.isDeleted,
+            lastSyncedAt: item.lastSyncedAt,
+            amplifyId: item.amplifyId,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt
+          } as ProductDocument;
+
+          const newItemKey = generateOrderItemKey(baseProduct, options);
+          
+          return {
+            ...orderItem,
+            options,
+            itemKey: newItemKey
+          };
+        }
+        return orderItem;
+      });
+    });
+    
+    setShowItemSettingsModal(false);
+    setEditingItem(null);
+  };
+
+  // Handle item settings cancel
+  const handleCancelItemSettings = () => {
+    setShowItemSettingsModal(false);
+    setEditingItem(null);
   };
 
   // Handle checkout flow - go to receipt preview
@@ -468,19 +598,7 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
     const result = await updateCustomer(customer.id, data);
     
     if (result.success && result.customer) {
-      // Update the local customer state with the new data
-      setCustomer({
-        id: result.customer.id,
-        firstName: result.customer.firstName,
-        lastName: result.customer.lastName,
-        phone: result.customer.phone,
-        email: result.customer.email || '',
-        address: result.customer.address || '',
-        city: result.customer.city || '',
-        state: result.customer.state || '',
-        zipCode: result.customer.zipCode || '',
-        notes: result.customer.notes || ''
-      });
+      // No need to manually update customer state - reactive hook will handle it automatically
       setShowEditCustomerModal(false);
       Alert.alert('Success', 'Customer updated successfully');
     } else {
@@ -505,7 +623,9 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
     setShowReceiptPreview(false);
     
     try {
-      // Save order to database
+      // No auto-completion needed since we're now tracking completed orders
+
+      // Save new order to database
       const newOrder = await createOrder({
         customer,
         items: orderItems,
@@ -531,7 +651,11 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
           {
             text: 'No Thanks',
             style: 'cancel',
-            onPress: () => navigation.goBack()
+            onPress: () => {
+              // Check if there are ready orders after completing this order
+              checkForCompletedOrdersAndShowPickup();
+              navigation.goBack();
+            }
           },
           {
             text: 'Print Receipt',
@@ -539,12 +663,25 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
               try {
                 await printReceiptToThermalPrinter(newOrder, paymentMethod, selectedDate);
                 Alert.alert('Receipt Printed', 'Receipt has been sent to your Munbyn printer', [
-                  { text: 'OK', onPress: () => navigation.goBack() }
+                  { 
+                    text: 'OK', 
+                    onPress: () => {
+                      // After printing, check for ready orders and show pickup modal
+                      checkForCompletedOrdersAndShowPickup();
+                      navigation.goBack();
+                    }
+                  }
                 ]);
               } catch (error) {
                 console.error('Print receipt error:', error);
                 Alert.alert('Print Error', 'Failed to print receipt. Please check printer connection.', [
-                  { text: 'OK', onPress: () => navigation.goBack() }
+                  { 
+                    text: 'OK', 
+                    onPress: () => {
+                      checkForCompletedOrdersAndShowPickup();
+                      navigation.goBack();
+                    }
+                  }
                 ]);
               }
             }
@@ -558,6 +695,20 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
         'Failed to create order. Please try again.',
         [{ text: 'OK' }]
       );
+    }
+  };
+
+  const checkForCompletedOrdersAndShowPickup = async () => {
+    try {
+      const completedOrders = await orderService.getOrdersByStatus('completed');
+      if (completedOrders.length > 0) {
+        // Delay slightly to allow navigation to complete
+        setTimeout(() => {
+          setShowPickupModal(true);
+        }, 500);
+      }
+    } catch (error) {
+      console.error('Error checking for completed orders:', error);
     }
   };
 
@@ -645,12 +796,18 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
 
   return (
     <SafeAreaView style={styles.container}>
-      <CustomerHeader 
-        customer={customer}
-        onEdit={handleEditCustomer}
-        onDatePick={handleOpenDatePicker}
-        selectedDate={selectedDate || undefined}
-      />
+      <View style={styles.headerRow}>
+        <CustomerHeader 
+          customer={customer}
+          onEdit={handleEditCustomer}
+          onDatePick={handleOpenDatePicker}
+          selectedDate={selectedDate || undefined}
+          onReadyOrdersPress={hasReadyOrders ? () => setShowPickupModal(true) : undefined}
+          hasReadyOrders={hasReadyOrders}
+          blinkAnimation={blinkAnimation}
+          style={styles.customerHeaderFlex}
+        />
+      </View>
       
       {renderContent()}
 
@@ -692,7 +849,9 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
             city: customer.city || '',
             state: customer.state || '',
             zipCode: customer.zipCode || '',
-            notes: customer.notes || ''
+            notes: customer.notes || '',
+            emailNotifications: customer.emailNotifications || false,
+            textNotifications: customer.textNotifications || false
           }}
           onSubmit={handleUpdateCustomer}
           onCancel={handleCloseEditModal}
@@ -701,6 +860,23 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
           duplicateError={duplicateError}
         />
       </Modal>
+
+      {/* Order Item Settings Modal */}
+      <OrderItemSettingsModal
+        visible={showItemSettingsModal}
+        item={editingItem}
+        onSave={handleSaveItemSettings}
+        onCancel={handleCancelItemSettings}
+      />
+
+      {/* Pickup Modal */}
+      <PickupModal
+        visible={showPickupModal}
+        onClose={() => setShowPickupModal(false)}
+        onOrderPickedUp={(orderId) => {
+          console.log('Order picked up:', orderId);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -758,5 +934,15 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+  },
+  customerHeaderFlex: {
+    flex: 1,
+    marginRight: 12,
   },
 });

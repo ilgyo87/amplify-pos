@@ -170,9 +170,10 @@ export class CustomerRepository extends BaseRepository<CustomerDocType, Customer
   }
 
   /**
-   * Search customers across multiple fields
+   * Search customers across multiple fields, including by order ID/number
+   * @returns Array of customer documents with metadata about search match source
    */
-  async search(query: string, limit?: number): Promise<CustomerDocument[]> {
+  async search(query: string, limit?: number): Promise<Array<CustomerDocument & { fromOrderSearch?: boolean }>> {
     if (!query || query.trim() === '') {
       return this.findAll();
     }
@@ -186,8 +187,8 @@ export class CustomerRepository extends BaseRepository<CustomerDocType, Customer
 
     // Perform in-memory search for better compatibility and more flexible matching
     const searchTerm = query.toLowerCase().trim();
-    
-    const filteredCustomers = allCustomers.filter(customer => {
+  
+    let filteredCustomers = allCustomers.filter(customer => {
       // Search in name fields
       const firstName = customer.firstName?.toLowerCase() || '';
       const lastName = customer.lastName?.toLowerCase() || '';
@@ -218,14 +219,57 @@ export class CustomerRepository extends BaseRepository<CustomerDocType, Customer
       );
     });
 
+    // Check if search term might be an order ID or order number
+    // This is more efficient than fetching all orders since we're likely looking for a specific order
+    try {
+      // Get the database instance to access orders collection
+      const { getDatabaseInstance } = await import('../config');
+      const db = await getDatabaseInstance();
+      
+      // Search for orders where orderNumber includes the search term
+      const matchingOrders = await db.orders.find({
+        selector: {
+          orderNumber: {
+            $regex: searchTerm
+          },
+          isDeleted: { $ne: true }
+        }
+      }).exec();
+      
+      // If we found matching orders, add their customers to our results if not already included
+      if (matchingOrders.length > 0) {
+        // Extract customer IDs from matching orders
+        const customerIds = matchingOrders.map(order => order.customerId);
+        
+        // Find customers that aren't already in our filtered results
+        const orderCustomers = allCustomers.filter(customer => 
+          customerIds.includes(customer.id) && 
+          !filteredCustomers.some(fc => fc.id === customer.id)
+        );
+        
+        // Mark these customers as coming from order search and add them to results
+        const orderCustomersWithMetadata = orderCustomers.map(customer => ({
+          ...customer,
+          fromOrderSearch: true
+        }));
+        
+        // Add these customers to our results
+        filteredCustomers = [...filteredCustomers, ...orderCustomersWithMetadata];
+      }
+    } catch (error) {
+      console.error('Error searching orders:', error);
+    }
+
     // Apply limit if specified
     const results = limit ? filteredCustomers.slice(0, limit) : filteredCustomers;
-    
+  
     return results as CustomerDocument[];
   }
 
   /**
    * Subscribe to changes in the customers collection
+   * @param callback Function to be called when changes occur
+   * @returns Unsubscribe function
    */
   subscribeToChanges(callback: (change: any) => void): () => void {
     const subscription = this.collection.$.subscribe(callback);

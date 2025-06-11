@@ -5,6 +5,8 @@ import { SerializableCustomer } from '../../navigation/types';
 import { getDatabaseInstance } from '../config';
 import { v4 as uuidv4 } from 'uuid';
 import { toPreciseAmount } from '../../utils/monetaryUtils';
+import { notificationService } from '../../services/notificationService';
+import { customerService } from './customerService';
 
 export class OrderService {
   private repository: OrderRepository | null = null;
@@ -46,6 +48,26 @@ export class OrderService {
     const now = new Date().toISOString();
     const orderNumber = await repository.generateOrderNumber();
     
+    // Get a valid businessId
+    let businessId = customer.businessId || '';
+    if (!businessId || businessId.trim() === '') {
+      try {
+        const { businessService } = await import('./businessService');
+        await businessService.initialize();
+        const businesses = await businessService.getAllBusinesses();
+        if (businesses.length > 0) {
+          businessId = businesses[0].id;
+          console.log(`[ORDER CREATE] Using business ID ${businessId} for new order`);
+        } else {
+          console.warn('[ORDER CREATE] No businesses found, using empty businessId');
+          businessId = '';
+        }
+      } catch (error) {
+        console.error('Error getting business for new order:', error);
+        businessId = '';
+      }
+    }
+    
     // Using a more robust approach for monetary values to eliminate floating point errors
     
     // Calculate totals with precise handling of decimals
@@ -67,12 +89,17 @@ export class OrderService {
     const tax = toPreciseAmount(subtotal * 0.0875); // 8.75% tax
     const total = toPreciseAmount(subtotal + tax);
 
+    // Initialize status history with order creation
+    const timestamp = new Date(now).toLocaleString();
+    const initialStatusHistory = [`${timestamp}: Order created with status 'pending'`];
+
     const orderData: OrderDocType = {
       id: uuidv4(),
       orderNumber,
       customerId: customer.id,
       customerName: `${customer.firstName} ${customer.lastName}`,
       customerPhone: customer.phone,
+      businessId: businessId, // Use the resolved businessId
       employeeId: employee?.id,
       employeeName: employee?.name,
       items: items.map(item => ({
@@ -81,6 +108,8 @@ export class OrderService {
         description: item.description,
         price: Number(item.price) || 0,
         quantity: Number(item.quantity) || 0,
+        categoryId: item.categoryId, // Preserve categoryId for sync purposes
+        discount: Number(item.discount) || 0, // Preserve discount for sync purposes
         options: item.options,
         itemKey: item.itemKey
       })),
@@ -92,6 +121,7 @@ export class OrderService {
       paymentMethod,
       selectedDate,
       status: 'pending',
+      statusHistory: initialStatusHistory,
       notes,
       barcodeData,
       isLocalOnly: true,
@@ -129,7 +159,44 @@ export class OrderService {
 
   async updateOrderStatus(orderId: string, status: OrderDocType['status']): Promise<OrderDocument | null> {
     const repository = await this.getRepository();
-    return repository.updateStatus(orderId, status);
+    
+    // Get the current order to access its current status and history
+    const currentOrder = await repository.findById(orderId);
+    if (!currentOrder) {
+      return null;
+    }
+
+    // Create status history entry
+    const now = new Date();
+    const timestamp = now.toLocaleString();
+    const statusEntry = `${timestamp}: Status changed from '${currentOrder.status}' to '${status}'`;
+    
+    // Get existing status history or create new array
+    const currentHistory = currentOrder.statusHistory || [];
+    const updatedHistory = [...currentHistory, statusEntry];
+
+    // Use the repository's update method to update both status and history
+    const updatedOrder = await repository.update(orderId, {
+      status,
+      statusHistory: updatedHistory,
+      updatedAt: now.toISOString()
+    });
+
+    // Send notifications if order is marked as completed
+    if (status === 'completed' && updatedOrder) {
+      try {
+        await customerService.initialize();
+        const customer = await customerService.getCustomerById(updatedOrder.customerId);
+        if (customer) {
+          await notificationService.sendOrderCompletedNotification(customer, updatedOrder);
+        }
+      } catch (error) {
+        console.error('Failed to send notification for completed order:', error);
+        // Don't throw - we don't want notification failures to break order completion
+      }
+    }
+
+    return updatedOrder;
   }
 
   async updateOrderRack(orderId: string, rackNumber: string): Promise<OrderDocument | null> {
@@ -139,14 +206,48 @@ export class OrderService {
 
   async updateOrderStatusAndRack(orderId: string, status: OrderDocType['status'], rackNumber?: string): Promise<OrderDocument | null> {
     const repository = await this.getRepository();
+    
+    // Get the current order to access its current status and history
+    const currentOrder = await repository.findById(orderId);
+    if (!currentOrder) {
+      return null;
+    }
+
+    // Create status history entry
+    const now = new Date();
+    const timestamp = now.toLocaleString();
+    const statusEntry = `${timestamp}: Status changed from '${currentOrder.status}' to '${status}'${rackNumber ? ` (Rack: ${rackNumber})` : ''}`;
+    
+    // Get existing status history or create new array
+    const currentHistory = currentOrder.statusHistory || [];
+    const updatedHistory = [...currentHistory, statusEntry];
+
     const updateData: Partial<OrderDocType> = { 
-      status, 
-      updatedAt: new Date().toISOString() 
+      status,
+      statusHistory: updatedHistory, 
+      updatedAt: now.toISOString() 
     };
     if (rackNumber) {
       updateData.rackNumber = rackNumber;
     }
-    return repository.update(orderId, updateData);
+    
+    const updatedOrder = await repository.update(orderId, updateData);
+
+    // Send notifications if order is marked as completed
+    if (status === 'completed' && updatedOrder) {
+      try {
+        await customerService.initialize();
+        const customer = await customerService.getCustomerById(updatedOrder.customerId);
+        if (customer) {
+          await notificationService.sendOrderCompletedNotification(customer, updatedOrder);
+        }
+      } catch (error) {
+        console.error('Failed to send notification for completed order:', error);
+        // Don't throw - we don't want notification failures to break order completion
+      }
+    }
+
+    return updatedOrder;
   }
 
   async deleteOrder(id: string): Promise<boolean> {

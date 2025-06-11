@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform, Switch } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { Ionicons } from '@expo/vector-icons';
 import { PhoneInput } from '../ui/PhoneInput';
@@ -15,10 +15,11 @@ interface FormField {
   label: string;
   placeholder: string;
   required: boolean;
-  type: 'text' | 'email' | 'phone' | 'pin' | 'textarea';
+  type: 'text' | 'email' | 'phone' | 'pin' | 'textarea' | 'toggle';
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   keyboardType?: 'default' | 'email-address' | 'numeric' | 'phone-pad';
   secureTextEntry?: boolean;
+  description?: string; // For toggle switches description
 }
 
 interface DynamicFormProps {
@@ -120,16 +121,34 @@ const getFormFields = (entityType: 'customer' | 'employee'): FormField[] => {
     }
   );
 
-  // Add notes field for customers only
+  // Add notes field and notification toggles for customers only
   if (entityType === 'customer') {
-    fields.push({
-      name: 'notes',
-      label: 'Notes',
-      placeholder: 'Add any additional notes about the customer (optional)',
-      required: false,
-      type: 'textarea',
-      autoCapitalize: 'sentences'
-    });
+    fields.push(
+      {
+        name: 'notes',
+        label: 'Notes',
+        placeholder: 'Add any additional notes about the customer (optional)',
+        required: false,
+        type: 'textarea',
+        autoCapitalize: 'sentences'
+      },
+      {
+        name: 'emailNotifications',
+        label: 'Email Notifications',
+        placeholder: '',
+        required: false,
+        type: 'toggle',
+        description: 'Send email notifications when orders are completed'
+      },
+      {
+        name: 'textNotifications',
+        label: 'Text Notifications',
+        placeholder: '',
+        required: false,
+        type: 'toggle',
+        description: 'Send text notifications when orders are completed'
+      }
+    );
   }
 
   return fields;
@@ -167,7 +186,9 @@ export function DynamicForm({
           city: initialData?.city || '',
           state: initialData?.state || '',
           zipCode: initialData?.zipCode || '',
-          notes: initialData?.notes || ''
+          notes: initialData?.notes || '',
+          emailNotifications: initialData?.emailNotifications || false,
+          textNotifications: initialData?.textNotifications || false
         };
       } else if (entityType === 'employee') {
         return {
@@ -220,6 +241,34 @@ export function DynamicForm({
               placeholder={field.placeholder}
               editable={!isLoading}
             />
+          )}
+        />
+      );
+    }
+
+    if (field.type === 'toggle') {
+      return (
+        <Controller
+          key={field.name}
+          control={control}
+          name={field.name as any}
+          render={({ field: { onChange, value } }) => (
+            <View style={styles.toggleContainer}>
+              <View style={styles.toggleTextContainer}>
+                <Text style={styles.toggleLabel}>{field.label}</Text>
+                {field.description && (
+                  <Text style={styles.toggleDescription}>{field.description}</Text>
+                )}
+              </View>
+              <Switch
+                value={value || false}
+                onValueChange={onChange}
+                disabled={isLoading}
+                trackColor={{ false: '#e5e7eb', true: '#10b981' }}
+                thumbColor={value ? '#ffffff' : '#9ca3af'}
+                ios_backgroundColor="#e5e7eb"
+              />
+            </View>
           )}
         />
       );
@@ -445,5 +494,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    padding: 16,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e5e5',
+  },
+  toggleTextContainer: {
+    flex: 1,
+    marginRight: 16,
+  },
+  toggleLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  toggleDescription: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
   },
 });
