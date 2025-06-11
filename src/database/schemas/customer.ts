@@ -32,7 +32,7 @@ export interface CustomerDocType {
 }
 
 export const customerSchema: RxJsonSchema<CustomerDocType> = {
-  version: 4,
+  version: 0,
   primaryKey: 'id',
   type: 'object',
   properties: {

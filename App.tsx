@@ -29,12 +29,14 @@ import { Authenticator } from '@aws-amplify/ui-react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { LogBox } from 'react-native';
+import { StripeProvider } from '@stripe/stripe-react-native';
 
 import outputs from './amplify_outputs.json';
 import AppNavigator from './src/navigation/AppNavigator';
 import { getDatabaseInstance } from './src/database';
 import { customerService } from './src/database/services/customerService';
 import { EmployeeAuthProvider } from './src/context/EmployeeAuthContext';
+import { stripeService } from './src/services/stripeService';
 
 // Configure Amplify
 Amplify.configure(outputs);
@@ -45,9 +47,11 @@ LogBox.ignoreLogs([
 ]);
 
 const App = () => {
+  const [stripePublishableKey, setStripePublishableKey] = React.useState<string>('');
+
   useEffect(() => {
     // Initialize database and services on app start
-    const initDatabase = async () => {
+    const initServices = async () => {
       try {
         // Initialize the database
         await getDatabaseInstance();
@@ -56,24 +60,50 @@ const App = () => {
         // Initialize the customer service
         await customerService.initialize();
         console.log('CustomerService initialized successfully');
+
+        // Initialize Stripe
+        const stripeSettings = await stripeService.getStripeSettings();
+        if (stripeSettings?.publishableKey) {
+          setStripePublishableKey(stripeSettings.publishableKey);
+          await stripeService.initialize();
+          console.log('Stripe initialized successfully');
+        } else {
+          console.log('Stripe not configured - skipping initialization');
+        }
       } catch (error) {
-        console.error('Failed to initialize database services:', error);
+        console.error('Failed to initialize services:', error);
       }
     };
 
-    initDatabase();
+    initServices();
+
+    // Subscribe to Stripe settings changes
+    const unsubscribe = stripeService.onSettingsChange((settings) => {
+      if (settings?.publishableKey) {
+        setStripePublishableKey(settings.publishableKey);
+      } else {
+        setStripePublishableKey('');
+      }
+    });
+
+    return unsubscribe;
   }, []);
 
   return (
     <SafeAreaProvider>
       <StatusBar style="auto" />
-      <NavigationContainer>
-        <Authenticator.Provider>
-          <EmployeeAuthProvider>
-            <AppNavigator />
-          </EmployeeAuthProvider>
-        </Authenticator.Provider>
-      </NavigationContainer>
+      <StripeProvider
+        publishableKey={stripePublishableKey || 'pk_test_placeholder'}
+        merchantIdentifier="merchant.identifier"
+      >
+        <NavigationContainer>
+          <Authenticator.Provider>
+            <EmployeeAuthProvider>
+              <AppNavigator />
+            </EmployeeAuthProvider>
+          </Authenticator.Provider>
+        </NavigationContainer>
+      </StripeProvider>
     </SafeAreaProvider>
   );
 };

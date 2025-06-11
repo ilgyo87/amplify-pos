@@ -65,7 +65,7 @@ const createDatabase = async (): Promise<AppDatabase> => {
 
   try {
     const database = await createRxDatabase<DatabaseCollections>({
-      name: 'amplifyposdb',
+      name: 'amplifyposdb_v5',
       storage,
       multiInstance: false, // Set to false in React Native
       ignoreDuplicate: true,
@@ -83,35 +83,7 @@ const createDatabase = async (): Promise<AppDatabase> => {
     try {
       await database.addCollections({
         customers: {
-          schema: customerSchema,
-          migrationStrategies: {
-            // Migration from version 0 to 1 - add notes and joinDate fields
-            1: function(oldDoc: any) {
-              return {
-                ...oldDoc,
-                notes: oldDoc.notes || null,
-                joinDate: oldDoc.joinDate || null
-              };
-            },
-            // Migration from version 1 to 2 - allow null values for optional fields
-            2: function(oldDoc: any) {
-              // No data transformation needed, just schema validation change
-              return oldDoc;
-            },
-            // Migration from version 2 to 3 - remove problematic indexes
-            3: function(oldDoc: any) {
-              // No data transformation needed, just index change
-              return oldDoc;
-            },
-            // Migration from version 3 to 4 - add notification toggles
-            4: function(oldDoc: any) {
-              return {
-                ...oldDoc,
-                emailNotifications: oldDoc.emailNotifications || false,
-                textNotifications: oldDoc.textNotifications || false
-              };
-            }
-          }
+          schema: customerSchema
         },
         employees: {
           schema: employeeSchema
@@ -120,61 +92,14 @@ const createDatabase = async (): Promise<AppDatabase> => {
           schema: categorySchema
         },
         products: {
-          schema: productSchema,
-          migrationStrategies: {
-            // Migration from version 0 to 1 - add new sync fields
-            1: function(oldDoc: any) {
-              return {
-                ...oldDoc,
-                sku: oldDoc.sku || null,
-                cost: oldDoc.cost || null,
-                barcode: oldDoc.barcode || null,
-                quantity: oldDoc.quantity || null,
-                isActive: oldDoc.isActive !== undefined ? oldDoc.isActive : true
-              };
-            }
-          }
+          schema: productSchema
         },
         businesses: {
           schema: businessSchema
         },
         orders: {
-          schema: orderSchema,
-          migrationStrategies: {
-            // Migration from version 0 to 1 - initial creation
-            1: function(oldDoc: any) {
-              return oldDoc;
-            },
-            // Migration from version 1 to 2 - add businessId field
-            2: function(oldDoc: any) {
-              return {
-                ...oldDoc,
-                businessId: oldDoc.businessId || ''
-              };
-            },
-            // Migration from version 2 to 3 - add categoryId and discount to items
-            3: function(oldDoc: any) {
-              return {
-                ...oldDoc,
-                items: oldDoc.items ? oldDoc.items.map((item: any) => ({
-                  ...item,
-                  categoryId: item.categoryId || '', // Add categoryId if missing
-                  discount: item.discount || 0 // Add discount if missing
-                })) : []
-              };
-            },
-            // Migration from version 3 to 4 - add statusHistory and picked_up status
-            4: function(oldDoc: any) {
-              // Create initial status history for existing orders
-              const timestamp = new Date(oldDoc.createdAt || new Date()).toLocaleString();
-              const initialStatusHistory = oldDoc.statusHistory || [`${timestamp}: Order created with status '${oldDoc.status || 'pending'}'`];
-              
-              return {
-                ...oldDoc,
-                statusHistory: initialStatusHistory
-              };
-            }
-          }
+          schema: orderSchema
+          // No migration strategies needed for fresh database
         }
       });
       

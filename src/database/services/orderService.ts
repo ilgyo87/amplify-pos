@@ -1,6 +1,6 @@
 import { OrderRepository } from '../repositories/OrderRepository';
 import { OrderDocument, OrderDocType } from '../schemas/order';
-import { OrderItem } from '../../types/order';
+import { OrderItem, PaymentInfo } from '../../types/order';
 import { SerializableCustomer } from '../../navigation/types';
 import { getDatabaseInstance } from '../config';
 import { v4 as uuidv4 } from 'uuid';
@@ -30,7 +30,7 @@ export class OrderService {
   async createOrder({
     customer,
     items,
-    paymentMethod,
+    paymentInfo,
     selectedDate,
     notes,
     barcodeData,
@@ -38,7 +38,7 @@ export class OrderService {
   }: {
     customer: SerializableCustomer;
     items: OrderItem[];
-    paymentMethod: 'cash' | 'card' | 'credit';
+    paymentInfo: PaymentInfo;
     selectedDate?: string;
     notes?: string;
     barcodeData?: string;
@@ -118,7 +118,8 @@ export class OrderService {
       subtotal: subtotal,
       tax: tax,
       total: total,
-      paymentMethod,
+      paymentMethod: paymentInfo.method,
+      paymentInfo: paymentInfo, // Store complete payment information
       selectedDate,
       status: 'pending',
       statusHistory: initialStatusHistory,

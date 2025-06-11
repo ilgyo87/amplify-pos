@@ -27,7 +27,7 @@ export interface ProductDocType {
 }
 
 export const productSchema: RxJsonSchema<ProductDocType> = {
-  version: 1,
+  version: 0,
   primaryKey: 'id',
   type: 'object',
   properties: {
