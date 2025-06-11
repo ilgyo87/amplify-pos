@@ -17,6 +17,8 @@ import { PaymentMethod, PaymentInfo } from '../../types/order';
 import { CardFieldInput, useStripe } from '@stripe/stripe-react-native';
 import { stripeService } from '../../services/stripeService';
 import { StripeCardForm } from './StripeCardForm';
+import { StripeTerminalForm } from './StripeTerminalForm';
+import type { PaymentIntent } from '../../services/stripeTerminalService';
 
 interface PaymentModalProps {
   visible: boolean;
@@ -40,6 +42,28 @@ export function PaymentModal({
   const [checkNumber, setCheckNumber] = useState('');
   const [accountId, setAccountId] = useState('');
   const [customTip, setCustomTip] = useState('');
+  const [showTerminalForm, setShowTerminalForm] = useState(false);
+
+  const handleTerminalPaymentSuccess = (paymentIntent: PaymentIntent.Type) => {
+    const paymentInfo: PaymentInfo = {
+      method: 'terminal',
+      amount: totalWithTip,
+      tip: tipAmount > 0 ? tipAmount : undefined,
+      stripeChargeId: paymentIntent.id,
+    };
+    
+    setShowTerminalForm(false);
+    onCompletePayment(paymentInfo);
+  };
+
+  const handleTerminalPaymentError = (error: string) => {
+    Alert.alert('Terminal Payment Failed', error);
+    setShowTerminalForm(false);
+  };
+
+  const handleTerminalCancel = () => {
+    setShowTerminalForm(false);
+  };
 
   const tipPresets = [0, 1, 2, 3, 5];
   const totalWithTip = orderTotal + tipAmount;
@@ -72,8 +96,6 @@ export function PaymentModal({
   }, []);
 
   useEffect(() => {
-    let businessSubscription: any = null;
-
     const initialize = async () => {
       // Initialize Stripe
     };
@@ -91,6 +113,11 @@ export function PaymentModal({
         Alert.alert('Error', 'Please enter valid card details');
         return false;
       }
+    }
+    
+    if (selectedMethod === 'terminal') {
+      Alert.alert('Info', 'Please use the "Start Terminal Payment" button to process the payment.');
+      return false;
     }
     
     if (selectedMethod === 'check' && !checkNumber.trim()) {
@@ -230,6 +257,25 @@ export function PaymentModal({
           </View>
         );
       
+      case 'terminal':
+        return (
+          <View style={styles.detailsContainer}>
+            <Text style={styles.detailsLabel}>Card Reader Payment</Text>
+            <Text style={styles.detailsHint}>
+              Connect to a Stripe Terminal card reader to accept in-person card payments.
+            </Text>
+            <TouchableOpacity
+              style={styles.terminalButton}
+              onPress={() => setShowTerminalForm(true)}
+            >
+              <Ionicons name="card-outline" size={20} color="#007AFF" />
+              <Text style={styles.terminalButtonText}>
+                Start Terminal Payment
+              </Text>
+            </TouchableOpacity>
+          </View>
+        );
+      
       case 'check':
         return (
           <View style={styles.detailsContainer}>
@@ -333,6 +379,7 @@ export function PaymentModal({
             <View style={styles.paymentMethods}>
               {renderPaymentMethod('cash', 'cash', 'Cash')}
               {renderPaymentMethod('card', 'card', 'Credit/Debit Card')}
+              {renderPaymentMethod('terminal', 'card-outline', 'Card Reader')}
               {renderPaymentMethod('check', 'document-text', 'Check')}
               {renderPaymentMethod('account', 'person', 'Account')}
             </View>
@@ -372,6 +419,21 @@ export function PaymentModal({
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Stripe Terminal Form Modal */}
+      <Modal
+        visible={showTerminalForm}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={handleTerminalCancel}
+      >
+        <StripeTerminalForm
+          amount={totalWithTip}
+          onPaymentSuccess={handleTerminalPaymentSuccess}
+          onPaymentError={handleTerminalPaymentError}
+          onCancel={handleTerminalCancel}
+        />
+      </Modal>
     </Modal>
   );
 }
@@ -581,5 +643,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginTop: 4,
+  },
+  terminalButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f0f7ff',
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    borderRadius: 8,
+    padding: 16,
+    marginTop: 12,
+    gap: 8,
+  },
+  terminalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#007AFF',
   },
 });

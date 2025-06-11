@@ -48,7 +48,7 @@ export interface PickupTimeSlot {
   available: boolean;
 }
 
-export type PaymentMethod = 'cash' | 'card' | 'check' | 'account';
+export type PaymentMethod = 'cash' | 'card' | 'check' | 'account' | 'terminal';
 
 export interface PaymentInfo {
   method: PaymentMethod;

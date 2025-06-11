@@ -27,9 +27,9 @@ export interface OrderDocType {
   subtotal: number;
   tax: number;
   total: number;
-  paymentMethod: 'cash' | 'card' | 'credit';
+  paymentMethod: 'cash' | 'card' | 'check' | 'account' | 'terminal';
   paymentInfo?: {
-    method: 'cash' | 'card' | 'check' | 'account';
+    method: 'cash' | 'card' | 'check' | 'account' | 'terminal';
     amount: number;
     tip?: number;
     cardLast4?: string;
@@ -132,7 +132,7 @@ export const orderSchema: RxJsonSchema<OrderDocType> = {
     },
     paymentMethod: {
       type: 'string',
-      enum: ['cash', 'card', 'credit'],
+      enum: ['cash', 'card', 'check', 'account', 'terminal'],
       maxLength: 10
     },
     paymentInfo: {
@@ -140,7 +140,7 @@ export const orderSchema: RxJsonSchema<OrderDocType> = {
       properties: {
         method: {
           type: 'string',
-          enum: ['cash', 'card', 'check', 'account'],
+          enum: ['cash', 'card', 'check', 'account', 'terminal'],
           maxLength: 10
         },
         amount: {
