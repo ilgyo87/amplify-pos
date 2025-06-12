@@ -1,7 +1,12 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "lib": ["DOM", "DOM.Iterable", "ES6", "ES2020"],
+    "lib": [
+      "DOM",
+      "DOM.Iterable",
+      "ES6",
+      "ES2020"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
@@ -16,7 +21,12 @@
     "noImplicitAny": false,
     "noImplicitReturns": false,
     "noFallthroughCasesInSwitch": true,
-    "types": ["node", "jest", "@types/react-native", "@types/aws-lambda"]
+    "types": [
+      "node",
+      "jest",
+      "@types/react-native",
+      "@types/aws-lambda"
+    ]
   },
   "include": [
     "src/**/*",
@@ -29,5 +39,6 @@
     "dist",
     "ios",
     "android"
-  ]
+  ],
+  "extends": "expo/tsconfig.base"
 }
