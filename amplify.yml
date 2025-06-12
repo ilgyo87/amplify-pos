@@ -1,0 +1,29 @@
+version: 1
+backend:
+  phases:
+    build:
+      commands:
+        - echo "Starting backend build with Node.js $(node --version) and npm $(npm --version)"
+        - echo "Removing potentially corrupted package-lock.json"
+        - rm -f package-lock.json
+        - echo "Performing fresh npm install"
+        - npm install --no-save --legacy-peer-deps
+        - echo "Building backend resources"
+        - npx ampx generate
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - echo "Installing frontend dependencies"
+        - npm ci || npm install --legacy-peer-deps
+    build:
+      commands:
+        - echo "Building frontend"
+        - npm run build
+  artifacts:
+    baseDirectory: dist
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - node_modules/**/*
