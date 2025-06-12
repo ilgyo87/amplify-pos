@@ -6,7 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -14,7 +13,8 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.expo-iggy.amplify-pos"
+      "bundleIdentifier": "com.expo-iggy.amplify-pos",
+      "jsEngine": "jsc"
     },
     "android": {
       "adaptiveIcon": {
@@ -22,7 +22,8 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.expo_iggy.amplify_pos"
+      "package": "com.expo_iggy.amplify_pos",
+      "jsEngine": "jsc"
     },
     "web": {
       "favicon": "./assets/favicon.png"

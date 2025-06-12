@@ -1,0 +1,24 @@
+Starting project at /Users/iggy/coding_projects/amplify_pos
+Starting Metro Bundler
+warning: Bundler cache is empty, rebuilding (this may take a minute)
+The following packages should be updated for best compatibility with the installed expo version:
+  @react-native-async-storage/async-storage@2.2.0 - expected version: 2.1.2
+  @stripe/stripe-react-native@0.47.1 - expected version: 0.45.0
+  react@18.3.1 - expected version: 19.0.0
+  react-native-safe-area-context@5.4.1 - expected version: 5.4.0
+  react-native-svg@15.12.0 - expected version: 15.11.2
+  @types/react@18.3.23 - expected version: ~19.0.10
+  react-native-gesture-handler@2.25.0 - expected version: ~2.24.0
+Your project may not work correctly until you install the expected versions of the packages.
+Waiting on http://localhost:8081
+Logs for your project will appear below.
+Recrawled this watch 19 times, most recently because:
+MustScanSubDirs UserDroppedTo resolve, please review the information on
+https://facebook.github.io/watchman/docs/troubleshooting.html#recrawl
+To clear this warning, run:
+`watchman watch-del '/Users/iggy/coding_projects/amplify_pos' ; watchman watch-project '/Users/iggy/coding_projects/amplify_pos'`
+
+iOS ./index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+iOS ./index.ts ▓▓▓▓▓▓▓▓░░░░░░░░ 53.5% (1218/1810)
+iOS Bundling failed 6282ms index.ts (4033 modules)
+Unable to resolve "../modules/es.regexp.test" from "node_modules/core-js/stable/index.js"
