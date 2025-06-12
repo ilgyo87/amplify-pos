@@ -9,3 +9,17 @@ backend:
         - echo "Performing fresh npm install"
         - npm install --no-save --legacy-peer-deps
         - echo "Backend dependencies installed successfully"
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - echo "React Native app - no frontend build required"
+    build:
+      commands:
+        - echo "React Native builds happen via app stores, not web deployment"
+        - mkdir -p dist
+        - echo "Backend-only deployment" > dist/index.html
+  artifacts:
+    baseDirectory: dist
+    files:
+      - '**/*'
