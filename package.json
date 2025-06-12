@@ -99,7 +99,8 @@
     "glob": "^10.4.5",
     "jackspeak": "^3.4.3", 
     "lru-cache": "^10.4.3",
-    "minimatch": "^9.0.5"
+    "minimatch": "^9.0.5",
+    "@types/react": "~18.3.12"
   },
   "private": true
 }
