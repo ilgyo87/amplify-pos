@@ -16,15 +16,17 @@
   },
   "dependencies": {
     "@aws-amplify/api": "^6.3.12",
+    "@aws-amplify/data-schema-types": "^1.2.0",
     "@aws-amplify/react-native": "^1.1.10",
     "@aws-amplify/rtn-web-browser": "^1.1.4",
     "@aws-amplify/ui-react-native": "^2.5.3",
+    "@babel/types": "^7.27.6",
     "@peculiar/webcrypto": "^1.5.0",
-    "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-native-async-storage/async-storage": "2.1.2",
     "@react-native-community/netinfo": "^11.4.1",
     "@react-navigation/native": "^7.1.10",
     "@react-navigation/native-stack": "^7.3.14",
-    "@stripe/stripe-react-native": "^0.47.1",
+    "@stripe/stripe-react-native": "0.45.0",
     "@stripe/stripe-terminal-react-native": "^0.0.1-beta.25",
     "@types/react-native-vector-icons": "^6.4.18",
     "aws-amplify": "^6.15.0",
@@ -33,12 +35,13 @@
     "expo-camera": "~16.1.7",
     "expo-print": "~14.1.4",
     "expo-status-bar": "~2.2.3",
+    "hermes-parser": "^0.28.1",
     "metro": "^0.82.4",
     "metro-minify-terser": "^0.82.4",
     "pouchdb-adapter-asyncstorage": "^6.4.1",
     "pouchdb-adapter-http": "^9.0.0",
     "pouchdb-replication": "^9.0.0",
-    "react": "18.3.1",
+    "react": "19.0.0",
     "react-hook-form": "^7.57.0",
     "react-native": "0.79.3",
     "react-native-config": "^1.5.5",
@@ -47,15 +50,17 @@
     "react-native-quick-crypto": "^0.7.14",
     "react-native-quick-sqlite": "^8.2.7",
     "react-native-random-values-jsi-helper": "^2.0.1",
-    "react-native-safe-area-context": "^5.4.0",
+    "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.11.1",
-    "react-native-svg": "^15.12.0",
+    "react-native-svg": "15.11.2",
     "react-native-url-polyfill": "^2.0.0",
     "react-native-vector-icons": "^10.2.0",
     "react-native-view-shot": "^4.0.3",
     "rxdb": "^16.13.0",
     "rxjs": "^7.8.2",
-    "stripe": "^18.2.1"
+    "stripe": "^18.2.1",
+    "text-encoding-polyfill": "^0.6.7",
+    "xstate": "^4.38.3"
   },
   "devDependencies": {
     "@aws-amplify/backend": "^1.16.1",
@@ -78,7 +83,7 @@
     "@types/pouchdb-adapter-http": "^6.1.6",
     "@types/pouchdb-core": "^7.0.15",
     "@types/pouchdb-find": "^7.3.3",
-    "@types/react": "~18.3.12",
+    "@types/react": "~19.0.10",
     "@types/react-native": "^0.72.8",
     "aws-cdk-lib": "^2.189.1",
     "babel-jest": "^29.7.0",
@@ -88,7 +93,7 @@
     "jest-environment-jsdom": "^29.7.0",
     "metro-react-native-babel-preset": "^0.77.0",
     "react-native-gesture-handler": "^2.25.0",
-    "react-test-renderer": "^18.3.1",
+    "react-test-renderer": "^19.0.0",
     "ts-jest": "^29.3.4",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3"
@@ -98,7 +103,7 @@
     "npm": ">=10.0.0"
   },
   "overrides": {
-    "@types/react": "~18.3.12"
+    "@types/react": "~19.0.10"
   },
   "private": true
 }

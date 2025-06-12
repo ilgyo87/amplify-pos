@@ -16,6 +16,9 @@ addRxPlugin(RxDBUpdatePlugin);
 // Add dev mode plugin in development to get better error messages
 if (__DEV__) {
   addRxPlugin(RxDBDevModePlugin);
+  // Disable dev-mode warnings
+  const { disableWarnings } = require('rxdb/plugins/dev-mode');
+  disableWarnings();
 }
 
 import { customerSchema, CustomerCollection, CustomerDocType, CustomerDocument } from './schemas/customer';

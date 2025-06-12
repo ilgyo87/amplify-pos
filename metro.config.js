@@ -2,7 +2,7 @@ const { getDefaultConfig } = require('expo/metro-config');
 
 const config = getDefaultConfig(__dirname);
 
-// Exclude test files from the bundle
+// Exclude test files and problematic modules from the bundle
 config.resolver.blockList = [
   // Jest configuration files
   /jest\.setup\.js$/,
@@ -17,6 +17,9 @@ config.resolver.blockList = [
   
   // Babel config (if causing issues)
   /babel\.config\.js$/,
+  
+  // Block core-js stable index that's causing issues
+  /core-js\/stable\/index\.js$/,
 ];
 
 // Also try using resolverMainFields to prioritize certain exports
