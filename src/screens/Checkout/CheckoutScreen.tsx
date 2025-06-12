@@ -23,12 +23,14 @@ import { useCategories } from '../../database/hooks/useCategories';
 import { useProducts } from '../../database/hooks/useProducts';
 import { useOrders } from '../../database/hooks/useOrders';
 import { useCustomers, useCustomer } from '../../database/hooks/useCustomers';
+import { useBusiness } from '../../database/hooks/useBusiness';
 import { OrderService } from '../../database/services/orderService';
 import { SerializableCustomer } from '../../navigation/types';
 import { DynamicForm } from '../../components/forms/DynamicForm';
 import { CustomerFormData } from '../../utils/customerValidation';
 import { OrderItemSettingsModal } from '../../components/checkout/OrderItemSettingsModal';
 import { PickupModal } from '../../components/checkout/PickupModal';
+import { CheckoutValidationOverlay } from '../../components/checkout/CheckoutValidationOverlay';
 import { CategoryDocument } from '../../database/schemas/category';
 import { ProductDocument } from '../../database/schemas/product';
 import { OrderItem, OrderItemOptions, generateOrderItemKey, PaymentInfo } from '../../types/order';
@@ -334,6 +336,7 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
   const [selectedCategory, setSelectedCategory] = useState<CategoryDocument | null>(null);
   const { products, loading: productsLoading } = useProducts(selectedCategory?.id);
   const { currentEmployee } = useEmployeeAuth();
+  const { hasBusinesses, loading: businessLoading } = useBusiness();
 
   const {
     createOrder,
@@ -344,6 +347,24 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
     updateCustomer,
     operationLoading
   } = useCustomers();
+
+  // Validation logic
+  const hasEmployee = !!currentEmployee;
+  const hasProducts = products.length > 0;
+  const allRequirementsMet = hasEmployee && hasBusinesses && hasProducts;
+
+  // Navigation handlers for validation overlay
+  const handleNavigateToEmployees = () => {
+    navigation.navigate('Employees');
+  };
+
+  const handleNavigateToBusiness = () => {
+    navigation.navigate('BusinessSettings');
+  };
+
+  const handleNavigateToProducts = () => {
+    navigation.navigate('Products');
+  };
 
   // Handle screen size changes
   useEffect(() => {
@@ -427,6 +448,11 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
 
   // Handle product selection
   const handleAddItem = (product: ProductDocument, options?: OrderItemOptions) => {
+    // Check requirements first
+    if (!allRequirementsMet) {
+      Alert.alert('Setup Required', 'Please complete the required setup before adding items.');
+      return;
+    }
     setOrderItems(prevItems => {
       const orderOptions = options || {
         starch: 'none',
@@ -556,6 +582,12 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
 
   // Handle checkout flow - go to receipt preview
   const handleCheckout = async () => {
+    // Check requirements first
+    if (!allRequirementsMet) {
+      Alert.alert('Setup Required', 'Please complete the required setup before processing orders.');
+      return;
+    }
+    
     if (orderItems.length === 0) {
       Alert.alert('Error', 'Please add items to your order');
       return;
@@ -766,6 +798,7 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
               onEditItem={handleEditItem}
               onCheckout={handleCheckout}
               selectedDate={selectedDate}
+              disabled={!allRequirementsMet}
             />
           </View>
         </View>
@@ -796,6 +829,7 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
               onEditItem={handleEditItem}
               onCheckout={handleCheckout}
               selectedDate={selectedDate}
+              disabled={!allRequirementsMet}
             />
           </View>
         </View>
@@ -819,6 +853,16 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
       </View>
       
       {renderContent()}
+
+      {/* Validation Overlay - Shows when requirements are not met */}
+      <CheckoutValidationOverlay
+        hasEmployee={hasEmployee}
+        hasBusiness={hasBusinesses}
+        hasProducts={hasProducts}
+        onNavigateToEmployees={handleNavigateToEmployees}
+        onNavigateToBusiness={handleNavigateToBusiness}
+        onNavigateToProducts={handleNavigateToProducts}
+      />
 
       {/* Date Picker Modal */}
       <DatePickerModal

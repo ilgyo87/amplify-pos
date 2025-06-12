@@ -68,15 +68,15 @@ export class SyncService {
    * Convert order from local format to Amplify format
    */
   private async convertOrderToAmplifyFormat(order: any): Promise<any> {
-    // Get a valid businessId if the order doesn't have one
-    let businessId = order.businessId;
-    if (!businessId || businessId.trim() === '') {
+    // Map local business ID to Amplify business ID
+    let amplifyBusinessId = order.businessId;
+    if (!amplifyBusinessId || amplifyBusinessId.trim() === '') {
       try {
         await businessService.initialize();
         const businesses = await businessService.getAllBusinesses();
         if (businesses.length > 0) {
-          businessId = businesses[0].id; // Use the first business
-          console.log(`[ORDER UPLOAD] Using business ID ${businessId} for order ${order.orderNumber}`);
+          amplifyBusinessId = businesses[0].amplifyId || businesses[0].id; // Prefer Amplify ID
+          console.log(`[ORDER UPLOAD] Using business ID ${amplifyBusinessId} for order ${order.orderNumber}`);
         } else {
           throw new Error('No businesses found. Please create a business first.');
         }
@@ -84,12 +84,60 @@ export class SyncService {
         console.error('Error getting business for order:', error);
         throw new Error('Failed to get business ID for order upload');
       }
+    } else {
+      // Map local business ID to Amplify business ID
+      try {
+        await businessService.initialize();
+        const business = await businessService.getBusinessById(order.businessId);
+        if (business && business.amplifyId) {
+          amplifyBusinessId = business.amplifyId;
+          console.log(`[ORDER UPLOAD] Mapped local business ${order.businessId} to Amplify business ${amplifyBusinessId} for order ${order.orderNumber}`);
+        } else {
+          console.warn(`[ORDER UPLOAD] No Amplify ID found for business ${order.businessId} for order ${order.orderNumber}`);
+        }
+      } catch (error) {
+        console.warn(`[ORDER UPLOAD] Error mapping business for order ${order.orderNumber}:`, error);
+      }
+    }
+
+    // Map local customer ID to Amplify customer ID
+    let amplifyCustomerId = order.customerId;
+    if (order.customerId) {
+      try {
+        await customerService.initialize();
+        const customer = await customerService.getCustomerById(order.customerId);
+        if (customer && customer.amplifyId) {
+          amplifyCustomerId = customer.amplifyId;
+          console.log(`[ORDER UPLOAD] Mapped local customer ${order.customerId} to Amplify customer ${amplifyCustomerId} for order ${order.orderNumber}`);
+        } else {
+          console.warn(`[ORDER UPLOAD] No Amplify ID found for customer ${order.customerId} for order ${order.orderNumber}`);
+        }
+      } catch (error) {
+        console.warn(`[ORDER UPLOAD] Error mapping customer for order ${order.orderNumber}:`, error);
+      }
+    }
+
+    // Map local employee ID to Amplify employee ID
+    let amplifyEmployeeId = order.employeeId || '';
+    if (order.employeeId) {
+      try {
+        await employeeService.initialize();
+        const employee = await employeeService.getEmployeeById(order.employeeId);
+        if (employee && employee.amplifyId) {
+          amplifyEmployeeId = employee.amplifyId;
+          console.log(`[ORDER UPLOAD] Mapped local employee ${order.employeeId} to Amplify employee ${amplifyEmployeeId} for order ${order.orderNumber}`);
+        } else {
+          console.warn(`[ORDER UPLOAD] No Amplify ID found for employee ${order.employeeId} for order ${order.orderNumber}`);
+        }
+      } catch (error) {
+        console.warn(`[ORDER UPLOAD] Error mapping employee for order ${order.orderNumber}:`, error);
+      }
     }
 
     return {
-      businessId: businessId,
-      customerId: order.customerId,
-      employeeId: order.employeeId || '',
+      businessId: amplifyBusinessId,
+      customerId: amplifyCustomerId,
+      employeeId: amplifyEmployeeId,
       paymentMethod: order.paymentMethod,
       total: order.total,
       status: order.status || 'completed',
@@ -109,15 +157,42 @@ export class SyncService {
       firstName: doc.firstName,
       lastName: doc.lastName,
       phone: doc.phone,
-      address: doc.address,
-      notes: doc.notes,
-      joinDate: doc.joinDate,
     };
 
-    // Only include email if it has a valid value
+    // Only include optional fields if they have valid values
+    if (doc.address && doc.address.trim()) {
+      amplifyData.address = doc.address;
+    }
+    if (doc.city && doc.city.trim()) {
+      amplifyData.city = doc.city;
+    }
+    if (doc.state && doc.state.trim()) {
+      amplifyData.state = doc.state;
+    }
+    if (doc.zipCode && doc.zipCode.trim()) {
+      amplifyData.zipCode = doc.zipCode;
+    }
     if (doc.email && doc.email.trim()) {
       amplifyData.email = doc.email;
     }
+    if (doc.businessId && doc.businessId.trim()) {
+      amplifyData.businessId = doc.businessId;
+    }
+    if (doc.cognitoId && doc.cognitoId.trim()) {
+      amplifyData.cognitoId = doc.cognitoId;
+    }
+    if (typeof doc.emailNotifications === 'boolean') {
+      amplifyData.emailNotifications = doc.emailNotifications;
+    }
+    if (typeof doc.textNotifications === 'boolean') {
+      amplifyData.textNotifications = doc.textNotifications;
+    }
+    if (doc.coordinates) {
+      amplifyData.coordinates = doc.coordinates;
+    }
+
+    // Note: 'notes' and 'joinDate' fields are not supported in Amplify Customer schema
+    // These are local-only fields for enhanced customer management
 
     return amplifyData;
   }
@@ -130,18 +205,46 @@ export class SyncService {
       firstName: amplifyCustomer.firstName,
       lastName: amplifyCustomer.lastName,
       phone: amplifyCustomer.phone,
-      address: amplifyCustomer.address,
-      notes: amplifyCustomer.notes,
-      joinDate: amplifyCustomer.joinDate,
       amplifyId: amplifyCustomer.id,
       isLocalOnly: false,
       lastSyncedAt: new Date().toISOString()
     };
 
-    // Only include email if it exists and has a value
+    // Include optional fields if they exist in Amplify data
+    if (amplifyCustomer.address) {
+      localData.address = amplifyCustomer.address;
+    }
+    if (amplifyCustomer.city) {
+      localData.city = amplifyCustomer.city;
+    }
+    if (amplifyCustomer.state) {
+      localData.state = amplifyCustomer.state;
+    }
+    if (amplifyCustomer.zipCode) {
+      localData.zipCode = amplifyCustomer.zipCode;
+    }
     if (amplifyCustomer.email) {
       localData.email = amplifyCustomer.email;
     }
+    if (amplifyCustomer.businessId) {
+      localData.businessId = amplifyCustomer.businessId;
+    }
+    if (amplifyCustomer.cognitoId) {
+      localData.cognitoId = amplifyCustomer.cognitoId;
+    }
+    if (typeof amplifyCustomer.emailNotifications === 'boolean') {
+      localData.emailNotifications = amplifyCustomer.emailNotifications;
+    }
+    if (typeof amplifyCustomer.textNotifications === 'boolean') {
+      localData.textNotifications = amplifyCustomer.textNotifications;
+    }
+    if (amplifyCustomer.coordinates) {
+      localData.coordinates = amplifyCustomer.coordinates;
+    }
+
+    // Set default values for local-only fields that don't exist in Amplify
+    localData.notes = ''; // Local-only field for customer notes
+    localData.joinDate = new Date().toISOString(); // Use current date as join date
 
     return localData;
   }
@@ -300,7 +403,26 @@ export class SyncService {
   /**
    * Convert product from Amplify format to local format
    */
-  private fromProductApiModel(amplifyProduct: any): any {
+  private async fromProductApiModel(amplifyProduct: any): Promise<any> {
+    // Map Amplify category ID back to local category ID
+    let localCategoryId = amplifyProduct.categoryId; // Default to Amplify ID
+    
+    if (amplifyProduct.categoryId) {
+      try {
+        await categoryService.initialize();
+        const categories = await categoryService.getAllCategories();
+        const category = categories.find(cat => cat.amplifyId === amplifyProduct.categoryId);
+        if (category) {
+          localCategoryId = category.id;
+          console.log(`[PRODUCT DOWNLOAD] Mapped Amplify category ${amplifyProduct.categoryId} to local category ${localCategoryId} for product ${amplifyProduct.name}`);
+        } else {
+          console.warn(`[PRODUCT DOWNLOAD] No local category found for Amplify category ${amplifyProduct.categoryId} for product ${amplifyProduct.name}`);
+        }
+      } catch (error) {
+        console.warn(`[PRODUCT DOWNLOAD] Error mapping category for product ${amplifyProduct.name}:`, error);
+      }
+    }
+    
     // Return product document compatible with RxDB/React Native
     // (avoiding date-time format per memory)
     return {
@@ -309,7 +431,7 @@ export class SyncService {
       sku: amplifyProduct.sku,
       price: amplifyProduct.price,
       cost: amplifyProduct.cost,
-      categoryId: amplifyProduct.categoryId,
+      categoryId: localCategoryId, // Use mapped local category ID
       barcode: amplifyProduct.barcode,
       quantity: amplifyProduct.quantity,
       isActive: amplifyProduct.isActive,
@@ -386,7 +508,7 @@ export class SyncService {
   /**
    * Convert order from Amplify format to local format
    */
-  private convertOrderToLocalFormat(amplifyOrder: any, orderItems: any[] = []): any {
+  private async convertOrderToLocalFormat(amplifyOrder: any, orderItems: any[] = []): Promise<any> {
     // Group OrderItems by name and options to combine quantities
     const itemGroups = new Map<string, any>();
     
@@ -438,15 +560,75 @@ export class SyncService {
     // Convert map to array
     const localItems = Array.from(itemGroups.values());
 
+    // Map Amplify business ID back to local business ID
+    let localBusinessId = amplifyOrder.businessId; // Default to Amplify ID
+    if (amplifyOrder.businessId) {
+      try {
+        await businessService.initialize();
+        const businesses = await businessService.getAllBusinesses();
+        const business = businesses.find(biz => biz.amplifyId === amplifyOrder.businessId);
+        if (business) {
+          localBusinessId = business.id;
+          console.log(`[ORDER DOWNLOAD] Mapped Amplify business ${amplifyOrder.businessId} to local business ${localBusinessId} for order ${amplifyOrder.id}`);
+        } else {
+          console.warn(`[ORDER DOWNLOAD] No local business found for Amplify business ${amplifyOrder.businessId} for order ${amplifyOrder.id}`);
+        }
+      } catch (error) {
+        console.warn(`[ORDER DOWNLOAD] Error mapping business for order ${amplifyOrder.id}:`, error);
+      }
+    }
+
+    // Map Amplify customer ID back to local customer ID
+    let localCustomerId = amplifyOrder.customerId; // Default to Amplify ID
+    let customerName = 'Downloaded Customer';
+    let customerPhone = '';
+    if (amplifyOrder.customerId) {
+      try {
+        await customerService.initialize();
+        const customers = await customerService.getAllCustomers();
+        const customer = customers.find(cust => cust.amplifyId === amplifyOrder.customerId);
+        if (customer) {
+          localCustomerId = customer.id;
+          customerName = `${customer.firstName} ${customer.lastName}`;
+          customerPhone = customer.phone || '';
+          console.log(`[ORDER DOWNLOAD] Mapped Amplify customer ${amplifyOrder.customerId} to local customer ${localCustomerId} for order ${amplifyOrder.id}`);
+        } else {
+          console.warn(`[ORDER DOWNLOAD] No local customer found for Amplify customer ${amplifyOrder.customerId} for order ${amplifyOrder.id}`);
+        }
+      } catch (error) {
+        console.warn(`[ORDER DOWNLOAD] Error mapping customer for order ${amplifyOrder.id}:`, error);
+      }
+    }
+
+    // Map Amplify employee ID back to local employee ID
+    let localEmployeeId = amplifyOrder.employeeId; // Default to Amplify ID
+    let employeeName = '';
+    if (amplifyOrder.employeeId) {
+      try {
+        await employeeService.initialize();
+        const employees = await employeeService.getAllEmployees();
+        const employee = employees.find(emp => emp.amplifyId === amplifyOrder.employeeId);
+        if (employee) {
+          localEmployeeId = employee.id;
+          employeeName = `${employee.firstName} ${employee.lastName}`;
+          console.log(`[ORDER DOWNLOAD] Mapped Amplify employee ${amplifyOrder.employeeId} to local employee ${localEmployeeId} for order ${amplifyOrder.id}`);
+        } else {
+          console.warn(`[ORDER DOWNLOAD] No local employee found for Amplify employee ${amplifyOrder.employeeId} for order ${amplifyOrder.id}`);
+        }
+      } catch (error) {
+        console.warn(`[ORDER DOWNLOAD] Error mapping employee for order ${amplifyOrder.id}:`, error);
+      }
+    }
+
     return {
       id: amplifyOrder.id,
       orderNumber: `SYNC-${amplifyOrder.id.slice(-6)}`, // Generate order number from ID
-      customerId: amplifyOrder.customerId,
-      customerName: 'Downloaded Customer', // We don't have customer name from Order
-      customerPhone: '', // We don't have customer phone from Order
-      businessId: amplifyOrder.businessId,
-      employeeId: amplifyOrder.employeeId,
-      employeeName: '', // We don't have employee name from Order
+      customerId: localCustomerId, // Use mapped local customer ID
+      customerName: customerName, // Use actual customer name if found
+      customerPhone: customerPhone, // Use actual customer phone if found
+      businessId: localBusinessId, // Use mapped local business ID
+      employeeId: localEmployeeId, // Use mapped local employee ID
+      employeeName: employeeName, // Use actual employee name if found
       items: localItems,
       subtotal: amplifyOrder.total * 0.9, // Estimate subtotal (90% of total)
       tax: amplifyOrder.total * 0.1, // Estimate tax (10% of total)
@@ -1560,14 +1742,14 @@ export class SyncService {
             const localUpdatedAt = new Date(existingOrder.updatedAt);
             
             if (amplifyUpdatedAt > localUpdatedAt) {
-              const localFormat = this.convertOrderToLocalFormat(amplifyOrder, orderItems);
+              const localFormat = await this.convertOrderToLocalFormat(amplifyOrder, orderItems);
               await orderService.updateOrder(existingOrder.id, localFormat);
               downloadedCount++;
               console.log(`Updated order: ${amplifyOrder.id} with ${orderItems.length} items`);
             }
           } else {
             // Create new local order
-            const localFormat = this.convertOrderToLocalFormat(amplifyOrder, orderItems);
+            const localFormat = await this.convertOrderToLocalFormat(amplifyOrder, orderItems);
             await orderService.createOrder({
               customer: {
                 id: localFormat.customerId,
@@ -1658,33 +1840,16 @@ export class SyncService {
 
       for (const serverProduct of serverProducts) {
         try {
-          // Convert server model to local model
-          const productData = this.fromProductApiModel(serverProduct);
-          
-          // Map the category ID from Amplify to local if available
-          if (serverProduct.categoryId && categoryIdMapping[serverProduct.categoryId]) {
-            productData.categoryId = categoryIdMapping[serverProduct.categoryId];
-            console.log(`[PRODUCT DOWNLOAD] Mapped category ID ${serverProduct.categoryId} to local ID ${productData.categoryId} for product ${serverProduct.name}`);
-          } else if (serverProduct.categoryId) {
-            console.warn(`[PRODUCT DOWNLOAD] No local category found for Amplify category ID ${serverProduct.categoryId} for product ${serverProduct.name}`);
-            // Try to find category by name as fallback
-            const categoryName = await this.getCategoryNameFromAmplify(serverProduct.categoryId);
-            if (categoryName) {
-              const localCategory = await categoryService.findByName(categoryName);
-              if (localCategory) {
-                productData.categoryId = localCategory.id;
-                console.log(`[PRODUCT DOWNLOAD] Found category by name: ${categoryName} -> ${localCategory.id}`);
-              }
-            }
-          }
+          // Convert server model to local model (includes category ID mapping)
+          const productData = await this.fromProductApiModel(serverProduct);
           
           console.log(`[PRODUCT DOWNLOAD] Processing product: ${serverProduct.name} (imageName: ${serverProduct.imageName || 'none'}, categoryId: ${productData.categoryId})`);
 
           // Check if we already have this product locally
-          let localProduct = null;
+          let localProduct: any = null;
           if (serverProduct.id) {
             const existingProducts = await productService.getAllProductsSorted();
-            localProduct = existingProducts.find(p => p.amplifyId === serverProduct.id);
+            localProduct = existingProducts.find(p => p.amplifyId === serverProduct.id) || null;
           }
 
           if (localProduct) {
@@ -1746,21 +1911,6 @@ export class SyncService {
     }
   }
 
-  /**
-   * Helper method to get category name from Amplify by ID
-   */
-  private async getCategoryNameFromAmplify(categoryId: string): Promise<string | null> {
-    try {
-      if (!client.models || !client.models.Category) {
-        return null;
-      }
-      const response = await (client.models as any).Category.get({ id: categoryId });
-      return response.data?.name || null;
-    } catch (error) {
-      console.warn(`Could not fetch category ${categoryId} from Amplify:`, error);
-      return null;
-    }
-  }
 
   /**
    * Fix category relationships for all products in the local database

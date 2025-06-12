@@ -33,6 +33,7 @@ export default function OrdersScreen() {
   const [itemScanInput, setItemScanInput] = useState('');
   const [showRackScanner, setShowRackScanner] = useState(false);
   const [rackScanInput, setRackScanInput] = useState('');
+  const [rackScanResult, setRackScanResult] = useState<string | null>(null);
   const [notificationMessage, setNotificationMessage] = useState('');
   // Store QR refs for mass printing
   const qrRefs = useRef<{[key: string]: React.RefObject<View | null>}>({});
@@ -339,12 +340,18 @@ export default function OrdersScreen() {
   };
 
   const handleRackQRScanned = ({ data }: { data: string }) => {
-    setShowRackScanner(false);
+    setRackScanResult(data);
     processRackScan(data);
+  };
+
+  const handleRackScanOK = () => {
+    setShowRackScanner(false);
+    setRackScanResult(null);
   };
 
   const handleManualRackScan = () => {
     if (rackScanInput.trim()) {
+      setRackScanResult(rackScanInput.trim());
       processRackScan(rackScanInput.trim());
       // processRackScan will clear the input
     }
@@ -356,6 +363,7 @@ export default function OrdersScreen() {
     // Auto-scan when input has content (rack numbers can be any format)
     if (text.trim().length >= 2) {
       setTimeout(() => {
+        setRackScanResult(text.trim());
         processRackScan(text.trim());
         // processRackScan will clear the input
       }, 100);
@@ -1300,29 +1308,56 @@ export default function OrdersScreen() {
             <View style={styles.scannerHeader}>
               <TouchableOpacity 
                 style={styles.closeButton} 
-                onPress={() => setShowRackScanner(false)}
+                onPress={() => {
+                  setShowRackScanner(false);
+                  setRackScanResult(null);
+                }}
               >
                 <Ionicons name="close" size={24} color="white" />
               </TouchableOpacity>
-              <Text style={styles.scannerTitle}>Scan Rack Number</Text>
+              <Text style={styles.scannerTitle}>
+                {rackScanResult ? 'Rack Scanned Successfully' : 'Scan Rack Number'}
+              </Text>
               <View style={styles.placeholder} />
             </View>
             
-            <CameraView
-              style={styles.scanner}
-              facing="back"
-              onBarcodeScanned={handleRackQRScanned}
-              barcodeScannerSettings={{
-                barcodeTypes: ['qr', 'code128', 'code39'],
-              }}
-            />
-            
-            <View style={styles.scannerOverlay}>
-              <View style={styles.scannerFrame} />
-              <Text style={styles.scannerText}>
-                Scan the rack barcode to complete the order
-              </Text>
-            </View>
+            {!rackScanResult ? (
+              <>
+                <CameraView
+                  style={styles.scanner}
+                  facing="back"
+                  onBarcodeScanned={handleRackQRScanned}
+                  barcodeScannerSettings={{
+                    barcodeTypes: ['qr', 'code128', 'code39'],
+                  }}
+                />
+                
+                <View style={styles.scannerOverlay}>
+                  <View style={styles.scannerFrame} />
+                  <Text style={styles.scannerText}>
+                    Scan the rack barcode to complete the order
+                  </Text>
+                </View>
+              </>
+            ) : (
+              <View style={styles.scanResultContainer}>
+                <View style={styles.scanResultContent}>
+                  <Ionicons name="checkmark-circle" size={80} color="#4CAF50" />
+                  <Text style={styles.scanResultTitle}>Rack Number Scanned</Text>
+                  <Text style={styles.scanResultValue}>{rackScanResult}</Text>
+                  <Text style={styles.scanResultDescription}>
+                    Order has been assigned to this rack and marked as completed
+                  </Text>
+                  
+                  <TouchableOpacity 
+                    style={styles.okButton}
+                    onPress={handleRackScanOK}
+                  >
+                    <Text style={styles.okButtonText}>OK</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
           </SafeAreaView>
         </Modal>
     </SafeAreaView>
@@ -2167,5 +2202,61 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
     marginBottom: 4,
+  },
+  // Scan result styles
+  scanResultContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 20,
+  },
+  scanResultContent: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    maxWidth: 400,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  scanResultTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  scanResultValue: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#4CAF50',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  scanResultDescription: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 32,
+  },
+  okButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 8,
+    minWidth: 120,
+  },
+  okButtonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });

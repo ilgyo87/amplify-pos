@@ -19,6 +19,7 @@ interface OrderSummaryProps {
   onCheckout: () => void;
   selectedDate?: string;
   style?: any;
+  disabled?: boolean;
 }
 
 export function OrderSummary({
@@ -28,7 +29,8 @@ export function OrderSummary({
   onEditItem,
   onCheckout,
   selectedDate,
-  style
+  style,
+  disabled = false
 }: OrderSummaryProps) {
   const calculateSummary = (): OrderSummaryData => {
     const rawSubtotal = items.reduce((sum, item) => {
@@ -236,21 +238,21 @@ export function OrderSummary({
             <TouchableOpacity 
               style={[
                 styles.checkoutButton,
-                (!selectedDate || items.length === 0) && styles.checkoutButtonDisabled
+                (disabled || !selectedDate || items.length === 0) && styles.checkoutButtonDisabled
               ]} 
               onPress={onCheckout}
-              disabled={!selectedDate || items.length === 0}
+              disabled={disabled || !selectedDate || items.length === 0}
             >
               <Text style={[
                 styles.checkoutButtonText,
-                (!selectedDate || items.length === 0) && styles.checkoutButtonTextDisabled
+                (disabled || !selectedDate || items.length === 0) && styles.checkoutButtonTextDisabled
               ]}>
                 Complete
               </Text>
               <Ionicons 
                 name="checkmark-circle" 
                 size={20} 
-                color={(!selectedDate || items.length === 0) ? "#ccc" : "white"} 
+                color={(disabled || !selectedDate || items.length === 0) ? "#ccc" : "white"} 
               />
             </TouchableOpacity>
           </View>
