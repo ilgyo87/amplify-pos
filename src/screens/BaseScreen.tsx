@@ -20,7 +20,11 @@ export function BaseScreen({ title, children, showBackButton = false, hideHeader
           {showBackButton && (
             <TouchableOpacity 
               style={styles.backButton} 
-              onPress={() => navigation.goBack()}
+              onPress={() => {
+                if (navigation.canGoBack()) {
+                  navigation.goBack();
+                }
+              }}
             >
               <Ionicons name="arrow-back" size={24} color="#333" />
             </TouchableOpacity>

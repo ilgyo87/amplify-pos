@@ -202,12 +202,15 @@ export class SyncService {
    */
   private convertCustomerToLocalFormat(amplifyCustomer: any): any {
     const localData: any = {
+      id: amplifyCustomer.id, // Use Amplify ID as primary key for consistency
       firstName: amplifyCustomer.firstName,
       lastName: amplifyCustomer.lastName,
       phone: amplifyCustomer.phone,
-      amplifyId: amplifyCustomer.id,
+      amplifyId: amplifyCustomer.id, // Keep for backwards compatibility
       isLocalOnly: false,
-      lastSyncedAt: new Date().toISOString()
+      lastSyncedAt: new Date().toISOString(),
+      createdAt: amplifyCustomer.createdAt || new Date().toISOString(),
+      updatedAt: amplifyCustomer.updatedAt || new Date().toISOString()
     };
 
     // Include optional fields if they exist in Amplify data
@@ -566,7 +569,11 @@ export class SyncService {
       try {
         await businessService.initialize();
         const businesses = await businessService.getAllBusinesses();
-        const business = businesses.find(biz => biz.amplifyId === amplifyOrder.businessId);
+        
+        // Try to find by amplifyId first, then by direct ID match
+        const business = businesses.find(biz => biz.amplifyId === amplifyOrder.businessId) ||
+                        businesses.find(biz => biz.id === amplifyOrder.businessId);
+        
         if (business) {
           localBusinessId = business.id;
           console.log(`[ORDER DOWNLOAD] Mapped Amplify business ${amplifyOrder.businessId} to local business ${localBusinessId} for order ${amplifyOrder.id}`);
@@ -586,14 +593,20 @@ export class SyncService {
       try {
         await customerService.initialize();
         const customers = await customerService.getAllCustomers();
-        const customer = customers.find(cust => cust.amplifyId === amplifyOrder.customerId);
+        
+        // Try to find by amplifyId first, then by direct ID match
+        let customer = customers.find(cust => cust.amplifyId === amplifyOrder.customerId) ||
+                     customers.find(cust => cust.id === amplifyOrder.customerId);
+        
         if (customer) {
           localCustomerId = customer.id;
           customerName = `${customer.firstName} ${customer.lastName}`;
           customerPhone = customer.phone || '';
           console.log(`[ORDER DOWNLOAD] Mapped Amplify customer ${amplifyOrder.customerId} to local customer ${localCustomerId} for order ${amplifyOrder.id}`);
         } else {
-          console.warn(`[ORDER DOWNLOAD] No local customer found for Amplify customer ${amplifyOrder.customerId} for order ${amplifyOrder.id}`);
+          console.warn(`[ORDER DOWNLOAD] No local customer found for Amplify customer ${amplifyOrder.customerId} for order ${amplifyOrder.id}. Order will use placeholder customer data.`);
+          // Use a default customer name that shows it's from sync
+          customerName = 'Unknown Customer (Synced)';
         }
       } catch (error) {
         console.warn(`[ORDER DOWNLOAD] Error mapping customer for order ${amplifyOrder.id}:`, error);
@@ -607,7 +620,11 @@ export class SyncService {
       try {
         await employeeService.initialize();
         const employees = await employeeService.getAllEmployees();
-        const employee = employees.find(emp => emp.amplifyId === amplifyOrder.employeeId);
+        
+        // Try to find by amplifyId first, then by direct ID match
+        const employee = employees.find(emp => emp.amplifyId === amplifyOrder.employeeId) ||
+                        employees.find(emp => emp.id === amplifyOrder.employeeId);
+        
         if (employee) {
           localEmployeeId = employee.id;
           employeeName = `${employee.firstName} ${employee.lastName}`;
@@ -621,13 +638,13 @@ export class SyncService {
     }
 
     return {
-      id: amplifyOrder.id,
-      orderNumber: `SYNC-${amplifyOrder.id.slice(-6)}`, // Generate order number from ID
-      customerId: localCustomerId, // Use mapped local customer ID
+      id: amplifyOrder.id, // Use Amplify ID as primary key for consistency
+      orderNumber: `SYNC-${amplifyOrder.id.slice(-8)}`, // Use longer slice for better uniqueness
+      customerId: amplifyOrder.customerId, // Use Amplify customer ID for consistency
       customerName: customerName, // Use actual customer name if found
       customerPhone: customerPhone, // Use actual customer phone if found
-      businessId: localBusinessId, // Use mapped local business ID
-      employeeId: localEmployeeId, // Use mapped local employee ID
+      businessId: amplifyOrder.businessId, // Use Amplify business ID for consistency
+      employeeId: amplifyOrder.employeeId, // Use Amplify employee ID for consistency
       employeeName: employeeName, // Use actual employee name if found
       items: localItems,
       subtotal: amplifyOrder.total * 0.9, // Estimate subtotal (90% of total)
@@ -819,9 +836,9 @@ export class SyncService {
 
       for (const amplifyCustomer of amplifyCustomers) {
         try {
-          // Check if customer already exists locally by amplifyId
+          // Check if customer already exists locally by ID or amplifyId
           const existingCustomers = await customerService.getAllCustomers();
-          const existingCustomer = existingCustomers.find(c => c.amplifyId === amplifyCustomer.id);
+          const existingCustomer = existingCustomers.find(c => c.id === amplifyCustomer.id || c.amplifyId === amplifyCustomer.id);
 
           if (existingCustomer) {
             // Update existing customer if Amplify version is newer
@@ -837,15 +854,13 @@ export class SyncService {
               }
             }
           } else {
-            // Create new local customer
+            // Create new local customer with Amplify ID as primary key
             const localFormat = this.convertCustomerToLocalFormat(amplifyCustomer);
             const result = await customerService.createCustomer(localFormat);
             
             if (result.customer) {
-              // Mark as synced since it came from Amplify
-              await customerService.markAsSynced(result.customer.id, amplifyCustomer.id);
               downloadedCount++;
-              console.log(`Downloaded new customer: ${amplifyCustomer.firstName} ${amplifyCustomer.lastName}`);
+              console.log(`Downloaded new customer: ${amplifyCustomer.firstName} ${amplifyCustomer.lastName} with ID ${amplifyCustomer.id}`);
             } else if (result.errors || result.duplicateError) {
               const errorMsg = result.duplicateError || Object.values(result.errors || {}).join(', ');
               errors.push(`Failed to create ${amplifyCustomer.firstName} ${amplifyCustomer.lastName}: ${errorMsg}`);

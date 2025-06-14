@@ -114,11 +114,11 @@ export const useOrders = (status?: OrderDocType['status']) => {
     }
   };
 
-  const generateOrderNumber = async () => {
+  const generateOrderNumber = async (customerFirstName?: string, customerLastName?: string, customerPhone?: string) => {
     try {
       const service = getOrderService();
       await service.initialize();
-      return await service.generateOrderNumber();
+      return await service.generateOrderNumber(customerFirstName, customerLastName, customerPhone);
     } catch (err) {
       console.error('Error generating order number:', err);
       throw err;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, SafeAreaView, Text, FlatList, TouchableOpacity, ActivityIndicator, Animated } from 'react-native';
+import { View, StyleSheet, SafeAreaView, Text, FlatList, TouchableOpacity, ActivityIndicator, Animated, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { InputBox } from '../components/ui/InputBox';
 import { DashboardMenu, MenuItem } from '../components/ui/DashboardMenu';
@@ -243,85 +243,91 @@ export default function Dashboard() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerText}>{businessName}</Text>
-          {hasReadyOrders && (
+        <Text style={styles.businessName}>{businessName}</Text>
+        {businessName === 'No Business' ? (
+          <TouchableOpacity style={styles.createButton} onPress={handleCreateBusinessPress}>
+            <Text style={styles.createButtonText}>Create Business</Text>
+          </TouchableOpacity>
+        ) : (
+          hasReadyOrders && (
             <TouchableOpacity
+              style={styles.readyOrdersButton}
               onPress={() => navigation.navigate('Orders')}
-              activeOpacity={0.7}
             >
-              <Animated.View style={[styles.readyOrdersNotification, { opacity: blinkAnimation }]}>
-                <Ionicons name="notifications" size={24} color="#FF6B35" />
-                <Text style={styles.readyOrdersText}>Orders Ready!</Text>
+              <Animated.View style={[styles.readyOrdersIcon, { opacity: blinkAnimation }]}>
+                <Ionicons name="cube" size={24} color="#FF6B35" />
+                <Text style={styles.readyOrdersButtonText}>Ready Orders</Text>
               </Animated.View>
             </TouchableOpacity>
-          )}
-          {businessName === 'No Business' && (
-            <TouchableOpacity 
-              style={styles.createBusinessButton}
-              onPress={handleCreateBusinessPress}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="add" size={20} color="#007AFF" />
-            </TouchableOpacity>
-          )}
-        </View>
+          )
+        )}
       </View>
-
-      <View style={styles.content}>
-        <View style={styles.searchContainer}>
-          <InputBox
-            placeholder="Search customers or order number"
-            value={searchTerm}
-            onChangeText={handleSearchChange}
-            onFocus={() => searchTerm.trim() && setShowResults(true)}
-            autoFocus={true}
-          />
-          
-          {showResults && (
-            <View style={styles.resultsContainer}>
-              {isLoading ? (
-                <ActivityIndicator size="small" color="#007AFF" style={styles.loader} />
-              ) : customers.length > 0 ? (
-                <FlatList
-                  data={customers}
-                  keyExtractor={(item) => item.id}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity 
-                      key={`customer-${item.id}`}
-                      style={[
-                        styles.customerItem,
-                        (item as any).fromOrderSearch && styles.orderSearchItem
-                      ]} 
-                      onPress={() => handleSelectCustomer(item)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.customerItemContent}>
-                        {(item as any).fromOrderSearch && (
-                          <View style={styles.orderIndicator}>
-                            <Ionicons name="document" size={16} color="#007AFF" />
-                            <Text style={styles.orderNumber}>Order: {(item as any).orderNumber}</Text>
-                          </View>
-                        )}
-                        <Text key={`name-${item.id}`} style={styles.customerName}>
-                          {item.firstName} {item.lastName}
-                        </Text>
-                        {item.email && <Text key={`email-${item.id}`} style={styles.customerDetail}>{item.email}</Text>}
-                        {item.phone && <Text key={`phone-${item.id}`} style={styles.customerDetail}>{item.phone}</Text>}
-                      </View>
-                    </TouchableOpacity>
-                  )}
-                  style={styles.resultsList}
-                  keyboardShouldPersistTaps="handled"
-                />
-              ) : searchTerm.trim() ? (
-                <Text style={styles.noResultsText}>No customers found</Text>
-              ) : null}
+      
+      <View style={styles.searchContainer}>
+        <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
+        <InputBox
+          placeholder="Search customers by name, phone, email, or order number..."
+          value={searchTerm}
+          onChangeText={handleSearchChange}
+          onFocus={() => searchTerm.trim() && setShowResults(true)}
+          style={styles.searchInput}
+        />
+      </View>
+      
+      {showResults && (
+        <View style={styles.searchResults}>
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#007AFF" />
+              <Text style={styles.loadingText}>Searching...</Text>
             </View>
-          )}
+          ) : customers.length > 0 ? (
+            <FlatList
+              data={customers}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <TouchableOpacity 
+                  style={styles.customerItem}
+                  onPress={() => handleSelectCustomer(item)}
+                >
+                  <View style={styles.customerAvatar}>
+                    <Text style={styles.customerInitials}>
+                      {item.firstName.charAt(0)}{item.lastName.charAt(0)}
+                    </Text>
+                  </View>
+                  <View style={styles.customerInfo}>
+                    {(item as any).fromOrderSearch && (
+                      <View style={styles.orderBadge}>
+                        <Ionicons name="receipt-outline" size={12} color="#007AFF" />
+                        <Text style={styles.orderBadgeText}>Order #{(item as any).orderNumber}</Text>
+                      </View>
+                    )}
+                    <Text style={styles.customerName}>
+                      {item.firstName} {item.lastName}
+                    </Text>
+                    <Text style={styles.customerDetails}>
+                      {item.phone} {item.email && `• ${item.email}`}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color="#999" />
+                </TouchableOpacity>
+              )}
+              style={styles.customerList}
+              keyboardShouldPersistTaps="handled"
+            />
+          ) : searchTerm.trim() ? (
+            <View style={styles.noResults}>
+              <Text style={styles.noResultsText}>No customers found</Text>
+              <Text style={styles.noResultsSubtext}>Try a different search term</Text>
+            </View>
+          ) : null}
         </View>
-
-        <DashboardMenu menuItems={menuItems} />
+      )}
+      
+      <View style={styles.content}>
+        <DashboardMenu
+          menuItems={menuItems}
+        />
       </View>
 
       <BusinessForm
@@ -339,116 +345,159 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
-  content: {
-    flex: 1,
-  },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     padding: 16,
-    backgroundColor: '#fff',
+    backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerText: {
-    fontSize: 20,
+  businessName: {
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#333',
   },
-  readyOrdersNotification: {
+  createButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  createButtonText: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 16,
+    backgroundColor: 'white',
+    margin: 16,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    paddingHorizontal: 0,
+  },
+  searchResults: {
+    backgroundColor: 'white',
+    marginHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    maxHeight: 300,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    marginLeft: 8,
+    color: '#666',
+  },
+  customerList: {
+    maxHeight: 280,
+  },
+  customerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  customerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#007AFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  customerInitials: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  customerInfo: {
+    flex: 1,
+  },
+  orderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginBottom: 4,
+  },
+  orderBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#007AFF',
+    marginLeft: 4,
+  },
+  customerName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+  },
+  customerDetails: {
+    fontSize: 14,
+    color: '#666',
+  },
+  noResults: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  noResultsText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  noResultsSubtext: {
+    fontSize: 14,
+    color: '#666',
+  },
+  content: {
+    flex: 1,
+    padding: 16,
+  },
+  readyOrdersButton: {
     backgroundColor: '#FFF4F1',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 2,
     borderColor: '#FF6B35',
+    shadowColor: '#FF6B35',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  readyOrdersText: {
-    fontSize: 14,
+  readyOrdersIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  readyOrdersButtonText: {
+    fontSize: 12,
     fontWeight: '600',
     color: '#FF6B35',
     marginLeft: 6,
-  },
-  createBusinessButton: {
-    marginLeft: 12,
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: '#f0f8ff',
-    borderWidth: 1,
-    borderColor: '#007AFF',
-  },
-  searchContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 8,
-    position: 'relative',
-    zIndex: 10,
-  },
-  resultsContainer: {
-    backgroundColor: 'white',
-    borderRadius: 8,
-    marginTop: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    maxHeight: 300,
-    position: 'absolute',
-    top: 60,
-    left: 16,
-    right: 16,
-  },
-  resultsList: {
-    borderRadius: 8,
-  },
-  customerItem: {
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  orderSearchItem: {
-    backgroundColor: '#f0f7ff',
-    borderLeftWidth: 3,
-    borderLeftColor: '#007AFF',
-  },
-  customerItemContent: {
-    flex: 1,
-  },
-  orderIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  orderNumber: {
-    fontSize: 12,
-    color: '#007AFF',
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-  customerName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 2,
-  },
-  customerDetail: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 1,
-  },
-  loader: {
-    padding: 16,
-  },
-  noResultsText: {
-    padding: 16,
-    textAlign: 'center',
-    color: '#888',
   },
 });

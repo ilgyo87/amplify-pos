@@ -34,6 +34,7 @@ interface DynamicFormProps {
   entityType?: 'customer' | 'employee';
   title?: string;
   submitButtonText?: string;
+  onOrderHistory?: () => void; // Optional callback for customer order history button
 }
 
 const getFormFields = (entityType: 'customer' | 'employee'): FormField[] => {
@@ -165,7 +166,8 @@ export function DynamicForm({
   mode,
   entityType,
   title,
-  submitButtonText
+  submitButtonText,
+  onOrderHistory
 }: DynamicFormProps) {
   const formFields = fields || (entityType ? getFormFields(entityType) : []);
   
@@ -346,6 +348,21 @@ export function DynamicForm({
         {formFields.map(renderField)}
       </ScrollView>
 
+      {/* Order History Button - only show for customer edit mode */}
+      {mode === 'edit' && entityType === 'customer' && onOrderHistory && (
+        <View style={styles.orderHistoryContainer}>
+          <TouchableOpacity
+            style={styles.orderHistoryButton}
+            onPress={onOrderHistory}
+            disabled={isLoading}
+          >
+            <Ionicons name="time-outline" size={20} color="#007AFF" />
+            <Text style={styles.orderHistoryButtonText}>View Order History</Text>
+            <Ionicons name="chevron-forward" size={16} color="#007AFF" />
+          </TouchableOpacity>
+        </View>
+      )}
+
       <View style={styles.buttonContainer}>
         <TouchableOpacity
           style={[styles.button, styles.cancelButton]}
@@ -520,5 +537,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     lineHeight: 20,
+  },
+  orderHistoryContainer: {
+    marginBottom: 16,
+    paddingHorizontal: 20,
+  },
+  orderHistoryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8f9fa',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  orderHistoryButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#007AFF',
+    marginLeft: 8,
+    flex: 1,
   },
 });

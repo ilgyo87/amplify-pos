@@ -8,7 +8,8 @@ import {
   Alert,
   Modal,
   SafeAreaView,
-  Animated
+  Animated,
+  ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp } from '@react-navigation/native';
@@ -27,7 +28,11 @@ import { useBusiness } from '../../database/hooks/useBusiness';
 import { OrderService } from '../../database/services/orderService';
 import { SerializableCustomer } from '../../navigation/types';
 import { DynamicForm } from '../../components/forms/DynamicForm';
+import { BusinessForm } from '../../components/forms/BusinessForm';
 import { CustomerFormData } from '../../utils/customerValidation';
+import { EmployeeFormData } from '../../utils/employeeValidation';
+import { BusinessFormData } from '../../utils/businessValidation';
+import { defaultDataService } from '../../database/services/defaultDataService';
 import { OrderItemSettingsModal } from '../../components/checkout/OrderItemSettingsModal';
 import { PickupModal } from '../../components/checkout/PickupModal';
 import { CheckoutValidationOverlay } from '../../components/checkout/CheckoutValidationOverlay';
@@ -37,6 +42,7 @@ import { OrderItem, OrderItemOptions, generateOrderItemKey, PaymentInfo } from '
 import { RootStackParamList } from '../../navigation/types';
 import { toPreciseAmount } from '../../utils/monetaryUtils';
 import { useEmployeeAuth } from '../../context/EmployeeAuthContext';
+import { useEmployees } from '../../database/hooks/useEmployees';
 
 type CheckoutScreenRouteProp = RouteProp<RootStackParamList, 'Checkout'>;
 type CheckoutScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Checkout'>;
@@ -330,13 +336,26 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
   const [showPickupModal, setShowPickupModal] = useState(false);
   const [blinkAnimation] = useState(new Animated.Value(1));
   const [customerHasReadyOrders, setCustomerHasReadyOrders] = useState(false);
+  const [showOrderHistoryModal, setShowOrderHistoryModal] = useState(false);
+  const [showCreateEmployeeModal, setShowCreateEmployeeModal] = useState(false);
+  const [showCreateBusinessModal, setShowCreateBusinessModal] = useState(false);
+  const [employeeFormErrors, setEmployeeFormErrors] = useState({});
+  const [businessFormErrors, setBusinessFormErrors] = useState({});
+  const [employeeDuplicateError, setEmployeeDuplicateError] = useState<string>('');
+  const [businessDuplicateError, setBusinessDuplicateError] = useState<string>('');
+  const [validationOverlayDismissed, setValidationOverlayDismissed] = useState(false);
   
   // Database hooks
   const { categories, loading: categoriesLoading } = useCategories();
   const [selectedCategory, setSelectedCategory] = useState<CategoryDocument | null>(null);
   const { products, loading: productsLoading } = useProducts(selectedCategory?.id);
   const { currentEmployee } = useEmployeeAuth();
-  const { hasBusinesses, loading: businessLoading } = useBusiness();
+  const { 
+    hasBusinesses, 
+    loading: businessLoading, 
+    createBusiness,
+    operationLoading: businessOperationLoading 
+  } = useBusiness();
 
   const {
     createOrder,
@@ -345,25 +364,95 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
 
   const {
     updateCustomer,
-    operationLoading
+    operationLoading: customerOperationLoading
   } = useCustomers();
 
-  // Validation logic
-  const hasEmployee = !!currentEmployee;
+  // Additional hooks for creation
+  const { employees, createEmployee, operationLoading: employeeOperationLoading } = useEmployees();
+
+  // Validation logic - allow employees without amplifyId for local-only accounts
+  const hasEmployee = !!currentEmployee && currentEmployee.id !== 'temp-admin';
   const hasProducts = products.length > 0;
   const allRequirementsMet = hasEmployee && hasBusinesses && hasProducts;
 
-  // Navigation handlers for validation overlay
+  // Debug logging for employee authentication
+  useEffect(() => {
+    console.log('[CHECKOUT DEBUG] Current employee:', currentEmployee ? {
+      id: currentEmployee.id,
+      firstName: currentEmployee.firstName,
+      lastName: currentEmployee.lastName,
+      amplifyId: currentEmployee.amplifyId,
+      isLocalOnly: currentEmployee.isLocalOnly
+    } : 'none');
+    console.log('[CHECKOUT DEBUG] hasEmployee:', hasEmployee);
+    console.log('[CHECKOUT DEBUG] hasBusinesses:', hasBusinesses);
+    console.log('[CHECKOUT DEBUG] hasProducts:', hasProducts);
+    console.log('[CHECKOUT DEBUG] allRequirementsMet:', allRequirementsMet);
+  }, [currentEmployee, hasEmployee, hasBusinesses, hasProducts, allRequirementsMet]);
+
+  // Auto-dismiss validation overlay when all requirements are met
+  useEffect(() => {
+    if (allRequirementsMet && !validationOverlayDismissed) {
+      setValidationOverlayDismissed(true);
+    }
+  }, [allRequirementsMet, validationOverlayDismissed]);
+
+  // Navigation handlers for validation overlay - open creation forms directly
+  const handleDismissValidationOverlay = () => {
+    setValidationOverlayDismissed(true);
+  };
+
   const handleNavigateToEmployees = () => {
-    navigation.navigate('Employees');
+    // Check if any employees exist in the system first
+    if (employees && employees.length > 0) {
+      // Employees exist but none signed in - navigate to sign in
+      navigation.navigate('EmployeeSignIn');
+    } else {
+      // No employees exist - open create employee modal
+      setShowCreateEmployeeModal(true);
+    }
   };
 
   const handleNavigateToBusiness = () => {
-    navigation.navigate('BusinessSettings');
+    setShowCreateBusinessModal(true);
   };
 
-  const handleNavigateToProducts = () => {
-    navigation.navigate('Products');
+  const handleNavigateToProducts = async () => {
+    try {
+      Alert.alert(
+        'Add Default Products',
+        'This will add default categories and products for a dry cleaning business to get you started quickly.',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          },
+          {
+            text: 'Add Default Data',
+            onPress: async () => {
+              try {
+                console.log('[DEFAULT DATA] Starting default data creation...');
+                const result = await defaultDataService.initializeDefaultData();
+                
+                console.log('[DEFAULT DATA] Result:', result);
+                
+                Alert.alert(
+                  'Success!',
+                  'Default categories and products have been added successfully. You can now start processing orders.',
+                  [{ text: 'OK' }]
+                );
+              } catch (error) {
+                console.error('Error adding default data:', error);
+                Alert.alert('Error', 'Failed to add default data. Please try again.');
+              }
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error in handleNavigateToProducts:', error);
+      Alert.alert('Error', 'An unexpected error occurred.');
+    }
   };
 
   // Handle screen size changes
@@ -595,7 +684,7 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
     
     try {
       // Generate order number before showing the receipt preview
-      const newOrderNumber = await generateOrderNumber();
+      const newOrderNumber = await generateOrderNumber(customer.firstName, customer.lastName, customer.phone);
       setOrderNumber(newOrderNumber);
       setShowReceiptPreview(true);
     } catch (error) {
@@ -650,6 +739,54 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
     setDuplicateError('');
   };
 
+  // Handle order history
+  const handleOrderHistory = async () => {
+    try {
+      await orderService.initialize();
+      const orders = await orderService.getOrdersByCustomer(customer.id);
+      setCustomerOrders(orders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      setShowOrderHistoryModal(true);
+    } catch (error) {
+      console.error('Error loading customer orders:', error);
+      Alert.alert('Error', 'Failed to load order history. Please try again.');
+    }
+  };
+
+  // Helper function to get order status color
+  const getOrderStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return '#f59e0b';
+      case 'in_progress': return '#3b82f6';
+      case 'ready': return '#10b981';
+      case 'completed': return '#6b7280';
+      case 'cancelled': return '#ef4444';
+      case 'picked_up': return '#059669';
+      default: return '#6b7280';
+    }
+  };
+
+  // Creation handlers for validation overlay
+  const handleCreateEmployee = async (data: EmployeeFormData) => {
+    setEmployeeFormErrors({});
+    setEmployeeDuplicateError('');
+
+    const result = await createEmployee(data);
+    
+    if (result.success && result.employee) {
+      setShowCreateEmployeeModal(false);
+      Alert.alert('Success', 'Employee created successfully');
+    } else {
+      if (result.errors) {
+        setEmployeeFormErrors(result.errors);
+      }
+      if (result.duplicateError) {
+        setEmployeeDuplicateError(result.duplicateError);
+      }
+    }
+  };
+
+
+
   // Handle order completion
   const handleOrderComplete = async (paymentInfo: PaymentInfo, qrData?: string) => {
     setShowReceiptPreview(false);
@@ -695,7 +832,11 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
             onPress: () => {
               // Check if there are ready orders after completing this order
               checkForCompletedOrdersAndShowPickup();
-              navigation.goBack();
+              if (navigation.canGoBack()) {
+                navigation.goBack();
+              } else {
+                navigation.navigate('Dashboard');
+              }
             }
           },
           {
@@ -709,7 +850,11 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
                     onPress: () => {
                       // After printing, check for ready orders and show pickup modal
                       checkForCompletedOrdersAndShowPickup();
-                      navigation.goBack();
+                      if (navigation.canGoBack()) {
+                        navigation.goBack();
+                      } else {
+                        navigation.navigate('Dashboard');
+                      }
                     }
                   }
                 ]);
@@ -720,7 +865,11 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
                     text: 'OK', 
                     onPress: () => {
                       checkForCompletedOrdersAndShowPickup();
-                      navigation.goBack();
+                      if (navigation.canGoBack()) {
+                        navigation.goBack();
+                      } else {
+                        navigation.navigate('Dashboard');
+                      }
                     }
                   }
                 ]);
@@ -855,14 +1004,18 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
       {renderContent()}
 
       {/* Validation Overlay - Shows when requirements are not met */}
-      <CheckoutValidationOverlay
-        hasEmployee={hasEmployee}
-        hasBusiness={hasBusinesses}
-        hasProducts={hasProducts}
-        onNavigateToEmployees={handleNavigateToEmployees}
-        onNavigateToBusiness={handleNavigateToBusiness}
-        onNavigateToProducts={handleNavigateToProducts}
-      />
+      {!validationOverlayDismissed && (
+        <CheckoutValidationOverlay
+          hasEmployee={hasEmployee}
+          hasBusiness={hasBusinesses}
+          hasProducts={hasProducts}
+          employeesExist={employees && employees.length > 0}
+          onNavigateToEmployees={handleNavigateToEmployees}
+          onNavigateToBusiness={handleNavigateToBusiness}
+          onNavigateToProducts={handleNavigateToProducts}
+          onDismiss={handleDismissValidationOverlay}
+        />
+      )}
 
       {/* Date Picker Modal */}
       <DatePickerModal
@@ -903,12 +1056,13 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
             state: customer.state || '',
             zipCode: customer.zipCode || '',
             notes: customer.notes || '',
-            emailNotifications: customer.emailNotifications || false,
-            textNotifications: customer.textNotifications || false
+            emailNotifications: false,
+            textNotifications: false
           }}
           onSubmit={handleUpdateCustomer}
           onCancel={handleCloseEditModal}
-          isLoading={operationLoading}
+          onOrderHistory={handleOrderHistory}
+          isLoading={customerOperationLoading}
           errors={formErrors}
           duplicateError={duplicateError}
         />
@@ -930,6 +1084,127 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
           console.log('Order picked up:', orderId);
         }}
       />
+
+      {/* Order History Modal */}
+      <Modal
+        visible={showOrderHistoryModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <SafeAreaView style={styles.orderHistoryContainer}>
+          <View style={styles.orderHistoryHeader}>
+            <TouchableOpacity 
+              style={styles.orderHistoryCloseButton} 
+              onPress={() => setShowOrderHistoryModal(false)}
+            >
+              <Ionicons name="close" size={24} color="#333" />
+            </TouchableOpacity>
+            <Text style={styles.orderHistoryTitle}>
+              Order History - {customer.firstName} {customer.lastName}
+            </Text>
+            <View style={styles.orderHistoryPlaceholder} />
+          </View>
+          
+          <View style={styles.orderHistoryContent}>
+            {customerOrders.length === 0 ? (
+              <View style={styles.orderHistoryEmpty}>
+                <Ionicons name="receipt-outline" size={64} color="#d1d5db" />
+                <Text style={styles.orderHistoryEmptyTitle}>No Orders Found</Text>
+                <Text style={styles.orderHistoryEmptyText}>
+                  This customer hasn't placed any orders yet.
+                </Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.orderHistoryList} showsVerticalScrollIndicator={false}>
+                {customerOrders.map((order) => (
+                  <View key={order.id} style={styles.orderHistoryCard}>
+                    <View style={styles.orderHistoryCardHeader}>
+                      <Text style={styles.orderHistoryOrderNumber}>#{order.orderNumber}</Text>
+                      <View style={[styles.orderHistoryStatusBadge, { backgroundColor: getOrderStatusColor(order.status) }]}>
+                        <Text style={styles.orderHistoryStatusText}>
+                          {order.status.charAt(0).toUpperCase() + order.status.slice(1).replace('_', ' ')}
+                        </Text>
+                      </View>
+                    </View>
+                    
+                    <Text style={styles.orderHistoryDate}>
+                      {new Date(order.createdAt).toLocaleDateString()} at {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                    
+                    <View style={styles.orderHistoryItems}>
+                      <Text style={styles.orderHistoryItemsLabel}>Items ({order.items.length}):</Text>
+                      {order.items.slice(0, 3).map((item, index) => (
+                        <Text key={index} style={styles.orderHistoryItemText}>
+                          {item.quantity}x {item.name}
+                        </Text>
+                      ))}
+                      {order.items.length > 3 && (
+                        <Text style={styles.orderHistoryMoreItems}>
+                          +{order.items.length - 3} more items
+                        </Text>
+                      )}
+                    </View>
+                    
+                    <View style={styles.orderHistoryFooter}>
+                      <Text style={styles.orderHistoryTotal}>${order.total.toFixed(2)}</Text>
+                      <Text style={styles.orderHistoryPayment}>
+                        {order.paymentMethod.charAt(0).toUpperCase() + order.paymentMethod.slice(1)}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Create Employee Modal */}
+      <Modal
+        visible={showCreateEmployeeModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <DynamicForm
+          mode="create"
+          entityType="employee"
+          onSubmit={handleCreateEmployee}
+          onCancel={() => {
+            setShowCreateEmployeeModal(false);
+            setEmployeeFormErrors({});
+            setEmployeeDuplicateError('');
+          }}
+          isLoading={employeeOperationLoading}
+          errors={employeeFormErrors}
+          duplicateError={employeeDuplicateError}
+        />
+      </Modal>
+
+      {/* Create Business Modal */}
+      <BusinessForm
+        visible={showCreateBusinessModal}
+        onSubmit={async (data) => {
+          const result = await createBusiness(data);
+          console.log('Business creation result:', result);
+          
+          if (result.success && result.business) {
+            // Close the modal first
+            setShowCreateBusinessModal(false);
+            setBusinessFormErrors({});
+            setBusinessDuplicateError('');
+            Alert.alert('Success', 'Business created successfully');
+            return { business: result.business };
+          } else {
+            return { errors: result.errors };
+          }
+        }}
+        onCancel={() => {
+          setShowCreateBusinessModal(false);
+          setBusinessFormErrors({});
+          setBusinessDuplicateError('');
+        }}
+      />
+
     </SafeAreaView>
   );
 }
@@ -997,5 +1272,135 @@ const styles = StyleSheet.create({
   customerHeaderFlex: {
     flex: 1,
     marginRight: 12,
+  },
+  // Order History Modal Styles
+  orderHistoryContainer: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  orderHistoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    backgroundColor: 'white',
+  },
+  orderHistoryCloseButton: {
+    padding: 8,
+  },
+  orderHistoryTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center',
+    flex: 1,
+  },
+  orderHistoryPlaceholder: {
+    width: 40,
+  },
+  orderHistoryContent: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
+  orderHistoryEmpty: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  orderHistoryEmptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#374151',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  orderHistoryEmptyText: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  orderHistoryList: {
+    flex: 1,
+  },
+  orderHistoryCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  orderHistoryCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  orderHistoryOrderNumber: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  orderHistoryStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  orderHistoryStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'white',
+  },
+  orderHistoryDate: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 12,
+  },
+  orderHistoryItems: {
+    marginBottom: 12,
+  },
+  orderHistoryItemsLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 4,
+  },
+  orderHistoryItemText: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 2,
+  },
+  orderHistoryMoreItems: {
+    fontSize: 12,
+    color: '#9ca3af',
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+  orderHistoryFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+  },
+  orderHistoryTotal: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  orderHistoryPayment: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontWeight: '500',
   },
 });

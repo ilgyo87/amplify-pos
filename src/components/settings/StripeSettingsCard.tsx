@@ -3,20 +3,19 @@ import {
   View,
   Text,
   TouchableOpacity,
-  TextInput,
   StyleSheet,
   Alert,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { stripeService } from '../../services/stripeService';
+import { getCurrentUser } from 'aws-amplify/auth';
 
 export function StripeSettingsCard() {
-  const [publishableKey, setPublishableKey] = useState('');
-  const [secretKey, setSecretKey] = useState('');
-  const [merchantId, setMerchantId] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [isConfigured, setIsConfigured] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
     loadStripeSettings();
@@ -24,13 +23,12 @@ export function StripeSettingsCard() {
 
   const loadStripeSettings = async () => {
     try {
-      const settings = await stripeService.getStripeSettings();
-      if (settings) {
-        setPublishableKey(settings.publishableKey);
-        setSecretKey(settings.secretKey || '');
-        setMerchantId(settings.merchantId || '');
-        setIsConfigured(true);
-      }
+      const currentUser = await getCurrentUser();
+      const currentUserId = currentUser.userId;
+      setUserId(currentUserId);
+
+      const connectionStatus = await stripeService.getStripeConnectionStatus(currentUserId);
+      setIsConnected(connectionStatus);
     } catch (error) {
       console.error('Failed to load Stripe settings:', error);
       Alert.alert('Error', 'Failed to load Stripe settings');
@@ -39,39 +37,58 @@ export function StripeSettingsCard() {
     }
   };
 
-  const handleSave = async () => {
-    if (!publishableKey.trim()) {
-      Alert.alert('Error', 'Publishable key is required');
+  const handleConnectWithStripe = async () => {
+    if (!userId) {
+      Alert.alert('Error', 'User ID is missing. Cannot connect to Stripe.');
       return;
     }
-
-    if (!secretKey.trim()) {
-      Alert.alert('Error', 'Secret key is required for processing payments');
-      return;
-    }
-
     try {
       setIsLoading(true);
-      await stripeService.saveStripeSettings({
-        publishableKey: publishableKey.trim(),
-        secretKey: secretKey.trim(),
-        merchantId: merchantId.trim() || undefined,
-      });
-      
-      // Reinitialize Stripe with new settings
-      const initialized = await stripeService.reinitialize();
-      if (initialized) {
-        setIsConfigured(true);
-        Alert.alert('Success', 'Stripe settings saved and initialized successfully');
+      const authData = await stripeService.getStripeConnectAuthUrl(userId);
+      if (authData && authData.url) {
+        await Linking.openURL(authData.url);
+        Alert.alert(
+          'Stripe Connect',
+          'You will be redirected to Stripe to complete the connection. Please return to the app when finished.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Set up a listener for when the user returns to check connection status
+                setTimeout(() => {
+                  loadStripeSettings();
+                }, 2000);
+              }
+            }
+          ]
+        );
       } else {
-        Alert.alert('Warning', 'Settings saved but failed to initialize Stripe. Please check your publishable key.');
+        Alert.alert('Error', 'Could not get Stripe Connect URL. Please try again.');
       }
-    } catch (error) {
-      console.error('Failed to save Stripe settings:', error);
-      Alert.alert('Error', 'Failed to save Stripe settings');
+    } catch (error: any) {
+      console.error('Stripe Connect error:', error);
+      Alert.alert('Error', error.message || 'Could not start Stripe Connect onboarding.');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleDisconnectStripe = async () => {
+    Alert.alert(
+      'Disconnect Stripe',
+      'Are you sure you want to disconnect your Stripe account? This will prevent you from processing payments.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Disconnect',
+          style: 'destructive',
+          onPress: async () => {
+            // TODO: Implement disconnect functionality
+            console.log('Disconnect Stripe account');
+          }
+        }
+      ]
+    );
   };
 
   if (isLoading) {
@@ -90,58 +107,31 @@ export function StripeSettingsCard() {
           <Text style={styles.title}>Stripe Payments</Text>
         </View>
         <View style={styles.statusContainer}>
-          <View style={[styles.statusIndicator, isConfigured && styles.statusConfigured]}>
-            <Text style={[styles.statusText, isConfigured && styles.statusTextConfigured]}>
-              {isConfigured ? 'Configured' : 'Not Configured'}
+          <View style={[styles.statusIndicator, isConnected && styles.statusConfigured]}>
+            <Text style={[styles.statusText, isConnected && styles.statusTextConfigured]}>
+              {isConnected ? 'Connected' : 'Not Connected'}
             </Text>
           </View>
         </View>
       </View>
 
       <View style={styles.content}>
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Publishable Key</Text>
-          <TextInput
-            style={styles.input}
-            value={publishableKey}
-            onChangeText={setPublishableKey}
-            placeholder="pk_test_..."
-            placeholderTextColor="#999"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Secret Key</Text>
-          <TextInput
-            style={styles.input}
-            value={secretKey}
-            onChangeText={setSecretKey}
-            placeholder="sk_test_..."
-            placeholderTextColor="#999"
-            autoCapitalize="none"
-            autoCorrect={false}
-            secureTextEntry={true}
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Merchant ID (Optional, for Apple Pay)</Text>
-          <TextInput
-            style={styles.input}
-            value={merchantId}
-            onChangeText={setMerchantId}
-            placeholder="merchant.com.example..."
-            placeholderTextColor="#999"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-        </View>
-
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-          <Text style={styles.saveButtonText}>Save Settings</Text>
-        </TouchableOpacity>
+        {isConnected ? (
+          <View>
+            <Text style={styles.infoText}>Your Stripe account is connected.</Text>
+            <TouchableOpacity style={styles.disconnectButton} onPress={handleDisconnectStripe}>
+              <Text style={styles.saveButtonText}>Disconnect Stripe</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity style={styles.saveButton} onPress={handleConnectWithStripe}>
+            <Text style={styles.saveButtonText}>Connect with Stripe</Text>
+          </TouchableOpacity>
+        )}
+        <Text style={styles.infoTextSmall}>
+          Connecting your Stripe account allows you to securely process payments through our platform.
+          You will be redirected to Stripe to authorize the connection.
+        </Text>
       </View>
     </View>
   );
@@ -230,5 +220,25 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  infoText: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  infoTextSmall: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 16,
+    lineHeight: 18,
+  },
+  disconnectButton: {
+    backgroundColor: '#d9534f', // A red color for disconnect/danger
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
   },
 });

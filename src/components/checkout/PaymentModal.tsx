@@ -16,9 +16,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { PaymentMethod, PaymentInfo } from '../../types/order';
 import { CardFieldInput, useStripe } from '@stripe/stripe-react-native';
 import { stripeService } from '../../services/stripeService';
+import { stripeTerminalService } from '../../services/stripeTerminalService';
 import { StripeCardForm } from './StripeCardForm';
-import { StripeTerminalForm } from './StripeTerminalForm';
-import type { PaymentIntent } from '../../services/stripeTerminalService';
+import { 
+  useStripeTerminal,
+  requestNeededAndroidPermissions,
+} from '@stripe/stripe-terminal-react-native';
 
 interface PaymentModalProps {
   visible: boolean;
@@ -34,50 +37,173 @@ export function PaymentModal({
   onCompletePayment
 }: PaymentModalProps) {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('cash');
-  const [tipAmount, setTipAmount] = useState(0);
   const [cardDetails, setCardDetails] = useState<CardFieldInput.Details | null>(null);
   const [isStripeEnabled, setIsStripeEnabled] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const { createToken } = useStripe();
   const [checkNumber, setCheckNumber] = useState('');
   const [accountId, setAccountId] = useState('');
-  const [customTip, setCustomTip] = useState('');
-  const [showTerminalForm, setShowTerminalForm] = useState(false);
+  const [isDiscoveringReaders, setIsDiscoveringReaders] = useState(false);
+  const [discoveredReaders, setDiscoveredReaders] = useState<any[]>([]);
+  const [selectedReader, setSelectedReader] = useState<any>(null);
+  const [currentPaymentIntent, setCurrentPaymentIntent] = useState<any>(null);
+  
+  // Stripe Terminal hooks
+  const {
+    initialize,
+    discoverReaders,
+    connectReader,
+    connectedReader,
+    createPaymentIntent,
+    collectPaymentMethod,
+    confirmPaymentIntent,
+    cancelPaymentIntent,
+  } = useStripeTerminal({
+    onUpdateDiscoveredReaders: (readers) => {
+      setDiscoveredReaders(readers);
+      setIsDiscoveringReaders(false);
+    },
+  });
 
-  const handleTerminalPaymentSuccess = (paymentIntent: PaymentIntent.Type) => {
-    const paymentInfo: PaymentInfo = {
-      method: 'terminal',
-      amount: totalWithTip,
-      tip: tipAmount > 0 ? tipAmount : undefined,
-      stripeChargeId: paymentIntent.id,
-    };
-    
-    setShowTerminalForm(false);
-    onCompletePayment(paymentInfo);
+  // Initialize Stripe Terminal only when needed
+  const initializeTerminalIfNeeded = async () => {
+    try {
+      // Request permissions on Android
+      if (Platform.OS === 'android') {
+        await requestNeededAndroidPermissions();
+      }
+
+      // Get current user for Stripe Connect
+      const { getCurrentUser } = await import('aws-amplify/auth');
+      const currentUser = await getCurrentUser();
+      const userId = currentUser.userId;
+
+      // Fetch connection token from backend (for debugging/logging only)
+      const connectionToken = await stripeTerminalService.fetchConnectionToken(userId);
+      if (!connectionToken) {
+        throw new Error('Failed to fetch Stripe Terminal connection token.');
+      }
+      // NOTE: The actual connectionToken usage is handled by the Stripe Terminal SDK via the hook's configuration, not as a direct argument to initialize().
+      await initialize(); // No arguments
+      console.log('[STRIPE TERMINAL] Terminal initialized successfully');
+    } catch (error: any) {
+      console.error('Failed to initialize Stripe Terminal:', error);
+      Alert.alert(
+        'Terminal Setup Required',
+        error && typeof error === 'object' && 'message' in error ? error.message : 'Stripe Terminal requires backend configuration. Please set up a connection token endpoint.'
+      );
+      throw error;
+    }
   };
 
-  const handleTerminalPaymentError = (error: string) => {
-    Alert.alert('Terminal Payment Failed', error);
-    setShowTerminalForm(false);
+  const handleTerminalPayment = async () => {
+    if (!connectedReader) {
+      // If no reader connected, start discovery process
+      handleDiscoverReaders();
+      return;
+    }
+
+    try {
+      setIsProcessingPayment(true);
+
+      // Create payment intent
+      const { paymentIntent, error: createError } = await createPaymentIntent({
+        amount: Math.round(orderTotal * 100), // Convert to cents
+        currency: 'usd',
+      });
+
+      if (createError) {
+        throw new Error(createError.message);
+      }
+
+      setCurrentPaymentIntent(paymentIntent);
+
+      // Collect payment method
+      const { paymentIntent: collectedPI, error: collectError } = await collectPaymentMethod({
+        paymentIntent: paymentIntent!,
+      });
+
+      if (collectError) {
+        throw new Error(collectError.message);
+      }
+
+      // Confirm payment
+      const { paymentIntent: confirmedPI, error: confirmError } = await confirmPaymentIntent({
+        paymentIntent: collectedPI!,
+      });
+
+      if (confirmError) {
+        throw new Error(confirmError.message);
+      }
+
+      // Payment successful
+      const paymentInfo: PaymentInfo = {
+        method: 'terminal',
+        amount: orderTotal,
+        stripeChargeId: confirmedPI!.id,
+      };
+
+      onCompletePayment(paymentInfo);
+      
+    } catch (error: any) {
+      console.error('Terminal payment failed:', error);
+      Alert.alert('Payment Failed', error && typeof error === 'object' && 'message' in error ? error.message : 'Failed to process terminal payment');
+      
+      // Cancel the payment intent if it exists
+      if (currentPaymentIntent) {
+        try {
+          await cancelPaymentIntent({
+            paymentIntent: currentPaymentIntent,
+          });
+          setCurrentPaymentIntent(null);
+        } catch (cancelError) {
+          console.error('Failed to cancel payment intent:', cancelError);
+        }
+      }
+    } finally {
+      setIsProcessingPayment(false);
+    }
   };
 
-  const handleTerminalCancel = () => {
-    setShowTerminalForm(false);
+  const handleDiscoverReaders = async () => {
+    try {
+      setIsDiscoveringReaders(true);
+      
+      // Initialize terminal first if not already done
+      await initializeTerminalIfNeeded();
+      
+      // Now discover readers
+      await discoverReaders({
+        discoveryMethod: 'bluetoothScan', // M2 readers use Bluetooth discovery
+        simulated: false, // Set to true for testing, false for real hardware
+      });
+    } catch (error) {
+      console.error('Failed to discover readers:', error);
+      Alert.alert('Error', 'Failed to discover card readers. Please ensure Stripe Terminal is properly configured.');
+      setIsDiscoveringReaders(false);
+    }
   };
 
-  const tipPresets = [0, 1, 2, 3, 5];
-  const totalWithTip = orderTotal + tipAmount;
+  const handleConnectReader = async (reader: any) => {
+    try {
+      setIsProcessingPayment(true);
+      
+      const { error } = await connectReader(reader, 'bluetoothScan');
 
-  const handleTipSelect = (amount: number) => {
-    setTipAmount(amount);
-    setCustomTip('');
+      if (error) {
+        throw new Error(error.message);
+      }
+      
+      setSelectedReader(reader);
+      Alert.alert('Success', 'Card reader connected successfully');
+    } catch (error: any) {
+      console.error('Failed to connect reader:', error);
+      Alert.alert('Error', 'Failed to connect to card reader');
+    } finally {
+      setIsProcessingPayment(false);
+    }
   };
 
-  const handleCustomTipChange = (value: string) => {
-    const numValue = parseFloat(value) || 0;
-    setTipAmount(numValue);
-    setCustomTip(value);
-  };
 
   useEffect(() => {
     const checkStripeConfig = async () => {
@@ -96,11 +222,7 @@ export function PaymentModal({
   }, []);
 
   useEffect(() => {
-    const initialize = async () => {
-      // Initialize Stripe
-    };
-
-    initialize();
+    // Removed incorrect extra initialize({ connectionToken }) usage
   }, []);
 
   const validatePayment = (): boolean => {
@@ -116,8 +238,10 @@ export function PaymentModal({
     }
     
     if (selectedMethod === 'terminal') {
-      Alert.alert('Info', 'Please use the "Start Terminal Payment" button to process the payment.');
-      return false;
+      if (!connectedReader) {
+        Alert.alert('Error', 'Please connect a card reader first.');
+        return false;
+      }
     }
     
     if (selectedMethod === 'check' && !checkNumber.trim()) {
@@ -136,6 +260,12 @@ export function PaymentModal({
   const handleCompletePayment = async () => {
     if (isProcessingPayment) return;
     if (!validatePayment()) return;
+
+    // Handle terminal payments separately
+    if (selectedMethod === 'terminal') {
+      await handleTerminalPayment();
+      return;
+    }
 
     try {
       setIsProcessingPayment(true);
@@ -169,10 +299,9 @@ export function PaymentModal({
         try {
           const paymentResult = await stripeService.processPayment(
             token.id,
-            totalWithTip,
-            `POS Order Payment - Amount: $${totalWithTip.toFixed(2)}`,
+            orderTotal,
+            `POS Order Payment - Amount: $${orderTotal.toFixed(2)}`,
             {
-              tip_amount: tipAmount || 0,
               order_total: orderTotal
             }
           );
@@ -189,8 +318,7 @@ export function PaymentModal({
 
       const paymentInfo: PaymentInfo = {
         method: selectedMethod,
-        amount: totalWithTip,
-        tip: tipAmount > 0 ? tipAmount : undefined,
+        amount: orderTotal,
         cardLast4: selectedMethod === 'card' ? cardDetails?.last4 : undefined,
         checkNumber: selectedMethod === 'check' ? checkNumber : undefined,
         accountId: selectedMethod === 'account' ? accountId : undefined,
@@ -214,25 +342,22 @@ export function PaymentModal({
       <TouchableOpacity
         key={method}
         style={[
-          styles.paymentMethod,
-          isSelected && styles.selectedPaymentMethod
+          styles.paymentMethodIcon,
+          isSelected && styles.selectedPaymentMethodIcon
         ]}
         onPress={() => setSelectedMethod(method)}
       >
         <Ionicons 
           name={icon as any} 
-          size={24} 
+          size={28} 
           color={isSelected ? '#007AFF' : '#666'} 
         />
         <Text style={[
-          styles.paymentMethodText,
-          isSelected && styles.selectedPaymentMethodText
+          styles.paymentMethodLabel,
+          isSelected && styles.selectedPaymentMethodLabel
         ]}>
           {label}
         </Text>
-        {isSelected && (
-          <Ionicons name="checkmark-circle" size={20} color="#007AFF" />
-        )}
       </TouchableOpacity>
     );
   };
@@ -261,18 +386,56 @@ export function PaymentModal({
         return (
           <View style={styles.detailsContainer}>
             <Text style={styles.detailsLabel}>Card Reader Payment</Text>
-            <Text style={styles.detailsHint}>
-              Connect to a Stripe Terminal card reader to accept in-person card payments.
-            </Text>
-            <TouchableOpacity
-              style={styles.terminalButton}
-              onPress={() => setShowTerminalForm(true)}
-            >
-              <Ionicons name="card-outline" size={20} color="#007AFF" />
-              <Text style={styles.terminalButtonText}>
-                Start Terminal Payment
-              </Text>
-            </TouchableOpacity>
+            {connectedReader ? (
+              <View>
+                <Text style={styles.detailsHint}>
+                  Reader connected: {connectedReader.label || connectedReader.serialNumber}
+                </Text>
+                <TouchableOpacity
+                  style={styles.terminalButton}
+                  onPress={handleTerminalPayment}
+                  disabled={isProcessingPayment}
+                >
+                  <Ionicons name="card" size={20} color="#007AFF" />
+                  <Text style={styles.terminalButtonText}>
+                    {isProcessingPayment ? 'Processing...' : 'Start Payment'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View>
+                <Text style={styles.detailsHint}>
+                  {isDiscoveringReaders ? 'Discovering readers...' : 'No card reader connected'}
+                </Text>
+                <TouchableOpacity
+                  style={styles.terminalButton}
+                  onPress={handleDiscoverReaders}
+                  disabled={isDiscoveringReaders}
+                >
+                  <Ionicons name="search" size={20} color="#007AFF" />
+                  <Text style={styles.terminalButtonText}>
+                    {isDiscoveringReaders ? 'Searching...' : 'Find Card Reader'}
+                  </Text>
+                </TouchableOpacity>
+                {discoveredReaders.length > 0 && (
+                  <View style={styles.readersList}>
+                    <Text style={styles.readersListTitle}>Available Readers:</Text>
+                    {discoveredReaders.map((reader, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={styles.readerItem}
+                        onPress={() => handleConnectReader(reader)}
+                      >
+                        <Text style={styles.readerName}>
+                          {reader.label || reader.serialNumber}
+                        </Text>
+                        <Ionicons name="chevron-forward" size={20} color="#666" />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
           </View>
         );
       
@@ -329,50 +492,6 @@ export function PaymentModal({
         </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {/* Order Summary */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Order Total</Text>
-            <View style={styles.totalContainer}>
-              <Text style={styles.totalLabel}>Subtotal + Tax:</Text>
-              <Text style={styles.totalAmount}>${orderTotal.toFixed(2)}</Text>
-            </View>
-          </View>
-
-          {/* Tip Selection */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Add Tip (Optional)</Text>
-            <View style={styles.tipPresets}>
-              {tipPresets.map((amount) => (
-                <TouchableOpacity
-                  key={amount}
-                  style={[
-                    styles.tipButton,
-                    tipAmount === amount && !customTip && styles.selectedTipButton
-                  ]}
-                  onPress={() => handleTipSelect(amount)}
-                >
-                  <Text style={[
-                    styles.tipButtonText,
-                    tipAmount === amount && !customTip && styles.selectedTipButtonText
-                  ]}>
-                    ${amount}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            
-            <View style={styles.customTipContainer}>
-              <Text style={styles.customTipLabel}>Custom Amount:</Text>
-              <TextInput
-                style={styles.customTipInput}
-                value={customTip}
-                onChangeText={handleCustomTipChange}
-                placeholder="0.00"
-                keyboardType="decimal-pad"
-              />
-            </View>
-          </View>
-
           {/* Payment Method Selection */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Payment Method</Text>
@@ -392,13 +511,8 @@ export function PaymentModal({
           <View style={styles.section}>
             <View style={styles.finalTotalContainer}>
               <Text style={styles.finalTotalLabel}>Total Amount:</Text>
-              <Text style={styles.finalTotalAmount}>${totalWithTip.toFixed(2)}</Text>
+              <Text style={styles.finalTotalAmount}>${orderTotal.toFixed(2)}</Text>
             </View>
-            {tipAmount > 0 && (
-              <Text style={styles.tipIncluded}>
-                (includes ${tipAmount.toFixed(2)} tip)
-              </Text>
-            )}
           </View>
         </ScrollView>
 
@@ -413,27 +527,13 @@ export function PaymentModal({
               <ActivityIndicator color="#fff" style={styles.buttonLoader} />
             ) : (
               <Text style={styles.completeButtonText}>
-                Complete Payment - ${totalWithTip.toFixed(2)}
+                Complete Payment
               </Text>
             )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
 
-      {/* Stripe Terminal Form Modal */}
-      <Modal
-        visible={showTerminalForm}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={handleTerminalCancel}
-      >
-        <StripeTerminalForm
-          amount={totalWithTip}
-          onPaymentSuccess={handleTerminalPaymentSuccess}
-          onPaymentError={handleTerminalPaymentError}
-          onCancel={handleTerminalCancel}
-        />
-      </Modal>
     </Modal>
   );
 }
@@ -481,90 +581,36 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 12,
   },
-  totalContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  totalLabel: {
-    fontSize: 16,
-    color: '#666',
-  },
-  totalAmount: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#333',
-  },
-  tipPresets: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 16,
-  },
-  tipButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginRight: 8,
-    marginBottom: 8,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  selectedTipButton: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
-  },
-  tipButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#333',
-  },
-  selectedTipButtonText: {
-    color: 'white',
-  },
-  customTipContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  customTipLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginRight: 12,
-  },
-  customTipInput: {
-    flex: 1,
-    padding: 12,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    fontSize: 14,
-  },
   paymentMethods: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    flexWrap: 'wrap',
     gap: 12,
   },
-  paymentMethod: {
-    flexDirection: 'row',
+  paymentMethodIcon: {
+    flex: 1,
+    minWidth: 80,
     alignItems: 'center',
     padding: 16,
     backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    borderWidth: 1,
+    borderRadius: 12,
+    borderWidth: 2,
     borderColor: '#e0e0e0',
   },
-  selectedPaymentMethod: {
+  selectedPaymentMethodIcon: {
     backgroundColor: '#f0f7ff',
     borderColor: '#007AFF',
   },
-  paymentMethodText: {
-    flex: 1,
-    fontSize: 16,
+  paymentMethodLabel: {
+    fontSize: 12,
     fontWeight: '500',
     color: '#333',
-    marginLeft: 12,
+    marginTop: 8,
+    textAlign: 'center',
   },
-  selectedPaymentMethodText: {
+  selectedPaymentMethodLabel: {
     color: '#007AFF',
+    fontWeight: '600',
   },
   detailsContainer: {
     backgroundColor: 'white',
@@ -610,12 +656,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#007AFF',
   },
-  tipIncluded: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'right',
-    marginTop: 4,
-  },
   footer: {
     padding: 16,
     backgroundColor: 'white',
@@ -660,5 +700,32 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#007AFF',
+  },
+  readersList: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  readersListTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  readerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  readerName: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
   },
 });

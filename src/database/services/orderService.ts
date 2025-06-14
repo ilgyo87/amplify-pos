@@ -46,7 +46,7 @@ export class OrderService {
   }): Promise<OrderDocument> {
     const repository = await this.getRepository();
     const now = new Date().toISOString();
-    const orderNumber = await repository.generateOrderNumber();
+    const orderNumber = await repository.generateOrderNumber(customer.firstName, customer.lastName, customer.phone);
     
     // Get a valid businessId
     let businessId = customer.businessId || '';
@@ -283,9 +283,17 @@ export class OrderService {
     );
   }
 
-  async generateOrderNumber(): Promise<string> {
+  async generateOrderNumber(customerFirstName?: string, customerLastName?: string, customerPhone?: string): Promise<string> {
     const repository = await this.getRepository();
-    return repository.generateOrderNumber();
+    
+    if (customerFirstName && customerLastName && customerPhone) {
+      return repository.generateOrderNumber(customerFirstName, customerLastName, customerPhone);
+    } else {
+      // Fallback to a generic temporary order number for previews
+      const today = new Date();
+      const datePrefix = today.toISOString().slice(2, 10).replace(/-/g, ''); // YYMMDD format
+      return `TEMP${datePrefix}001`; // Temporary preview number
+    }
   }
 
   /**

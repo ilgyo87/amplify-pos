@@ -833,6 +833,13 @@ export default function OrdersScreen() {
         )}
       </View>
 
+      {order.notes && order.notes.trim() !== '' && (
+        <View style={styles.notesSection}>
+          <Text style={styles.notesLabel}>Notes:</Text>
+          <Text style={styles.notesText}>{order.notes}</Text>
+        </View>
+      )}
+
       <View style={styles.orderFooter}>
         <Text style={styles.totalAmount}>${order.total.toFixed(2)}</Text>
         <View style={styles.actionButtons}>
@@ -1695,6 +1702,24 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     fontStyle: 'italic',
     marginTop: 4,
+  },
+  notesSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+  },
+  notesLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 6,
+  },
+  notesText: {
+    fontSize: 14,
+    color: '#6b7280',
+    lineHeight: 20,
+    fontStyle: 'italic',
   },
   orderFooter: {
     flexDirection: 'row',

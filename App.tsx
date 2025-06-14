@@ -37,6 +37,7 @@ import { getDatabaseInstance } from './src/database';
 import { customerService } from './src/database/services/customerService';
 import { EmployeeAuthProvider } from './src/context/EmployeeAuthContext';
 import { stripeService } from './src/services/stripeService';
+import { StripeConnectHandler } from './src/components/stripe/StripeConnectHandler';
 
 // Configure Amplify
 Amplify.configure(outputs);
@@ -99,6 +100,7 @@ const App = () => {
         <NavigationContainer>
           <Authenticator.Provider>
             <EmployeeAuthProvider>
+              <StripeConnectHandler />
               <AppNavigator />
             </EmployeeAuthProvider>
           </Authenticator.Provider>

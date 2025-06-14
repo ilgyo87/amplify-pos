@@ -12,18 +12,22 @@ interface CheckoutValidationOverlayProps {
   hasEmployee: boolean;
   hasBusiness: boolean;
   hasProducts: boolean;
+  employeesExist: boolean;
   onNavigateToEmployees?: () => void;
   onNavigateToBusiness?: () => void;
   onNavigateToProducts?: () => void;
+  onDismiss?: () => void;
 }
 
 export function CheckoutValidationOverlay({
   hasEmployee,
   hasBusiness,
   hasProducts,
+  employeesExist,
   onNavigateToEmployees,
   onNavigateToBusiness,
-  onNavigateToProducts
+  onNavigateToProducts,
+  onDismiss
 }: CheckoutValidationOverlayProps) {
   const requirements = [
     {
@@ -31,7 +35,9 @@ export function CheckoutValidationOverlay({
       label: 'Employee signed in',
       completed: hasEmployee,
       onPress: onNavigateToEmployees,
-      description: 'An employee must be signed in to process orders'
+      description: employeesExist 
+        ? 'Please sign in with an existing employee account'
+        : 'Create an employee account to process orders'
     },
     {
       id: 'business',
@@ -56,8 +62,16 @@ export function CheckoutValidationOverlay({
   }
 
   return (
-    <View style={styles.overlay}>
-      <View style={styles.content}>
+    <TouchableOpacity 
+      style={styles.overlay} 
+      activeOpacity={1}
+      onPress={onDismiss}
+    >
+      <TouchableOpacity 
+        style={styles.content}
+        activeOpacity={1}
+        onPress={(e) => e.stopPropagation()}
+      >
         <View style={styles.header}>
           <Ionicons name="warning-outline" size={48} color="#FF6B6B" />
           <Text style={styles.title}>Setup Required</Text>
@@ -114,8 +128,8 @@ export function CheckoutValidationOverlay({
             Tap any incomplete item above to get started
           </Text>
         </View>
-      </View>
-    </View>
+      </TouchableOpacity>
+    </TouchableOpacity>
   );
 }
 

@@ -46,21 +46,32 @@ export class OrderRepository extends BaseRepository<OrderDocType, OrderCollectio
     }).exec();
   }
 
-  async generateOrderNumber(): Promise<string> {
-    const today = new Date();
-    const datePrefix = today.toISOString().slice(2, 10).replace(/-/g, ''); // YYMMDD format
+  async generateOrderNumber(customerFirstName: string, customerLastName: string, customerPhone: string): Promise<string> {
+    // Get customer initials (first letter of first and last name)
+    const firstInitial = customerFirstName.charAt(0).toUpperCase();
+    const lastInitial = customerLastName.charAt(0).toUpperCase();
     
-    const todayOrders = await this.collection.find({
+    // Extract only digits from phone number
+    const phoneDigits = customerPhone.replace(/\D/g, '');
+    
+    // Create base pattern: initials + phone digits
+    const basePattern = `${firstInitial}${lastInitial}${phoneDigits}`;
+    
+    // Find all existing orders for this customer pattern
+    const existingOrders = await this.collection.find({
       selector: {
         orderNumber: {
-          $regex: `^${datePrefix}.*`
+          $regex: `^${basePattern}`
         },
         isDeleted: { $ne: true }
       }
     }).exec();
-
-    const nextNumber = todayOrders.length + 1;
-    return `${datePrefix}${nextNumber.toString().padStart(3, '0')}`;
+    
+    // Get the next sequential number (start from 1)
+    const nextNumber = existingOrders.length + 1;
+    
+    // Create final order number: initials + phone + sequential number
+    return `${basePattern}${nextNumber}`;
   }
 
   async updateStatus(orderId: string, status: OrderDocType['status']): Promise<OrderDocument | null> {

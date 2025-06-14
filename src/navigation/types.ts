@@ -38,6 +38,8 @@ export type RootStackParamList = {
   PaymentSettings: undefined;
   PrinterSettings: undefined;
   DataSync: undefined;
+  // Employee authentication
+  EmployeeSignIn: undefined;
   // Checkout flow
   Checkout: {
     customer: SerializableCustomer;

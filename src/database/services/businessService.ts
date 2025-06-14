@@ -1,18 +1,18 @@
 import { RxDatabase } from 'rxdb';
 import { BusinessRepository } from '../repositories/BusinessRepository';
 import { BusinessDocument, BusinessDocType } from '../schemas/business';
-import { BusinessFormData, validateBusinessForm } from '../../utils/businessValidation';
+import { BusinessFormData, BusinessValidationErrors, validateBusinessForm } from '../../utils/businessValidation';
 import { getDatabaseInstance, DatabaseCollections } from '../config';
 
 export interface BusinessCreateResult {
   business?: BusinessDocument;
-  errors?: string[];
+  errors?: BusinessValidationErrors;
   duplicateError?: string;
 }
 
 export interface BusinessUpdateResult {
   business?: BusinessDocument;
-  errors?: string[];
+  errors?: BusinessValidationErrors;
 }
 
 export class BusinessService {
@@ -35,8 +35,8 @@ export class BusinessService {
     try {
       await this.initialize();
 
-      const validationErrors = this.validateBusinessData(businessData);
-      if (validationErrors.length > 0) {
+      const validationErrors = validateBusinessForm(businessData);
+      if (Object.keys(validationErrors).length > 0) {
         return { errors: validationErrors };
       }
 
@@ -65,7 +65,7 @@ export class BusinessService {
 
     } catch (error) {
       console.error('Error creating business:', error);
-      return { errors: ['Failed to create business. Please try again.'] };
+      return { errors: { name: 'Failed to create business. Please try again.' } };
     }
   }
 
@@ -73,20 +73,20 @@ export class BusinessService {
     try {
       await this.initialize();
 
-      const validationErrors = this.validateBusinessData(businessData);
-      if (validationErrors.length > 0) {
+      const validationErrors = validateBusinessForm(businessData);
+      if (Object.keys(validationErrors).length > 0) {
         return { errors: validationErrors };
       }
 
       const existingBusiness = await this.businessRepository!.getBusinessById(id);
       if (!existingBusiness) {
-        return { errors: ['Business not found'] };
+        return { errors: { name: 'Business not found' } };
       }
 
       if (businessData.name !== existingBusiness.name) {
         const duplicateBusiness = await this.businessRepository!.getBusinessByName(businessData.name);
         if (duplicateBusiness && duplicateBusiness.id !== id) {
-          return { errors: [`Business with name "${businessData.name}" already exists`] };
+          return { errors: { name: `Business with name "${businessData.name}" already exists` } };
         }
       }
 
@@ -104,11 +104,11 @@ export class BusinessService {
       };
 
       const business = await this.businessRepository!.updateBusiness(id, updates);
-      return business ? { business } : { errors: ['Failed to update business'] };
+      return business ? { business } : { errors: { name: 'Failed to update business' } };
 
     } catch (error) {
       console.error('Error updating business:', error);
-      return { errors: ['Failed to update business. Please try again.'] };
+      return { errors: { name: 'Failed to update business. Please try again.' } };
     }
   }
 
@@ -213,19 +213,6 @@ export class BusinessService {
     }
   }
 
-  private validateBusinessData(data: BusinessFormData): string[] {
-    const validationErrors = validateBusinessForm(data);
-    const errors: string[] = [];
-    
-    // Convert validation errors object to array of strings
-    Object.values(validationErrors).forEach(error => {
-      if (error) {
-        errors.push(error);
-      }
-    });
-    
-    return errors;
-  }
 }
 
 export const businessService = new BusinessService();

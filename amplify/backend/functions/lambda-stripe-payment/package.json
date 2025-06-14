@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "dependencies": {
-    "stripe": "^14.21.0"
+    "stripe": "^15.0.0"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.138"

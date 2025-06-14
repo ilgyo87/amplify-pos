@@ -141,6 +141,16 @@ const schema = a.schema({
     .authorization((allow) => [
       allow.authenticated().to(['read']),
       allow.owner(),
+    ]),
+  StripeToken: a
+    .model({
+      userId: a.string().required(), // This will be the Cognito User ID or other unique user identifier
+      accessToken: a.string().required(),
+      stripeUserId: a.string().required(), // The Stripe Account ID (acct_...)
+    })
+    .identifier(["userId"])
+    .authorization((allow) => [
+      allow.ownerDefinedIn("userId") // Allow owner to manage their token. Backend function access will be granted via IAM policies.
     ])
 });
 

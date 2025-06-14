@@ -21,6 +21,13 @@ const BUSINESS_FORM_FIELDS = [
     autoCapitalize: 'words' as const,
   },
   {
+    name: 'phone',
+    label: 'Phone',
+    placeholder: 'Enter phone number',
+    required: true,
+    type: 'phone' as const,
+  },
+  {
     name: 'address',
     label: 'Address',
     placeholder: 'Enter street address',
@@ -51,13 +58,6 @@ const BUSINESS_FORM_FIELDS = [
     required: false,
     type: 'text' as const,
     keyboardType: 'numeric' as const,
-  },
-  {
-    name: 'phone',
-    label: 'Phone',
-    placeholder: 'Enter phone number',
-    required: true,
-    type: 'phone' as const,
   },
   {
     name: 'taxId',
@@ -104,9 +104,8 @@ export function BusinessForm({
       if (result.errors) {
         setErrors(result.errors);
       } else if (result.business) {
-        // Success
+        // Success - parent component will handle closing the modal
         setErrors({});
-        onCancel(); // Close the modal
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to create business. Please try again.');

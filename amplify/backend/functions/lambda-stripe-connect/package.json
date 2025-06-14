@@ -1,0 +1,22 @@
+{
+  "name": "lambda-stripe-connect",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Stripe Connect Lambda function for OAuth flow",
+  "main": "handler.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.500.0",
+    "@aws-sdk/lib-dynamodb": "^3.500.0",
+    "stripe": "^15.0.0",
+    "axios": "^1.6.7"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.130",
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0"
+  }
+}
