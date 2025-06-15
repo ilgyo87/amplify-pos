@@ -6,7 +6,7 @@ import * as querystring from 'querystring';
 
 const STRIPE_CLIENT_ID = process.env.STRIPE_CLIENT_ID;
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const FRONTEND_URL = process.env.FRONTEND_URL;
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000'; // Default to localhost for development
 const STRIPE_TOKENS_TABLE_NAME = process.env.STRIPE_TOKENS_TABLE_NAME!;
 
 const dynamoClient = new DynamoDBClient({});
@@ -20,14 +20,8 @@ if (STRIPE_SECRET_KEY && !STRIPE_SECRET_KEY.includes('YOUR_SECRET_KEY_HERE')) {
   });
 }
 
-interface EventRequest {
-  path: string;
-  httpMethod: string;
-  queryStringParameters?: { [key: string]: string };
-  body?: string;
-}
 
-export const handler = async (event: EventRequest) => {
+export const handler = async (event: any) => {
   console.log('Received event:', JSON.stringify(event, null, 2));
   
   // Debug environment variables (without exposing sensitive data)
@@ -54,9 +48,12 @@ export const handler = async (event: EventRequest) => {
     };
   }
 
-  const path = event.path || '';
-  const method = event.httpMethod || '';
+  // Handle both API Gateway and Function URL events
+  const path = event.rawPath || event.path || '';
+  const method = event.requestContext?.http?.method || event.httpMethod || '';
   let userId = event.queryStringParameters?.userId;
+
+  console.log(`Processing request - Path: "${path}", Method: "${method}"`);
 
   if (!userId && event.body) {
     try {
@@ -73,8 +70,12 @@ export const handler = async (event: EventRequest) => {
     userId = 'demo-user'; 
   }
 
+  // Normalize path by removing trailing slashes and handling different formats
+  const normalizedPath = path.replace(/\/+$/, '').toLowerCase();
+  console.log(`Normalized path: "${normalizedPath}"`);
+
   // 1. Get Stripe Connect onboarding URL
-  if (path.endsWith('/connect/authorize') && method === 'GET') {
+  if ((normalizedPath.includes('connect/authorize') || normalizedPath.includes('authorize')) && method === 'GET') {
     if (!userId) {
       return { statusCode: 400, body: JSON.stringify({ error: 'userId is required' }) };
     }
@@ -95,7 +96,7 @@ export const handler = async (event: EventRequest) => {
   }
 
   // 2. Handle Stripe Connect OAuth callback
-  if (path.endsWith('/connect/callback') && method === 'POST') {
+  if (normalizedPath.endsWith('/connect/callback') && method === 'POST') {
     if (!event.body) {
       return { statusCode: 400, body: JSON.stringify({ error: 'Request body is missing' }) };
     }
@@ -150,7 +151,7 @@ export const handler = async (event: EventRequest) => {
   }
 
   // 3. Create a connection token for the connected account
-  if (path.endsWith('/connection_token') && method === 'POST') {
+  if (normalizedPath.endsWith('/connection_token') && method === 'POST') {
     if (!event.body) {
       return { statusCode: 400, body: JSON.stringify({ error: 'Request body is missing' }) };
     }
@@ -189,6 +190,138 @@ export const handler = async (event: EventRequest) => {
         statusCode: 500,
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, // Adjust CORS
         body: JSON.stringify({ error: err.message || 'Failed to create connection token' }),
+      };
+    }
+  }
+
+  // 4. Create payment intent with Stripe Connect (direct charge model)
+  if (normalizedPath.endsWith('/create_payment_intent') && method === 'POST') {
+    if (!event.body) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'Request body is missing' }) };
+    }
+    try {
+      const body = JSON.parse(event.body);
+      const { amount, currency = 'usd', userId: paymentUserId, application_fee_amount, description, metadata } = body;
+
+      if (!paymentUserId || !amount) {
+        return { statusCode: 400, body: JSON.stringify({ error: 'Missing required fields: userId, amount' }) };
+      }
+
+      console.log(`Creating payment intent for userId ${paymentUserId}, amount: ${amount}, fee: ${application_fee_amount}`);
+      
+      // Get the connected account info
+      const getCommand = new GetCommand({
+        TableName: STRIPE_TOKENS_TABLE_NAME,
+        Key: { userId: paymentUserId },
+      });
+      const result = await docClient.send(getCommand);
+
+      if (!result.Item || !result.Item.stripeUserId) {
+        console.warn(`No connected Stripe account found for userId ${paymentUserId}`);
+        return { statusCode: 404, body: JSON.stringify({ error: 'Stripe account not connected' }) };
+      }
+
+      if (!stripe) {
+        return { statusCode: 503, body: JSON.stringify({ error: 'Stripe not configured' }) };
+      }
+
+      // Create payment intent with direct charge model
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount,
+        currency,
+        application_fee_amount: application_fee_amount || 1, // Default $0.01 platform fee
+        on_behalf_of: result.Item.stripeUserId, // Connected account
+        transfer_data: {
+          destination: result.Item.stripeUserId,
+        },
+        description: description || 'POS Terminal Payment',
+        metadata: {
+          platform_user_id: paymentUserId,
+          connected_account: result.Item.stripeUserId,
+          ...metadata
+        },
+        // Enable for Terminal usage
+        payment_method_types: ['card_present'],
+        capture_method: 'automatic',
+      });
+
+      console.log(`Payment intent created: ${paymentIntent.id} for connected account ${result.Item.stripeUserId}`);
+      
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({
+          id: paymentIntent.id,
+          client_secret: paymentIntent.client_secret,
+          amount: paymentIntent.amount,
+          currency: paymentIntent.currency,
+          application_fee_amount: paymentIntent.application_fee_amount,
+          on_behalf_of: paymentIntent.on_behalf_of,
+          status: paymentIntent.status
+        }),
+      };
+    } catch (err: any) {
+      console.error('Error in /create_payment_intent:', err.message);
+      return {
+        statusCode: 500,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: err.message || 'Failed to create payment intent' }),
+      };
+    }
+  }
+
+  // 5. Get connected account information
+  if (normalizedPath.endsWith('/account_info') && method === 'GET') {
+    if (!userId) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'userId is required' }) };
+    }
+    try {
+      console.log(`Fetching account info for userId ${userId}`);
+      const getCommand = new GetCommand({
+        TableName: STRIPE_TOKENS_TABLE_NAME,
+        Key: { userId },
+      });
+      const result = await docClient.send(getCommand);
+
+      if (!result.Item || !result.Item.stripeUserId) {
+        console.warn(`No connected Stripe account found for userId ${userId}`);
+        return { statusCode: 404, body: JSON.stringify({ error: 'Stripe account not connected' }) };
+      }
+
+      if (!stripe) {
+        return { statusCode: 503, body: JSON.stringify({ error: 'Stripe not configured' }) };
+      }
+
+      // Get account details from Stripe
+      const account = await stripe.accounts.retrieve(result.Item.stripeUserId);
+      
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({
+          id: account.id,
+          type: account.type,
+          country: account.country,
+          default_currency: account.default_currency,
+          details_submitted: account.details_submitted,
+          charges_enabled: account.charges_enabled,
+          payouts_enabled: account.payouts_enabled,
+          business_profile: {
+            name: account.business_profile?.name,
+            url: account.business_profile?.url,
+          },
+          requirements: {
+            currently_due: account.requirements?.currently_due,
+            disabled_reason: account.requirements?.disabled_reason,
+          }
+        }),
+      };
+    } catch (err: any) {
+      console.error('Error in /account_info:', err.message);
+      return {
+        statusCode: 500,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: err.message || 'Failed to get account info' }),
       };
     }
   }

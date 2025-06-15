@@ -115,36 +115,13 @@ class StripeService {
 
   async getStripeConnectAuthUrl(userId: string): Promise<{ url: string } | null> {
     try {
-      await initializeEndpoint();
-      if (!STRIPE_CONNECT_API_ENDPOINT) {
-        throw new Error('Stripe Connect API endpoint not configured');
-      }
-
-      const baseUrl = STRIPE_CONNECT_API_ENDPOINT.endsWith('/') 
-        ? STRIPE_CONNECT_API_ENDPOINT.slice(0, -1) 
-        : STRIPE_CONNECT_API_ENDPOINT;
-
-      const response = await fetch(`${baseUrl}/connect/authorize?userId=${encodeURIComponent(userId)}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Failed to get Stripe Connect URL:', response.status, errorData);
-        throw new Error(errorData.error || 'Failed to get Stripe Connect URL');
-      }
+      // Use the direct Stripe Connect URL with your client ID
+      const stripeConnectUrl = `https://connect.stripe.com/oauth/authorize?response_type=code&client_id=ca_SVBQ4Xdq1CkP9yivzAT9KGviMk6HbfrW&scope=read_write&state=${encodeURIComponent(userId)}&redirect_uri=${encodeURIComponent('https://example.com/stripe-connect-callback')}`;
       
-      const data = await response.json();
-      if (!data.url) {
-        console.error('Stripe Connect URL not found in response:', data);
-        throw new Error('Stripe Connect URL not found in response');
-      }
-      return data as { url: string };
+      console.log('Generated Stripe Connect URL:', stripeConnectUrl);
+      return { url: stripeConnectUrl };
     } catch (error) {
-      console.error('Error fetching Stripe Connect URL:', error);
+      console.error('Error generating Stripe Connect URL:', error);
       return null;
     }
   }
@@ -183,14 +160,35 @@ class StripeService {
     }
   }
 
+  async getConnectedAccountInfo(userId: string) {
+    try {
+      const baseUrl = await this.getBaseUrl();
+      const response = await fetch(`${baseUrl}/account_info?userId=${userId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to get account info');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error getting connected account info:', error);
+      throw error;
+    }
+  }
+
   async getStripeConnectionStatus(userId: string): Promise<boolean> {
     try {
-      // For now, use the connection token endpoint to check if user has Stripe Connect set up
-      // This is a simpler approach that doesn't rely on direct DynamoDB access
-      const connectionToken = await this.createConnectionToken(userId);
-      return connectionToken !== null;
+      const accountInfo = await this.getConnectedAccountInfo(userId);
+      return !!accountInfo.id;
     } catch (error) {
-      console.error('Error checking Stripe connection status:', error);
+      // If we get a 404 or any error, assume not connected
+      console.log('User not connected to Stripe:', error);
       return false;
     }
   }
@@ -234,31 +232,20 @@ class StripeService {
     return await this.initialize();
   }
 
-  // Process payment using stored secret key
-  async processPayment(token: string, amount: number, description?: string, metadata?: any) {
+  async processPayment(amount: number, currency: string = 'usd', description?: string): Promise<any> {
     try {
-      if (!this.isInitialized()) {
-        throw new Error('Stripe not initialized');
-      }
-
-      const settings = await this.getStripeSettings();
-      if (!settings?.secretKey) {
-        throw new Error('Stripe secret key not configured');
-      }
-
-      console.log('Processing payment with stored secret key...');
+      console.log('Processing payment via backend API...');
       
-      // Import Stripe for server-side usage
-      const stripePackage = await import('stripe');
-      const Stripe = stripePackage.default; // Default export is the Stripe class
+      // All payment processing should go through the backend Lambda function
+      // This avoids importing server-side Stripe libraries in React Native
+      await initializeEndpoint();
       
-      if (!Stripe) {
-        throw new Error('Failed to import Stripe library correctly.');
+      if (!STRIPE_CONNECT_API_ENDPOINT) {
+        throw new Error('Stripe Connect API endpoint not configured');
       }
 
-      const stripe = new Stripe(settings.secretKey, {
-        apiVersion: '2024-04-10' as any,
-      });
+      // Get current user ID (you may want to get this from your auth system)
+      const userId = 'demo-user'; // Replace with actual user ID from auth
 
       // Validate amount (should be in cents)
       const amountInCents = Math.round(amount * 100);
@@ -266,44 +253,123 @@ class StripeService {
         throw new Error('Amount must be at least $0.50');
       }
 
-      console.log(`Processing payment: $${amount} (${amountInCents} cents)`);
+      console.log(`Creating payment intent via backend: $${amount} (${amountInCents} cents)`);
 
-      // Create the charge
-      const charge = await stripe.charges.create({
-        amount: amountInCents,
-        currency: 'usd',
-        source: token,
-        description: description || 'POS Transaction',
-        metadata: metadata || {}
+      // Create payment intent through backend API
+      const response = await fetch(`${STRIPE_CONNECT_API_ENDPOINT}/create_payment_intent`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount: amountInCents,
+          currency,
+          userId,
+          description: description || 'POS Terminal Payment',
+          application_fee_amount: 1, // $0.01 platform fee
+        }),
       });
 
-      console.log('Payment successful:', charge.id);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create payment intent');
+      }
 
-      // Return success response
+      const paymentIntent = await response.json();
+      console.log('Payment intent created successfully:', paymentIntent.id);
+
       return {
         success: true,
-        chargeId: charge.id,
-        amount: charge.amount / 100, // Convert back to dollars
-        currency: charge.currency,
-        status: charge.status,
-        created: charge.created,
-        receipt_url: charge.receipt_url
+        paymentIntent,
+        message: 'Payment intent created successfully'
       };
 
     } catch (error: any) {
       console.error('Payment processing error:', error);
-      
-      // Handle specific Stripe errors
-      if (error.type === 'StripeCardError') {
-        throw new Error(`Card was declined: ${error.message}`);
-      }
-      
-      if (error.type === 'StripeInvalidRequestError') {
-        throw new Error(`Invalid request: ${error.message}`);
-      }
-      
-      throw new Error(error.message || 'Payment processing failed');
+      return {
+        success: false,
+        error: error.message || 'Payment processing failed'
+      };
     }
+  }
+
+  // Create Terminal payment with Stripe Connect (direct charge model)
+  async createTerminalPayment(
+    amount: number, 
+    currency: string = 'usd',
+    userId: string,
+    description?: string,
+    metadata?: any
+  ) {
+    try {
+      await initializeEndpoint();
+      if (!STRIPE_CONNECT_API_ENDPOINT) {
+        throw new Error('Stripe Connect API endpoint not configured');
+      }
+
+      // Platform fee: $0.01 (1 cent in smallest currency unit)
+      const platformFeeAmount = 1;
+      
+      // Validate amount (minimum after platform fee)
+      const amountInCents = Math.round(amount * 100);
+      if (amountInCents < 51) { // Minimum $0.51 to allow for $0.01 fee
+        throw new Error('Amount must be at least $0.51 to cover platform fee');
+      }
+
+      const baseUrl = STRIPE_CONNECT_API_ENDPOINT.endsWith('/') 
+        ? STRIPE_CONNECT_API_ENDPOINT.slice(0, -1) 
+        : STRIPE_CONNECT_API_ENDPOINT;
+
+      const response = await fetch(`${baseUrl}/create_payment_intent`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount: amountInCents,
+          currency,
+          userId,
+          description: description || 'POS Terminal Payment',
+          application_fee_amount: platformFeeAmount,
+          metadata: {
+            platform: 'amplify_pos',
+            payment_type: 'terminal',
+            ...metadata
+          }
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Failed to create payment intent:', response.status, errorData);
+        throw new Error(errorData.error || 'Failed to create payment intent');
+      }
+
+      const paymentIntent = await response.json();
+      
+      console.log('Terminal payment intent created:', {
+        id: paymentIntent.id,
+        amount: paymentIntent.amount,
+        application_fee_amount: paymentIntent.application_fee_amount,
+        on_behalf_of: paymentIntent.on_behalf_of
+      });
+
+      return paymentIntent;
+    } catch (error) {
+      console.error('Error creating Terminal payment:', error);
+      throw error;
+    }
+  }
+
+  async getBaseUrl() {
+    await initializeEndpoint();
+    if (!STRIPE_CONNECT_API_ENDPOINT) {
+      throw new Error('Stripe Connect API endpoint not configured');
+    }
+
+    return STRIPE_CONNECT_API_ENDPOINT.endsWith('/') 
+      ? STRIPE_CONNECT_API_ENDPOINT.slice(0, -1) 
+      : STRIPE_CONNECT_API_ENDPOINT;
   }
 }
 
