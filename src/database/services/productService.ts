@@ -67,7 +67,7 @@ export class ProductService {
     // Set default values for new products
     const productWithDefaults = {
       ...productData,
-      isLocalOnly: true,
+      isLocalOnly: (productData as any).isLocalOnly !== undefined ? (productData as any).isLocalOnly : true,
       isDeleted: false
     };
     
@@ -205,11 +205,12 @@ export class ProductService {
 
   /**
    * Get all products that haven't been synced with the server
+   * @param forceRefresh Whether to force a refresh of cached data
    * @returns Array of unsynced product documents
    */
-  async getUnsyncedProducts(): Promise<ProductDocument[]> {
+  async getUnsyncedProducts(forceRefresh = false): Promise<ProductDocument[]> {
     const repository = this.getRepository();
-    return repository.findUnsyncedDocuments() as Promise<ProductDocument[]>;
+    return repository.findUnsyncedDocuments(forceRefresh) as Promise<ProductDocument[]>;
   }
 
   /**

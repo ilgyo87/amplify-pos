@@ -83,7 +83,9 @@ export class EmployeeService {
       ...employeeData,
       phone: cleanPhoneNumber(employeeData.phone),
       isActive: true,
-      isLocalOnly: true,
+      // Only set isLocalOnly to true if it's not already specified in the data
+      // This allows synced employees from Amplify to have isLocalOnly: false
+      isLocalOnly: employeeData.isLocalOnly !== undefined ? employeeData.isLocalOnly : true,
       isDeleted: false
     };
     
@@ -245,11 +247,12 @@ export class EmployeeService {
 
   /**
    * Get all employees that haven't been synced with the server
+   * @param forceRefresh If true, forces a fresh query ignoring any cached results
    * @returns Array of unsynced employee documents
    */
-  async getUnsyncedEmployees(): Promise<EmployeeDocument[]> {
+  async getUnsyncedEmployees(forceRefresh = false): Promise<EmployeeDocument[]> {
     const repository = this.getRepository();
-    return repository.findUnsyncedDocuments() as Promise<EmployeeDocument[]>;
+    return repository.findUnsyncedDocuments(forceRefresh) as Promise<EmployeeDocument[]>;
   }
 
   /**

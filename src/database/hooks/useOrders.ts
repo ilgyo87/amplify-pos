@@ -103,6 +103,17 @@ export const useOrders = (status?: OrderDocType['status']) => {
     }
   };
 
+  const updateOrder = async (orderId: string, updateData: Partial<OrderDocType>) => {
+    try {
+      const service = getOrderService();
+      await service.initialize();
+      return await service.updateOrder(orderId, updateData);
+    } catch (err) {
+      console.error('Error updating order:', err);
+      throw err;
+    }
+  };
+
   const deleteOrder = async (orderId: string) => {
     try {
       const service = getOrderService();
@@ -132,6 +143,7 @@ export const useOrders = (status?: OrderDocType['status']) => {
     createOrder,
     updateOrderStatus,
     updateOrderStatusAndRack,
+    updateOrder,
     deleteOrder,
     generateOrderNumber
   };

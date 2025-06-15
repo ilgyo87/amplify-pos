@@ -4,16 +4,21 @@ import Stripe from 'stripe';
 import axios from 'axios';
 import * as querystring from 'querystring';
 
-const STRIPE_CLIENT_ID = process.env.STRIPE_CLIENT_ID!;
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY!;
-const FRONTEND_URL = process.env.FRONTEND_URL!;
+const STRIPE_CLIENT_ID = process.env.STRIPE_CLIENT_ID;
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+const FRONTEND_URL = process.env.FRONTEND_URL;
 const STRIPE_TOKENS_TABLE_NAME = process.env.STRIPE_TOKENS_TABLE_NAME!;
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
-const stripe = new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: '2024-04-10',
-});
+
+// Only initialize Stripe if we have the secret key
+let stripe: Stripe | null = null;
+if (STRIPE_SECRET_KEY && !STRIPE_SECRET_KEY.includes('YOUR_SECRET_KEY_HERE')) {
+  stripe = new Stripe(STRIPE_SECRET_KEY, {
+    apiVersion: '2024-04-10',
+  });
+}
 
 interface EventRequest {
   path: string;
@@ -24,6 +29,30 @@ interface EventRequest {
 
 export const handler = async (event: EventRequest) => {
   console.log('Received event:', JSON.stringify(event, null, 2));
+  
+  // Debug environment variables (without exposing sensitive data)
+  console.log('Environment check:', {
+    STRIPE_CLIENT_ID: STRIPE_CLIENT_ID ? STRIPE_CLIENT_ID.substring(0, 10) + '...' : 'undefined',
+    STRIPE_SECRET_KEY: STRIPE_SECRET_KEY ? STRIPE_SECRET_KEY.substring(0, 10) + '...' : 'undefined',
+    FRONTEND_URL: FRONTEND_URL || 'undefined',
+    STRIPE_TOKENS_TABLE_NAME: STRIPE_TOKENS_TABLE_NAME || 'undefined'
+  });
+
+  // Check if Stripe is properly configured
+  if (!STRIPE_CLIENT_ID || !STRIPE_SECRET_KEY || !FRONTEND_URL ||
+      STRIPE_CLIENT_ID.includes('YOUR_CLIENT_ID_HERE') || 
+      STRIPE_SECRET_KEY.includes('YOUR_SECRET_KEY_HERE') ||
+      FRONTEND_URL.includes('YOUR_EXPO_URL_HERE')) {
+    console.error('Stripe environment variables not properly configured');
+    return {
+      statusCode: 503,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify({ 
+        error: 'Stripe service not configured',
+        message: 'Contact administrator to configure Stripe environment variables'
+      })
+    };
+  }
 
   const path = event.path || '';
   const method = event.httpMethod || '';

@@ -101,7 +101,9 @@ export abstract class BaseRepository<T, C extends RxCollection = RxCollection> {
       id: this.generateId(),
       createdAt: now,
       updatedAt: now,
-      isLocalOnly: true, // New documents are local by default
+      // Only set isLocalOnly to true if it's not already specified in the data
+      // This allows synced documents from Amplify to have isLocalOnly: false
+      isLocalOnly: (processedData as any).isLocalOnly !== undefined ? (processedData as any).isLocalOnly : true,
       isDeleted: false   // Ensure soft delete flag is set
     } as unknown as T;
     
@@ -198,7 +200,35 @@ export abstract class BaseRepository<T, C extends RxCollection = RxCollection> {
   /**
    * Find all documents that haven't been synced yet
    */
-  async findUnsyncedDocuments(): Promise<RxDocument<T>[]> {
+  async findUnsyncedDocuments(forceRefresh = false): Promise<RxDocument<T>[]> {
+    // If force refresh is requested, clear any cached queries
+    if (forceRefresh) {
+      console.log(`[REPOSITORY] Force refreshing unsynced documents query...`);
+      // Adding a longer delay to ensure any pending writes are committed
+      await new Promise(resolve => setTimeout(resolve, 150));
+    }
+
+    // Debug: Get all documents to see what's actually in the database
+    const allDocs = await this.collection
+      .find({
+        selector: {
+          isDeleted: { $ne: true }
+        }
+      })
+      .exec();
+
+    console.log(`[REPOSITORY] DEBUG - All documents in collection:`, 
+      allDocs.map(doc => {
+        const data = doc.toJSON();
+        return {
+          id: data.id,
+          isLocalOnly: data.isLocalOnly,
+          lastSyncedAt: data.lastSyncedAt,
+          amplifyId: data.amplifyId
+        };
+      })
+    );
+
     // Get all local-only, non-deleted documents
     const localOnlyDocs = await this.collection
       .find({
@@ -209,19 +239,33 @@ export abstract class BaseRepository<T, C extends RxCollection = RxCollection> {
       })
       .exec();
 
+    console.log(`[REPOSITORY] Found ${localOnlyDocs.length} local-only documents`);
+
     // Filter for documents that are truly unsynced
     // Either no lastSyncedAt or updatedAt is newer than lastSyncedAt
-    return localOnlyDocs.filter(doc => {
+    const unsyncedDocs = localOnlyDocs.filter(doc => {
       const data = doc.toJSON();
       if (!data.lastSyncedAt) {
+        console.log(`[REPOSITORY] Document ${data.id} never synced (no lastSyncedAt)`);
         return true; // Never synced
       }
       
       // Compare dates: if updatedAt is newer than lastSyncedAt, it needs sync
       const updatedAt = new Date(data.updatedAt);
       const lastSyncedAt = new Date(data.lastSyncedAt);
-      return updatedAt > lastSyncedAt;
+      const needsSync = updatedAt > lastSyncedAt;
+      
+      if (needsSync) {
+        console.log(`[REPOSITORY] Document ${data.id} needs sync - updatedAt: ${data.updatedAt}, lastSyncedAt: ${data.lastSyncedAt}`);
+      } else {
+        console.log(`[REPOSITORY] Document ${data.id} is up to date but still marked as isLocalOnly: true`);
+      }
+      
+      return needsSync;
     });
+
+    console.log(`[REPOSITORY] After filtering, ${unsyncedDocs.length} documents need sync`);
+    return unsyncedDocs;
   }
 
   /**
@@ -229,7 +273,13 @@ export abstract class BaseRepository<T, C extends RxCollection = RxCollection> {
    */
   async markAsSynced(id: string, amplifyId?: string): Promise<RxDocument<T> | null> {
     const doc = await this.findById(id);
-    if (!doc) return null;
+    if (!doc) {
+      console.warn(`[REPOSITORY] Cannot mark as synced - document not found: ${id}`);
+      return null;
+    }
+    
+    const beforeData = doc.toJSON();
+    console.log(`[REPOSITORY] BEFORE marking as synced - Document ${id}: isLocalOnly=${beforeData.isLocalOnly}, lastSyncedAt=${beforeData.lastSyncedAt}`);
     
     const updateData: any = {
       isLocalOnly: false,
@@ -241,10 +291,45 @@ export abstract class BaseRepository<T, C extends RxCollection = RxCollection> {
       updateData.amplifyId = amplifyId;
     }
     
-    await doc.update({
-      $set: updateData
-    });
+    console.log(`[REPOSITORY] Marking document as synced: ${id}, amplifyId: ${amplifyId || 'none'}, updateData:`, updateData);
     
-    return this.findById(id);
+    try {
+      await doc.update({
+        $set: updateData
+      });
+      
+      // Wait for the database operation to commit
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Verify the update was successful by re-querying
+      const updatedDoc = await this.findById(id);
+      if (updatedDoc) {
+        const afterData = updatedDoc.toJSON();
+        console.log(`[REPOSITORY] AFTER marking as synced - Document ${id}: isLocalOnly=${afterData.isLocalOnly}, lastSyncedAt=${afterData.lastSyncedAt}`);
+        
+        if (afterData.isLocalOnly === true) {
+          console.error(`[REPOSITORY] ERROR: Document ${id} still has isLocalOnly=true after sync update!`);
+          
+          // Try a more aggressive update
+          console.log(`[REPOSITORY] Attempting aggressive update for document ${id}`);
+          await updatedDoc.update({
+            $set: { isLocalOnly: false }
+          });
+          
+          // Wait and check again
+          await new Promise(resolve => setTimeout(resolve, 100));
+          const reCheckedDoc = await this.findById(id);
+          if (reCheckedDoc) {
+            const recheckData = reCheckedDoc.toJSON();
+            console.log(`[REPOSITORY] After aggressive update - Document ${id}: isLocalOnly=${recheckData.isLocalOnly}`);
+          }
+        }
+      }
+      
+      return updatedDoc;
+    } catch (error) {
+      console.error(`[REPOSITORY] Error marking document ${id} as synced:`, error);
+      return null;
+    }
   }
 }

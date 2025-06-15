@@ -44,6 +44,9 @@ export interface OrderDocType {
   barcodeData?: string; // Barcode data for scanning
   rackNumber?: string; // Rack number where order is stored
   statusHistory?: string[]; // Array of status changes with timestamps
+  cancellationReason?: string; // Reason for cancellation if status is cancelled
+  refundAmount?: number; // Amount refunded to customer if order is cancelled
+  refundDate?: string; // Date when refund was processed
   // Local-only fields for sync management
   isLocalOnly: boolean;
   isDeleted?: boolean;
@@ -204,6 +207,19 @@ export const orderSchema: RxJsonSchema<OrderDocType> = {
         type: 'string',
         maxLength: 200
       }
+    },
+    cancellationReason: {
+      type: 'string',
+      maxLength: 500
+    },
+    refundAmount: {
+      type: 'number',
+      minimum: 0,
+      maximum: 999999.99
+    },
+    refundDate: {
+      type: 'string',
+      maxLength: 50
     },
     isLocalOnly: {
       type: 'boolean'

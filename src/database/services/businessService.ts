@@ -56,7 +56,7 @@ export class BusinessService {
         email: undefined, // Will be set to user email during sync
         taxId: businessData.taxId?.trim() || undefined,
         website: businessData.website?.trim() || undefined,
-        isLocalOnly: true,
+        isLocalOnly: (businessData as any).isLocalOnly !== undefined ? (businessData as any).isLocalOnly : true,
         isDeleted: false
       };
 
@@ -100,7 +100,7 @@ export class BusinessService {
         phone: businessData.phone.trim(),
         taxId: businessData.taxId?.trim() || undefined,
         website: businessData.website?.trim() || undefined,
-        isLocalOnly: true
+        isLocalOnly: (businessData as any).isLocalOnly !== undefined ? (businessData as any).isLocalOnly : true
       };
 
       const business = await this.businessRepository!.updateBusiness(id, updates);
@@ -162,10 +162,16 @@ export class BusinessService {
     }
   }
 
-  async getUnsyncedBusinesses(): Promise<BusinessDocument[]> {
+  /**
+   * Get all businesses that haven't been synced with the server
+   * @param forceRefresh Whether to force a refresh of cached data
+   * @returns Array of unsynced business documents
+   */
+  async getUnsyncedBusinesses(forceRefresh = false): Promise<BusinessDocument[]> {
     try {
       await this.initialize();
-      return await this.businessRepository!.getUnsyncedBusinesses();
+      const repository = this.businessRepository!;
+      return repository.findUnsyncedDocuments(forceRefresh) as Promise<BusinessDocument[]>;
     } catch (error) {
       console.error('Error getting unsynced businesses:', error);
       return [];

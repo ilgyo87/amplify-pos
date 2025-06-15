@@ -82,11 +82,11 @@ export class CustomerService {
     }
 
     // Set default values for new customers
+    // Note: isLocalOnly will be handled by BaseRepository.create() which respects the field if present
     const customerWithDefaults = {
       ...customerData,
       phone: cleanPhoneNumber(customerData.phone),
       businessId: businessId,
-      isLocalOnly: true,
       isDeleted: false
     };
     
@@ -224,11 +224,12 @@ export class CustomerService {
 
   /**
    * Get all customers that haven't been synced with the server
+   * @param forceRefresh If true, forces a fresh query ignoring any cached results
    * @returns Array of unsynced customer documents
    */
-  async getUnsyncedCustomers(): Promise<CustomerDocument[]> {
+  async getUnsyncedCustomers(forceRefresh = false): Promise<CustomerDocument[]> {
     const repository = this.getRepository();
-    return repository.findUnsyncedDocuments() as Promise<CustomerDocument[]>;
+    return repository.findUnsyncedDocuments(forceRefresh) as Promise<CustomerDocument[]>;
   }
 
   /**

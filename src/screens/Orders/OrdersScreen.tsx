@@ -1,10 +1,12 @@
-import { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { 
   View, 
   StyleSheet, 
   SafeAreaView, 
   Text, 
   TouchableOpacity, 
+  TouchableWithoutFeedback,
+  KeyboardAvoidingView,
   Alert, 
   ScrollView, 
   FlatList, 
@@ -35,9 +37,15 @@ export default function OrdersScreen() {
   const [rackScanInput, setRackScanInput] = useState('');
   const [rackScanResult, setRackScanResult] = useState<string | null>(null);
   const [notificationMessage, setNotificationMessage] = useState('');
+  // Cancel modal state
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [orderToCancel, setOrderToCancel] = useState<OrderDocument | null>(null);
+  const [cancelNote, setCancelNote] = useState('');
   // Store QR refs for mass printing
   const qrRefs = useRef<{[key: string]: React.RefObject<View | null>}>({});
-  const { orders, loading, updateOrderStatus, updateOrderStatusAndRack } = useOrders(selectedStatus === 'all' ? undefined : selectedStatus);
+  const { orders, loading, updateOrderStatus, updateOrderStatusAndRack, updateOrder } = useOrders(
+    selectedStatus === 'all' ? undefined : selectedStatus
+  );
   
   // Create a memoized lookup map for orders
   const orderLookupMap = useMemo(() => {
@@ -386,7 +394,13 @@ export default function OrdersScreen() {
       
       // Build combined HTML for all selected items
       let combinedHTML = '';
-      const validItems = [];
+      const validItems: Array<{
+        orderItem: OrderItem;
+        globalItemNumber: number;
+        itemId: string;
+        itemKey: string;
+        itemIndex: number;
+      }> = [];
       
       for (const itemId of selectedItems) {
         const lastHyphenIndex = itemId.lastIndexOf('-');
@@ -700,7 +714,7 @@ export default function OrdersScreen() {
 
   const renderOrderItem = (item: OrderItem, globalItemStartIndex: number) => {
     // Create individual items for each quantity
-    const individualItems = [];
+    const individualItems: React.ReactElement[] = [];
     for (let i = 0; i < item.quantity; i++) {
       const itemId = `${item.itemKey}-${i}`;
       const isScanned = scannedItems[itemId] || false;
@@ -746,6 +760,50 @@ export default function OrdersScreen() {
         }
       ]
     );
+  };
+
+  const handleCancelOrder = (order: OrderDocument) => {
+    setOrderToCancel(order);
+    setShowCancelModal(true);
+  };
+
+  const confirmCancelOrder = async () => {
+    if (!orderToCancel || !cancelNote.trim()) {
+      Alert.alert('Error', 'Please provide a cancellation reason');
+      return;
+    }
+
+    try {
+      // Calculate refund amount (full order total)
+      const refundAmount = orderToCancel.total;
+      
+      // Update order with cancelled status and cancellation details
+      const updates = {
+        status: 'cancelled' as const,
+        cancellationReason: cancelNote.trim(),
+        refundAmount: refundAmount,
+        refundDate: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      await updateOrder(orderToCancel.id, updates);
+
+      // TODO: Update customer's total refunds
+      // This would require a customer service update function
+
+      // Close modal and reset state
+      setShowCancelModal(false);
+      setOrderToCancel(null);
+      setCancelNote('');
+
+      Alert.alert(
+        'Order Cancelled',
+        `Order ${orderToCancel.orderNumber} has been cancelled.\nRefund amount: $${refundAmount.toFixed(2)}`
+      );
+    } catch (error) {
+      console.error('Failed to cancel order:', error);
+      Alert.alert('Error', 'Failed to cancel order. Please try again.');
+    }
   };
 
   const getStatusColor = (status: OrderDocType['status']) => {
@@ -819,6 +877,18 @@ export default function OrdersScreen() {
         )}
       </View>
 
+      {order.status === 'cancelled' && order.cancellationReason && (
+        <View style={styles.cancellationInfo}>
+          <Text style={styles.cancellationLabel}>Cancelled:</Text>
+          <Text style={styles.cancellationReason}>{order.cancellationReason}</Text>
+          {order.refundAmount && order.refundAmount > 0 && (
+            <Text style={styles.refundAmount}>
+              Refund: ${order.refundAmount.toFixed(2)}
+            </Text>
+          )}
+        </View>
+      )}
+
       <View style={styles.itemsSection}>
         <Text style={styles.itemsLabel}>Items ({order.items.length}):</Text>
         {order.items.slice(0, 2).map((item) => (
@@ -844,20 +914,36 @@ export default function OrdersScreen() {
         <Text style={styles.totalAmount}>${order.total.toFixed(2)}</Text>
         <View style={styles.actionButtons}>
           {order.status === 'pending' && (
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#3b82f6' }]}
-              onPress={() => handleStatusChange(order.id, 'in_progress')}
-            >
-              <Text style={styles.actionButtonText}>Start</Text>
-            </TouchableOpacity>
+            <>
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: '#3b82f6' }]}
+                onPress={() => handleStatusChange(order.id, 'in_progress')}
+              >
+                <Text style={styles.actionButtonText}>Start</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: '#ef4444' }]}
+                onPress={() => handleCancelOrder(order)}
+              >
+                <Text style={styles.actionButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </>
           )}
           {order.status === 'in_progress' && (
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#10b981' }]}
-              onPress={() => handleStatusChange(order.id, 'ready')}
-            >
-              <Text style={styles.actionButtonText}>Ready</Text>
-            </TouchableOpacity>
+            <>
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: '#10b981' }]}
+                onPress={() => handleStatusChange(order.id, 'ready')}
+              >
+                <Text style={styles.actionButtonText}>Ready</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: '#ef4444' }]}
+                onPress={() => handleCancelOrder(order)}
+              >
+                <Text style={styles.actionButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </>
           )}
           {order.status === 'ready' && (
             <TouchableOpacity
@@ -1366,6 +1452,83 @@ export default function OrdersScreen() {
               </View>
             )}
           </SafeAreaView>
+        </Modal>
+
+        {/* Cancellation Modal */}
+        <Modal visible={showCancelModal} animationType="slide" transparent>
+          <View style={styles.modalOverlay}>
+            <View style={styles.cancelModalContainer}>
+              <View style={styles.cancelModalHeader}>
+                <Text style={styles.cancelModalTitle}>Cancel Order</Text>
+                <TouchableOpacity 
+                  style={styles.modalCloseButton}
+                  onPress={() => {
+                    setShowCancelModal(false);
+                    setOrderToCancel(null);
+                    setCancelNote('');
+                  }}
+                >
+                  <Ionicons name="close" size={24} color="#666" />
+                </TouchableOpacity>
+              </View>
+              
+              {orderToCancel && (
+                <>
+                  <View style={styles.cancelOrderInfo}>
+                    <Text style={styles.cancelOrderNumber}>
+                      Order #{orderToCancel.orderNumber}
+                    </Text>
+                    <Text style={styles.cancelCustomerName}>
+                      {orderToCancel.customerName}
+                    </Text>
+                    <Text style={styles.cancelOrderTotal}>
+                      Total: ${orderToCancel.total.toFixed(2)}
+                    </Text>
+                  </View>
+
+                  <View style={styles.cancelReasonSection}>
+                    <Text style={styles.cancelReasonLabel}>
+                      Cancellation Reason *
+                    </Text>
+                    <TextInput
+                      style={styles.cancelReasonInput}
+                      placeholder="Enter reason for cancellation..."
+                      value={cancelNote}
+                      onChangeText={setCancelNote}
+                      multiline
+                      numberOfLines={4}
+                      textAlignVertical="top"
+                    />
+                  </View>
+
+                  <View style={styles.refundInfo}>
+                    <Text style={styles.refundInfoText}>
+                      Full refund of ${orderToCancel.total.toFixed(2)} will be processed
+                    </Text>
+                  </View>
+
+                  <View style={styles.cancelModalActions}>
+                    <TouchableOpacity
+                      style={[styles.modalActionButton, styles.cancelButton]}
+                      onPress={() => {
+                        setShowCancelModal(false);
+                        setOrderToCancel(null);
+                        setCancelNote('');
+                      }}
+                    >
+                      <Text style={styles.cancelButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.modalActionButton, styles.confirmCancelButton]}
+                      onPress={confirmCancelOrder}
+                    >
+                      <Text style={styles.confirmCancelButtonText}>Confirm Cancellation</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
         </Modal>
     </SafeAreaView>
   );
@@ -2123,6 +2286,43 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  // Modal styles
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  cancelNoteInput: {
+    minHeight: 80,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 20,
+    textAlignVertical: 'top',
+  },
+  modalButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  modalButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  modalButtonText: {
+    color: 'white',
+    fontWeight: '600',
+  },
+
   // Notification styles
   notificationContainer: {
     backgroundColor: '#fef3cd',
@@ -2283,5 +2483,145 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  // Cancellation Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cancelModalContainer: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 20,
+    width: '90%',
+    maxWidth: 400,
+    maxHeight: '80%',
+  },
+  cancelModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  cancelModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  cancelOrderInfo: {
+    backgroundColor: '#f9fafb',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  cancelOrderNumber: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 5,
+  },
+  cancelCustomerName: {
+    fontSize: 16,
+    color: '#6b7280',
+    marginBottom: 5,
+  },
+  cancelOrderTotal: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#059669',
+  },
+  cancelReasonSection: {
+    marginBottom: 20,
+  },
+  cancelReasonLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  cancelReasonInput: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: 'white',
+    minHeight: 100,
+  },
+  refundInfo: {
+    backgroundColor: '#fef3c7',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  refundInfoText: {
+    fontSize: 14,
+    color: '#92400e',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  cancelModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  modalActionButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#f3f4f6',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  confirmCancelButton: {
+    backgroundColor: '#ef4444',
+  },
+  confirmCancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'white',
+  },
+  // Cancellation Info Display Styles
+  cancellationInfo: {
+    backgroundColor: '#fef2f2',
+    padding: 12,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#ef4444',
+    marginVertical: 8,
+  },
+  cancellationLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#ef4444',
+    marginBottom: 4,
+  },
+  cancellationReason: {
+    fontSize: 14,
+    color: '#7f1d1d',
+    lineHeight: 18,
+    marginBottom: 4,
+  },
+  refundAmount: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#059669',
   },
 });

@@ -112,10 +112,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: CONTAINER_PADDING,
+    paddingBottom: CONTAINER_PADDING + 30, // Extra bottom padding for categories
   },
 
   landscapeContainer: {
-    paddingBottom: CONTAINER_PADDING + 20, // Extra padding at the bottom in landscape mode
+    paddingBottom: CONTAINER_PADDING + 50, // Extra padding at the bottom in landscape mode
   },
   gridContainer: {
     flexDirection: 'row',

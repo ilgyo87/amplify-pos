@@ -44,21 +44,54 @@ export default function DataSyncScreen() {
     success: false
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     loadSyncStatus();
   }, []);
 
-  const loadSyncStatus = async () => {
+  const loadSyncStatus = async (forceRefresh = false) => {
     try {
-      setIsLoading(true);
-      const status = await syncService.getSyncStatus();
+      if (forceRefresh) {
+        setIsRefreshing(true);
+      } else {
+        setIsLoading(true);
+      }
+      
+      // If this is called after a sync operation, add a small delay
+      // to ensure database writes are fully committed
+      if (forceRefresh) {
+        console.log('[DATASYNC] Force refreshing sync status after sync operation...');
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      
+      const status = await syncService.getSyncStatus(forceRefresh);
       setSyncStatus(status);
+      
+      // Log the status for debugging
+      console.log('[DATASYNC] Sync status loaded:', {
+        totalUnsyncedCustomers: status.totalUnsyncedCustomers,
+        totalUnsyncedEmployees: status.totalUnsyncedEmployees,
+        totalUnsyncedBusinesses: status.totalUnsyncedBusinesses,
+        totalUnsyncedProducts: status.totalUnsyncedProducts,
+        totalUnsyncedCategories: status.totalUnsyncedCategories,
+        totalUnsyncedOrders: status.totalUnsyncedOrders,
+        forceRefresh
+      });
+
+      // Force component to re-render by triggering state update
+      if (forceRefresh) {
+        // Add a small delay and then update the state again to ensure re-render
+        setTimeout(() => {
+          setSyncStatus(prevStatus => ({ ...prevStatus }));
+        }, 50);
+      }
     } catch (error) {
       console.error('Failed to load sync status:', error);
       Alert.alert('Error', 'Failed to load sync status');
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -107,7 +140,7 @@ export default function DataSyncScreen() {
         errors: allErrors
       };
       
-      await loadSyncStatus();
+      await loadSyncStatus(true);
       showSyncResult('Upload', combinedResult);
     } catch (error) {
       Alert.alert('Upload Error', error instanceof Error ? error.message : 'Unknown error');
@@ -149,7 +182,7 @@ export default function DataSyncScreen() {
         errors: allErrors
       };
       
-      await loadSyncStatus();
+      await loadSyncStatus(true);
       showSyncResult('Download', combinedResult);
     } catch (error) {
       Alert.alert('Download Error', error instanceof Error ? error.message : 'Unknown error');
@@ -170,7 +203,7 @@ export default function DataSyncScreen() {
             try {
               setSyncStatus(prev => ({ ...prev, isUploading: true, isDownloading: true }));
               const result = await syncService.fullSync();
-              await loadSyncStatus();
+              await loadSyncStatus(true);
               showSyncResult('Full Sync', result);
             } catch (error) {
               Alert.alert('Sync Error', error instanceof Error ? error.message : 'Unknown error');
@@ -336,7 +369,14 @@ export default function DataSyncScreen() {
               </View>
             </View>
 
-            {getTotalUnsyncedCount() > 0 && (
+            {isRefreshing && (
+              <View style={styles.refreshingIndicator}>
+                <ActivityIndicator size="small" color="#007AFF" />
+                <Text style={styles.refreshingText}>Updating sync status...</Text>
+              </View>
+            )}
+
+            {!isRefreshing && getTotalUnsyncedCount() > 0 && (
               <View style={styles.unsyncedWarning}>
                 <Ionicons name="warning" size={20} color="#ff6b35" />
                 <Text style={styles.unsyncedWarningText}>
@@ -416,7 +456,7 @@ export default function DataSyncScreen() {
         <View style={styles.footer}>
           <TouchableOpacity
             style={styles.refreshButton}
-            onPress={loadSyncStatus}
+            onPress={() => loadSyncStatus(false)}
           >
             <Ionicons name="refresh" size={20} color="#007AFF" />
             <Text style={styles.refreshButtonText}>Refresh Status</Text>
@@ -623,6 +663,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#007AFF',
+    marginLeft: 8,
+  },
+  refreshingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e6f3ff',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#b3d9ff',
+  },
+  refreshingText: {
+    fontSize: 14,
+    color: '#0066cc',
+    fontWeight: '500',
     marginLeft: 8,
   },
 });

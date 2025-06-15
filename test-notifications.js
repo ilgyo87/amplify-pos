@@ -49,7 +49,7 @@ async function testSMSFunction() {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      phoneNumber: '+1234567890',
+      phoneNumber: '+6104280048',
       message: 'Test SMS from POS System: Your order TEST-001 is ready!',
       customerName: 'Test Customer',
       orderNumber: 'TEST-001'

@@ -22,6 +22,7 @@ export interface CustomerDocType {
   joinDate?: string; // Date customer joined
   emailNotifications?: boolean; // Toggle for email notifications
   textNotifications?: boolean; // Toggle for text notifications
+  totalRefunds?: number; // Total amount of refunds issued to this customer
   // Local-only fields for sync management
   isLocalOnly: boolean;
   isDeleted?: boolean; // For soft deletes
@@ -106,6 +107,12 @@ export const customerSchema: RxJsonSchema<CustomerDocType> = {
     textNotifications: {
       type: 'boolean',
       default: false
+    },
+    totalRefunds: {
+      type: 'number',
+      minimum: 0,
+      maximum: 999999.99,
+      default: 0
     },
     isLocalOnly: {
       type: 'boolean'

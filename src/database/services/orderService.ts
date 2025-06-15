@@ -245,7 +245,7 @@ export class OrderService {
       statusHistory: initialStatusHistory,
       notes,
       barcodeData,
-      isLocalOnly: true,
+      isLocalOnly: (customer as any).isLocalOnly !== undefined ? (customer as any).isLocalOnly : true,
       createdAt: now,
       updatedAt: now
     };

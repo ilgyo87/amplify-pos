@@ -11,7 +11,7 @@ export function TestNotificationButton() {
         firstName: 'Test',
         lastName: 'Customer',
         email: 'ilgyo87@gmail.com', // Change this to your email
-        phone: '+1234567890', // Change this to your phone
+        phone: '+6104280048', // Change this to your phone
         emailNotifications: true,
         textNotifications: true,
         isLocalOnly: true,

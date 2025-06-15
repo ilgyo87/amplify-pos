@@ -67,7 +67,7 @@ export class CategoryService {
     // Set default values for new categories
     const categoryWithDefaults = {
       ...categoryData,
-      isLocalOnly: true,
+      isLocalOnly: (categoryData as any).isLocalOnly !== undefined ? (categoryData as any).isLocalOnly : true,
       isDeleted: false
     };
     
@@ -188,11 +188,12 @@ export class CategoryService {
 
   /**
    * Get all categories that haven't been synced with the server
+   * @param forceRefresh Whether to force a refresh of cached data
    * @returns Array of unsynced category documents
    */
-  async getUnsyncedCategories(): Promise<CategoryDocument[]> {
+  async getUnsyncedCategories(forceRefresh = false): Promise<CategoryDocument[]> {
     const repository = this.getRepository();
-    return repository.findUnsyncedDocuments() as Promise<CategoryDocument[]>;
+    return repository.findUnsyncedDocuments(forceRefresh) as Promise<CategoryDocument[]>;
   }
 
   /**

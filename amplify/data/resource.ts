@@ -46,6 +46,7 @@ const schema = a.schema({
       cognitoId: a.string(),
       emailNotifications: a.boolean(),
       textNotifications: a.boolean(),
+      totalRefunds: a.float(),
     })
     .authorization((allow) => [
       allow.authenticated().to(['read']),
@@ -73,6 +74,9 @@ const schema = a.schema({
       notes: a.string(),
       barcodeData: a.string(),
       rackNumber: a.string(),
+      cancellationReason: a.string(),
+      refundAmount: a.float(),
+      refundDate: a.string(),
     })
     .authorization((allow) => [
       allow.authenticated().to(['read']),
