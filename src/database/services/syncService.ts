@@ -134,15 +134,55 @@ export class SyncService {
       }
     }
 
-    return {
+    const amplifyOrderData: any = {
       businessId: amplifyBusinessId,
       customerId: amplifyCustomerId,
       employeeId: amplifyEmployeeId,
-      paymentMethod: order.paymentMethod,
       total: order.total,
-      status: order.status || 'completed',
-      rackNumber: order.rackNumber || undefined
+      paymentMethod: order.paymentMethod,
+      status: order.status || 'completed'
     };
+
+    // Only include optional fields if they have valid values
+    if (order.orderNumber && order.orderNumber.trim()) {
+      amplifyOrderData.orderNumber = order.orderNumber;
+    }
+    if (order.customerName && order.customerName.trim()) {
+      amplifyOrderData.customerName = order.customerName;
+    }
+    if (order.customerPhone && order.customerPhone.trim()) {
+      amplifyOrderData.customerPhone = order.customerPhone;
+    }
+    if (order.employeeName && order.employeeName.trim()) {
+      amplifyOrderData.employeeName = order.employeeName;
+    }
+    if (typeof order.subtotal === 'number') {
+      amplifyOrderData.subtotal = order.subtotal;
+    }
+    if (typeof order.tax === 'number') {
+      amplifyOrderData.tax = order.tax;
+    }
+    if (order.paymentInfo) {
+      amplifyOrderData.paymentInfo = JSON.stringify(order.paymentInfo);
+    }
+    if (order.selectedDate && order.selectedDate.trim()) {
+      amplifyOrderData.selectedDate = order.selectedDate;
+    }
+    if (order.statusHistory && order.statusHistory.length > 0) {
+      amplifyOrderData.statusHistory = JSON.stringify(order.statusHistory);
+    }
+    if (order.notes && order.notes.trim()) {
+      amplifyOrderData.notes = order.notes;
+    }
+    if (order.barcodeData && order.barcodeData.trim()) {
+      amplifyOrderData.barcodeData = order.barcodeData;
+    }
+    if (order.rackNumber && order.rackNumber.trim()) {
+      amplifyOrderData.rackNumber = order.rackNumber;
+    }
+
+    console.log(`[ORDER UPLOAD] Order ${order.orderNumber} data for Amplify:`, JSON.stringify(amplifyOrderData, null, 2));
+    return amplifyOrderData;
   }
 
 
@@ -150,7 +190,7 @@ export class SyncService {
   /**
    * Convert customer from local format to Amplify format
    */
-  private convertCustomerToAmplifyFormat(customer: CustomerDocument): any {
+  private async convertCustomerToAmplifyFormat(customer: CustomerDocument): Promise<any> {
     // Using type assertion to bypass type checking issues
     const doc = customer as any;
     const amplifyData: any = {
@@ -175,9 +215,25 @@ export class SyncService {
     if (doc.email && doc.email.trim()) {
       amplifyData.email = doc.email;
     }
+    
+    // Map local business ID to AWS business ID
     if (doc.businessId && doc.businessId.trim()) {
-      amplifyData.businessId = doc.businessId;
+      try {
+        await businessService.initialize();
+        const business = await businessService.getBusinessById(doc.businessId);
+        if (business && business.amplifyId) {
+          amplifyData.businessId = business.amplifyId;
+          console.log(`[CUSTOMER UPLOAD] Mapped local business ${doc.businessId} to AWS business ${business.amplifyId} for customer ${doc.firstName} ${doc.lastName}`);
+        } else {
+          console.warn(`[CUSTOMER UPLOAD] No AWS ID found for business ${doc.businessId} for customer ${doc.firstName} ${doc.lastName}`);
+          // Don't include businessId if we can't map it properly
+        }
+      } catch (error) {
+        console.warn(`[CUSTOMER UPLOAD] Error mapping business for customer ${doc.firstName} ${doc.lastName}:`, error);
+        // Don't include businessId if mapping fails
+      }
     }
+    
     if (doc.cognitoId && doc.cognitoId.trim()) {
       amplifyData.cognitoId = doc.cognitoId;
     }
@@ -200,7 +256,7 @@ export class SyncService {
   /**
    * Convert customer from Amplify format to local format
    */
-  private convertCustomerToLocalFormat(amplifyCustomer: any): any {
+  private async convertCustomerToLocalFormat(amplifyCustomer: any): Promise<any> {
     const localData: any = {
       id: amplifyCustomer.id, // Use Amplify ID as primary key for consistency
       firstName: amplifyCustomer.firstName,
@@ -229,9 +285,26 @@ export class SyncService {
     if (amplifyCustomer.email) {
       localData.email = amplifyCustomer.email;
     }
+    
+    // Map AWS business ID to local business ID
     if (amplifyCustomer.businessId) {
-      localData.businessId = amplifyCustomer.businessId;
+      try {
+        await businessService.initialize();
+        const businesses = await businessService.getAllBusinesses();
+        const business = businesses.find(b => b.amplifyId === amplifyCustomer.businessId);
+        if (business) {
+          localData.businessId = business.id;
+          console.log(`[CUSTOMER DOWNLOAD] Mapped AWS business ${amplifyCustomer.businessId} to local business ${business.id} for customer ${amplifyCustomer.firstName} ${amplifyCustomer.lastName}`);
+        } else {
+          console.warn(`[CUSTOMER DOWNLOAD] No local business found for AWS business ${amplifyCustomer.businessId} for customer ${amplifyCustomer.firstName} ${amplifyCustomer.lastName}`);
+          localData.businessId = amplifyCustomer.businessId; // Keep AWS ID as fallback
+        }
+      } catch (error) {
+        console.warn(`[CUSTOMER DOWNLOAD] Error mapping business for customer ${amplifyCustomer.firstName} ${amplifyCustomer.lastName}:`, error);
+        localData.businessId = amplifyCustomer.businessId; // Keep AWS ID as fallback
+      }
     }
+    
     if (amplifyCustomer.cognitoId) {
       localData.cognitoId = amplifyCustomer.cognitoId;
     }
@@ -255,7 +328,7 @@ export class SyncService {
   /**
    * Convert employee from local format to Amplify format
    */
-  private convertEmployeeToAmplifyFormat(employee: EmployeeDocument): any {
+  private async convertEmployeeToAmplifyFormat(employee: EmployeeDocument): Promise<any> {
     // Using type assertion to bypass type checking issues
     const doc = employee as any;
     const amplifyData: any = {
@@ -286,8 +359,22 @@ export class SyncService {
       amplifyData.zipCode = doc.zipCode;
     }
     
+    // Map local business ID to AWS business ID
     if (doc.businessId && doc.businessId.trim()) {
-      amplifyData.businessId = doc.businessId;
+      try {
+        await businessService.initialize();
+        const business = await businessService.getBusinessById(doc.businessId);
+        if (business && business.amplifyId) {
+          amplifyData.businessId = business.amplifyId;
+          console.log(`[EMPLOYEE UPLOAD] Mapped local business ${doc.businessId} to AWS business ${business.amplifyId} for employee ${doc.firstName} ${doc.lastName}`);
+        } else {
+          console.warn(`[EMPLOYEE UPLOAD] No AWS ID found for business ${doc.businessId} for employee ${doc.firstName} ${doc.lastName}`);
+          // Don't include businessId if we can't map it properly
+        }
+      } catch (error) {
+        console.warn(`[EMPLOYEE UPLOAD] Error mapping business for employee ${doc.firstName} ${doc.lastName}:`, error);
+        // Don't include businessId if mapping fails
+      }
     }
 
     return amplifyData;
@@ -296,7 +383,7 @@ export class SyncService {
   /**
    * Convert employee from Amplify format to local format
    */
-  private convertEmployeeToLocalFormat(amplifyEmployee: any): any {
+  private async convertEmployeeToLocalFormat(amplifyEmployee: any): Promise<any> {
     const localData: any = {
       firstName: amplifyEmployee.firstName,
       lastName: amplifyEmployee.lastName,
@@ -328,8 +415,23 @@ export class SyncService {
       localData.zipCode = amplifyEmployee.zipCode;
     }
     
+    // Map AWS business ID to local business ID
     if (amplifyEmployee.businessId) {
-      localData.businessId = amplifyEmployee.businessId;
+      try {
+        await businessService.initialize();
+        const businesses = await businessService.getAllBusinesses();
+        const business = businesses.find(b => b.amplifyId === amplifyEmployee.businessId);
+        if (business) {
+          localData.businessId = business.id;
+          console.log(`[EMPLOYEE DOWNLOAD] Mapped AWS business ${amplifyEmployee.businessId} to local business ${business.id} for employee ${amplifyEmployee.firstName} ${amplifyEmployee.lastName}`);
+        } else {
+          console.warn(`[EMPLOYEE DOWNLOAD] No local business found for AWS business ${amplifyEmployee.businessId} for employee ${amplifyEmployee.firstName} ${amplifyEmployee.lastName}`);
+          localData.businessId = amplifyEmployee.businessId; // Keep AWS ID as fallback
+        }
+      } catch (error) {
+        console.warn(`[EMPLOYEE DOWNLOAD] Error mapping business for employee ${amplifyEmployee.firstName} ${amplifyEmployee.lastName}:`, error);
+        localData.businessId = amplifyEmployee.businessId; // Keep AWS ID as fallback
+      }
     }
 
     return localData;
@@ -338,23 +440,43 @@ export class SyncService {
   /**
    * Convert category from local format to Amplify format
    */
-  private convertCategoryToAmplifyFormat(category: CategoryDocument): any {
+  private async convertCategoryToAmplifyFormat(category: CategoryDocument): Promise<any> {
     // Using type assertion to bypass type checking issues
     const doc = category as any;
-    return {
+    const amplifyData: any = {
       name: doc.name,
       description: doc.description,
       color: doc.color,
       displayOrder: doc.displayOrder,
       isActive: doc.isActive,
     };
+
+    // Map local business ID to AWS business ID
+    if (doc.businessId && doc.businessId.trim()) {
+      try {
+        await businessService.initialize();
+        const business = await businessService.getBusinessById(doc.businessId);
+        if (business && business.amplifyId) {
+          amplifyData.businessId = business.amplifyId;
+          console.log(`[CATEGORY UPLOAD] Mapped local business ${doc.businessId} to AWS business ${business.amplifyId} for category ${doc.name}`);
+        } else {
+          console.warn(`[CATEGORY UPLOAD] No AWS ID found for business ${doc.businessId} for category ${doc.name}`);
+          // Don't include businessId if we can't map it properly
+        }
+      } catch (error) {
+        console.warn(`[CATEGORY UPLOAD] Error mapping business for category ${doc.name}:`, error);
+        // Don't include businessId if mapping fails
+      }
+    }
+
+    return amplifyData;
   }
 
   /**
    * Convert category from Amplify format to local format
    */
-  private convertCategoryToLocalFormat(amplifyCategory: any): any {
-    return {
+  private async convertCategoryToLocalFormat(amplifyCategory: any): Promise<any> {
+    const localData: any = {
       name: amplifyCategory.name,
       description: amplifyCategory.description,
       color: amplifyCategory.color,
@@ -364,6 +486,27 @@ export class SyncService {
       isLocalOnly: false,
       lastSyncedAt: new Date().toISOString()
     };
+
+    // Map AWS business ID to local business ID
+    if (amplifyCategory.businessId) {
+      try {
+        await businessService.initialize();
+        const businesses = await businessService.getAllBusinesses();
+        const business = businesses.find(b => b.amplifyId === amplifyCategory.businessId);
+        if (business) {
+          localData.businessId = business.id;
+          console.log(`[CATEGORY DOWNLOAD] Mapped AWS business ${amplifyCategory.businessId} to local business ${business.id} for category ${amplifyCategory.name}`);
+        } else {
+          console.warn(`[CATEGORY DOWNLOAD] No local business found for AWS business ${amplifyCategory.businessId} for category ${amplifyCategory.name}`);
+          localData.businessId = amplifyCategory.businessId; // Keep AWS ID as fallback
+        }
+      } catch (error) {
+        console.warn(`[CATEGORY DOWNLOAD] Error mapping business for category ${amplifyCategory.name}:`, error);
+        localData.businessId = amplifyCategory.businessId; // Keep AWS ID as fallback
+      }
+    }
+
+    return localData;
   }
 
   /**
@@ -389,7 +532,7 @@ export class SyncService {
       console.warn(`[PRODUCT UPLOAD] Error mapping category for product ${doc.name}:`, error);
     }
     
-    return {
+    const amplifyData: any = {
       name: doc.name,
       description: doc.description,
       sku: doc.sku,
@@ -401,6 +544,26 @@ export class SyncService {
       isActive: doc.isActive,
       imageName: doc.imageName, // Include image reference for static assets
     };
+
+    // Map local business ID to AWS business ID
+    if (doc.businessId && doc.businessId.trim()) {
+      try {
+        await businessService.initialize();
+        const business = await businessService.getBusinessById(doc.businessId);
+        if (business && business.amplifyId) {
+          amplifyData.businessId = business.amplifyId;
+          console.log(`[PRODUCT UPLOAD] Mapped local business ${doc.businessId} to AWS business ${business.amplifyId} for product ${doc.name}`);
+        } else {
+          console.warn(`[PRODUCT UPLOAD] No AWS ID found for business ${doc.businessId} for product ${doc.name}`);
+          // Don't include businessId if we can't map it properly
+        }
+      } catch (error) {
+        console.warn(`[PRODUCT UPLOAD] Error mapping business for product ${doc.name}:`, error);
+        // Don't include businessId if mapping fails
+      }
+    }
+
+    return amplifyData;
   }
 
   /**
@@ -639,28 +802,29 @@ export class SyncService {
 
     return {
       id: amplifyOrder.id, // Use Amplify ID as primary key for consistency
-      orderNumber: `SYNC-${amplifyOrder.id.slice(-8)}`, // Use longer slice for better uniqueness
+      orderNumber: amplifyOrder.orderNumber || `SYNC-${amplifyOrder.id.slice(-8)}`, // Use actual order number if available
       customerId: amplifyOrder.customerId, // Use Amplify customer ID for consistency
-      customerName: customerName, // Use actual customer name if found
-      customerPhone: customerPhone, // Use actual customer phone if found
+      customerName: amplifyOrder.customerName || customerName, // Use actual customer name from order or found customer
+      customerPhone: amplifyOrder.customerPhone || customerPhone, // Use actual customer phone from order or found customer
       businessId: amplifyOrder.businessId, // Use Amplify business ID for consistency
       employeeId: amplifyOrder.employeeId, // Use Amplify employee ID for consistency
-      employeeName: employeeName, // Use actual employee name if found
+      employeeName: amplifyOrder.employeeName || employeeName, // Use actual employee name from order or found employee
       items: localItems,
-      subtotal: amplifyOrder.total * 0.9, // Estimate subtotal (90% of total)
-      tax: amplifyOrder.total * 0.1, // Estimate tax (10% of total)
+      subtotal: amplifyOrder.subtotal || (amplifyOrder.total * 0.9), // Use actual subtotal or estimate
+      tax: amplifyOrder.tax || (amplifyOrder.total * 0.1), // Use actual tax or estimate
       total: amplifyOrder.total || 0,
       paymentMethod: amplifyOrder.paymentMethod || 'cash',
-      paymentInfo: {
+      paymentInfo: amplifyOrder.paymentInfo ? JSON.parse(amplifyOrder.paymentInfo) : {
         method: amplifyOrder.paymentMethod || 'cash',
         amount: amplifyOrder.total || 0,
         tip: 0
       },
       status: amplifyOrder.status || 'completed',
-      notes: '', // Notes not available in Amplify Order model
-      barcodeData: '', // Not available in Amplify Order model
+      statusHistory: amplifyOrder.statusHistory ? JSON.parse(amplifyOrder.statusHistory) : [],
+      notes: amplifyOrder.notes || '', // Use actual notes if available
+      barcodeData: amplifyOrder.barcodeData || '', // Use actual barcode data if available
       rackNumber: amplifyOrder.rackNumber || '',
-      selectedDate: new Date().toISOString(), // Not available, use current date
+      selectedDate: amplifyOrder.selectedDate || new Date().toISOString(), // Use actual selected date or current date
       isLocalOnly: false,
       lastSyncedAt: new Date().toISOString(),
       amplifyId: amplifyOrder.id,
@@ -760,7 +924,7 @@ export class SyncService {
       for (const customer of unsyncedCustomers) {
         try {
           // Convert local customer to Amplify format
-          const amplifyCustomer = this.convertCustomerToAmplifyFormat(customer);
+          const amplifyCustomer = await this.convertCustomerToAmplifyFormat(customer);
           
           // Create customer in Amplify
           // Using 'as any' to bypass type checking issues with the client model types
@@ -846,7 +1010,7 @@ export class SyncService {
             const localUpdatedAt = new Date(existingCustomer.updatedAt);
             
             if (amplifyUpdatedAt > localUpdatedAt) {
-              const localFormat = this.convertCustomerToLocalFormat(amplifyCustomer);
+              const localFormat = await this.convertCustomerToLocalFormat(amplifyCustomer);
               const result = await customerService.updateCustomer(existingCustomer.id, localFormat);
               if (result.customer && !result.errors && !result.duplicateError) {
                 downloadedCount++;
@@ -855,7 +1019,7 @@ export class SyncService {
             }
           } else {
             // Create new local customer with Amplify ID as primary key
-            const localFormat = this.convertCustomerToLocalFormat(amplifyCustomer);
+            const localFormat = await this.convertCustomerToLocalFormat(amplifyCustomer);
             const result = await customerService.createCustomer(localFormat);
             
             if (result.customer) {
@@ -907,7 +1071,7 @@ export class SyncService {
       for (const employee of unsyncedEmployees) {
         try {
           // Convert local employee to Amplify format
-          const amplifyEmployee = this.convertEmployeeToAmplifyFormat(employee);
+          const amplifyEmployee = await this.convertEmployeeToAmplifyFormat(employee);
           
           // Create employee in Amplify
           // Using 'as any' to bypass type checking issues with the client model types
@@ -970,7 +1134,7 @@ export class SyncService {
       for (const category of unsyncedCategories) {
         try {
           // Convert local category to Amplify format
-          const amplifyCategory = this.convertCategoryToAmplifyFormat(category);
+          const amplifyCategory = await this.convertCategoryToAmplifyFormat(category);
           
           // Create category in Amplify
           // Using 'as any' to bypass type checking issues with the client model types
@@ -1298,7 +1462,7 @@ export class SyncService {
             categoryIdMapping[amplifyCategory.id] = existingCategory.id;
             
             if (amplifyUpdatedAt > localUpdatedAt) {
-              const localFormat = this.convertCategoryToLocalFormat(amplifyCategory);
+              const localFormat = await this.convertCategoryToLocalFormat(amplifyCategory);
               const result = await categoryService.updateCategory(existingCategory.id, localFormat);
               if (result.category && !result.errors) {
                 downloadedCount++;
@@ -1307,7 +1471,7 @@ export class SyncService {
             }
           } else {
             // Create new local category
-            const localFormat = this.convertCategoryToLocalFormat(amplifyCategory);
+            const localFormat = await this.convertCategoryToLocalFormat(amplifyCategory);
             const result = await categoryService.createCategory(localFormat);
             
             if (result.category) {
@@ -1426,7 +1590,7 @@ export class SyncService {
             const localUpdatedAt = new Date(existingEmployee.updatedAt);
             
             if (amplifyUpdatedAt > localUpdatedAt) {
-              const localFormat = this.convertEmployeeToLocalFormat(amplifyEmployee);
+              const localFormat = await this.convertEmployeeToLocalFormat(amplifyEmployee);
               const result = await employeeService.updateEmployee(existingEmployee.id, localFormat);
               if (result.employee && !result.errors && !result.duplicateError) {
                 downloadedCount++;
@@ -1435,7 +1599,7 @@ export class SyncService {
             }
           } else {
             // Create new local employee
-            const localFormat = this.convertEmployeeToLocalFormat(amplifyEmployee);
+            const localFormat = await this.convertEmployeeToLocalFormat(amplifyEmployee);
             const result = await employeeService.createEmployee(localFormat);
             
             if (result.employee) {
@@ -1527,60 +1691,72 @@ export class SyncService {
       syncStatus.totalLocalOrders = initialStatus.totalLocalOrders;
       syncStatus.totalUnsyncedOrders = initialStatus.totalUnsyncedOrders;
 
-      // Upload phase
-      console.log('Starting full sync - Upload phase');
+      // Upload phase - Follow the correct sync order: business → employee → customer → category → product → order → orderitem
+      console.log('Starting full sync - Upload phase (business → employee → customer → category → product → order → orderitem)');
       syncStatus.isUploading = true;
       
-      // Upload customers
-      const uploadCustomersResult = await this.uploadCustomers();
-      syncStatus.customersUploaded = uploadCustomersResult.uploadedCount;
-      
-      // Upload employees
-      const uploadEmployeesResult = await this.uploadEmployees();
-      syncStatus.employeesUploaded = uploadEmployeesResult.uploadedCount;
-      
-      // Upload categories
-      const uploadCategoriesResult = await this.uploadCategories();
-      syncStatus.categoriesUploaded = uploadCategoriesResult.uploadedCount;
-      
-      // Upload products
-      const uploadProductsResult = await this.uploadProducts();
-      syncStatus.productsUploaded = uploadProductsResult.uploadedCount;
-      
-      // Upload businesses
+      // 1. Upload businesses FIRST (they need to exist before other entities can reference them)
+      console.log('1. Uploading businesses...');
       const uploadBusinessesResult = await this.uploadBusinesses();
       syncStatus.businessesUploaded = uploadBusinessesResult.uploadedCount;
       
-      // Upload orders
+      // 2. Upload employees (need business IDs)
+      console.log('2. Uploading employees...');
+      const uploadEmployeesResult = await this.uploadEmployees();
+      syncStatus.employeesUploaded = uploadEmployeesResult.uploadedCount;
+      
+      // 3. Upload customers (need business IDs)
+      console.log('3. Uploading customers...');
+      const uploadCustomersResult = await this.uploadCustomers();
+      syncStatus.customersUploaded = uploadCustomersResult.uploadedCount;
+      
+      // 4. Upload categories (need business IDs)
+      console.log('4. Uploading categories...');
+      const uploadCategoriesResult = await this.uploadCategories();
+      syncStatus.categoriesUploaded = uploadCategoriesResult.uploadedCount;
+      
+      // 5. Upload products (need category IDs and business IDs)
+      console.log('5. Uploading products...');
+      const uploadProductsResult = await this.uploadProducts();
+      syncStatus.productsUploaded = uploadProductsResult.uploadedCount;
+      
+      // 6. Upload orders (need customer IDs, employee IDs, and business IDs)
+      console.log('6. Uploading orders...');
       const uploadOrdersResult = await this.uploadOrders();
       syncStatus.ordersUploaded = uploadOrdersResult.uploadedCount;
       
-      // Download phase
-      console.log('Starting download phase');
+      // Download phase - Follow the same sync order: business → employee → customer → category → product → order → orderitem
+      console.log('Starting download phase (business → employee → customer → category → product → order → orderitem)');
       syncStatus.isUploading = false;
       syncStatus.isDownloading = true;
       
-      // Download customers
-      const downloadCustomersResult = await this.downloadCustomers();
-      syncStatus.customersDownloaded = downloadCustomersResult.downloadedCount;
-      
-      // Download employees
-      const downloadEmployeesResult = await this.downloadEmployees();
-      syncStatus.employeesDownloaded = downloadEmployeesResult.downloadedCount;
-      
-      // Download categories
-      const downloadCategoriesResult = await this.downloadCategories();
-      syncStatus.categoriesDownloaded = downloadCategoriesResult.downloadedCount;
-      
-      // Download products
-      const downloadProductsResult = await this.downloadProducts();
-      syncStatus.productsDownloaded = downloadProductsResult.downloadedCount;
-      
-      // Download businesses
+      // 1. Download businesses FIRST
+      console.log('1. Downloading businesses...');
       const downloadBusinessesResult = await this.downloadBusinesses();
       syncStatus.businessesDownloaded = downloadBusinessesResult.downloadedCount;
       
-      // Download orders
+      // 2. Download employees (can now reference local business IDs)
+      console.log('2. Downloading employees...');
+      const downloadEmployeesResult = await this.downloadEmployees();
+      syncStatus.employeesDownloaded = downloadEmployeesResult.downloadedCount;
+      
+      // 3. Download customers (can now reference local business IDs)
+      console.log('3. Downloading customers...');
+      const downloadCustomersResult = await this.downloadCustomers();
+      syncStatus.customersDownloaded = downloadCustomersResult.downloadedCount;
+      
+      // 4. Download categories (can now reference local business IDs)
+      console.log('4. Downloading categories...');
+      const downloadCategoriesResult = await this.downloadCategories();
+      syncStatus.categoriesDownloaded = downloadCategoriesResult.downloadedCount;
+      
+      // 5. Download products (can now reference local category IDs and business IDs)
+      console.log('5. Downloading products...');
+      const downloadProductsResult = await this.downloadProducts();
+      syncStatus.productsDownloaded = downloadProductsResult.downloadedCount;
+      
+      // 6. Download orders (can now reference local customer, employee, and business IDs)
+      console.log('6. Downloading orders...');
       const downloadOrdersResult = await this.downloadOrders();
       syncStatus.ordersDownloaded = downloadOrdersResult.downloadedCount;
       

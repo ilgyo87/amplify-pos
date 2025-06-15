@@ -11,6 +11,8 @@ import { customerService } from './customerService';
 export class OrderService {
   private repository: OrderRepository | null = null;
   private initialized = false;
+  private notificationSubscription: (() => void) | null = null;
+  private notifiedOrders = new Set<string>(); // Track orders that already received notifications
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
@@ -18,6 +20,9 @@ export class OrderService {
     const db = await getDatabaseInstance();
     this.repository = new OrderRepository(db.orders);
     this.initialized = true;
+    
+    // Reactive notifications disabled due to duplicate issues
+    // await this.setupReactiveNotifications();
   }
 
   private async getRepository(): Promise<OrderRepository> {
@@ -25,6 +30,121 @@ export class OrderService {
       await this.initialize();
     }
     return this.repository!;
+  }
+
+  /**
+   * Set up reactive notifications that trigger immediately when order status changes to 'completed'
+   */
+  private async setupReactiveNotifications(): Promise<void> {
+    if (!this.repository) return;
+    
+    try {
+      // Subscribe to all order changes and check for status changes to 'completed'
+      this.notificationSubscription = this.repository.subscribeToChanges(async () => {
+        // This will be called whenever any order document changes
+        // We'll implement a more efficient approach using RxDB's reactive queries
+      });
+
+      // Set up a reactive query that specifically watches for completed orders
+      const db = await getDatabaseInstance();
+      const completedOrdersQuery = db.orders.find({
+        selector: {
+          status: 'completed',
+          isDeleted: { $ne: true }
+        },
+        sort: [{ updatedAt: 'desc' }]
+      });
+
+      // Subscribe to changes in completed orders
+      completedOrdersQuery.$.subscribe(async (orders) => {
+        // Process only orders that haven't been notified yet
+        const newlyCompletedOrders = orders.filter(order => {
+          return !this.notifiedOrders.has(order.id);
+        });
+
+        // Send notifications for newly completed orders
+        for (const order of newlyCompletedOrders) {
+          // Check if this order was already notified to prevent duplicates
+          if (this.notifiedOrders.has(order.id)) {
+            console.log(`⏭️ Skipping notification for order ${order.orderNumber} - already notified`);
+            continue;
+          }
+
+          try {
+            // Mark as notified immediately to prevent duplicates
+            this.notifiedOrders.add(order.id);
+            console.log(`🔔 Processing notification for order ${order.orderNumber} (ID: ${order.id})`);
+            
+            await customerService.initialize();
+            console.log(`🔍 Looking up customer with ID: ${order.customerId} for order ${order.orderNumber}`);
+            console.log(`📋 Order details: customerName=${order.customerName}, customerPhone=${order.customerPhone}`);
+            
+            const customer = await customerService.getCustomerById(order.customerId);
+            if (customer) {
+              console.log(`✅ Found customer: ${customer.firstName} ${customer.lastName} (ID: ${customer.id})`);
+              console.log(`🔔 Reactive notification: Sending notification for order ${order.orderNumber}`);
+              await notificationService.sendOrderCompletedNotification(customer, order);
+            } else {
+              console.error(`❌ No customer found for order ${order.orderNumber} with customerId: ${order.customerId}`);
+              
+              // Try to find customer by name and phone as fallback
+              console.log(`🔍 Attempting fallback lookup by name and phone...`);
+              const allCustomers = await customerService.getAllCustomers();
+              const customerByPhone = allCustomers.find(c => c.phone === order.customerPhone);
+              const customerByName = allCustomers.find(c => 
+                `${c.firstName} ${c.lastName}` === order.customerName
+              );
+              
+              if (customerByPhone) {
+                console.log(`✅ Found customer by phone: ${customerByPhone.firstName} ${customerByPhone.lastName} (ID: ${customerByPhone.id})`);
+                console.log(`🔄 Updating order ${order.orderNumber} with correct customer ID: ${customerByPhone.id}`);
+                
+                // Update the order with the correct customer ID
+                try {
+                  const repository = await this.getRepository();
+                  await repository.update(order.id, { customerId: customerByPhone.id });
+                  console.log(`✅ Order ${order.orderNumber} customer ID updated successfully`);
+                } catch (updateError) {
+                  console.error(`❌ Failed to update order customer ID:`, updateError);
+                }
+                
+                console.log(`🔔 Reactive notification: Sending notification for order ${order.orderNumber} using phone lookup`);
+                await notificationService.sendOrderCompletedNotification(customerByPhone, order);
+              } else if (customerByName) {
+                console.log(`✅ Found customer by name: ${customerByName.firstName} ${customerByName.lastName} (ID: ${customerByName.id})`);
+                console.log(`🔄 Updating order ${order.orderNumber} with correct customer ID: ${customerByName.id}`);
+                
+                // Update the order with the correct customer ID
+                try {
+                  const repository = await this.getRepository();
+                  await repository.update(order.id, { customerId: customerByName.id });
+                  console.log(`✅ Order ${order.orderNumber} customer ID updated successfully`);
+                } catch (updateError) {
+                  console.error(`❌ Failed to update order customer ID:`, updateError);
+                }
+                
+                console.log(`🔔 Reactive notification: Sending notification for order ${order.orderNumber} using name lookup`);
+                await notificationService.sendOrderCompletedNotification(customerByName, order);
+              } else {
+                console.log(`📋 Available customers in database:`, allCustomers.map(c => ({ 
+                  id: c.id, 
+                  name: `${c.firstName} ${c.lastName}`, 
+                  phone: c.phone 
+                })));
+              }
+            }
+          } catch (error) {
+            console.error(`Failed to send reactive notification for order ${order.orderNumber}:`, error);
+            // Remove from notified set if notification failed, allowing retry
+            this.notifiedOrders.delete(order.id);
+          }
+        }
+      });
+
+      console.log('✅ Reactive notification system initialized');
+    } catch (error) {
+      console.error('Failed to set up reactive notifications:', error);
+    }
   }
 
   async createOrder({
@@ -189,7 +309,10 @@ export class OrderService {
         await customerService.initialize();
         const customer = await customerService.getCustomerById(updatedOrder.customerId);
         if (customer) {
+          console.log(`🔔 Sending notification for completed order ${updatedOrder.orderNumber}`);
           await notificationService.sendOrderCompletedNotification(customer, updatedOrder);
+        } else {
+          console.error(`❌ No customer found for order ${updatedOrder.orderNumber} with customerId: ${updatedOrder.customerId}`);
         }
       } catch (error) {
         console.error('Failed to send notification for completed order:', error);
@@ -240,7 +363,10 @@ export class OrderService {
         await customerService.initialize();
         const customer = await customerService.getCustomerById(updatedOrder.customerId);
         if (customer) {
+          console.log(`🔔 Sending notification for completed order ${updatedOrder.orderNumber}`);
           await notificationService.sendOrderCompletedNotification(customer, updatedOrder);
+        } else {
+          console.error(`❌ No customer found for order ${updatedOrder.orderNumber} with customerId: ${updatedOrder.customerId}`);
         }
       } catch (error) {
         console.error('Failed to send notification for completed order:', error);
@@ -321,5 +447,16 @@ export class OrderService {
       ...updateData,
       updatedAt: new Date().toISOString()
     });
+  }
+
+  /**
+   * Clean up reactive notification subscriptions
+   */
+  cleanup(): void {
+    if (this.notificationSubscription) {
+      this.notificationSubscription();
+      this.notificationSubscription = null;
+    }
+    this.notifiedOrders.clear();
   }
 }

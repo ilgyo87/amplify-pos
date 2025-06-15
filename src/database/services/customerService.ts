@@ -287,12 +287,27 @@ export class CustomerService {
       return () => {};
     }
 
+    console.log(`🔔 Setting up customer subscription for ID: ${customerId}`);
+
     return this.customerRepository.subscribeToChanges(async (change: any) => {
+      console.log(`🔔 Customer change detected:`, {
+        changeType: change?.operation,
+        documentId: change?.documentId,
+        targetCustomerId: customerId,
+        isMatch: change.documentId === customerId || (change.documentData && change.documentData.id === customerId)
+      });
+
       // Check if the change affects our specific customer
       if (change.documentId === customerId || 
           (change.documentData && change.documentData.id === customerId)) {
         try {
+          console.log(`🔄 Fetching updated customer data for ${customerId}`);
           const updatedCustomer = await this.getCustomerById(customerId);
+          console.log(`✅ Calling callback with updated customer:`, {
+            id: updatedCustomer?.id,
+            emailNotifications: updatedCustomer?.emailNotifications,
+            textNotifications: updatedCustomer?.textNotifications
+          });
           callback(updatedCustomer);
         } catch (error) {
           console.error('Error fetching updated customer:', error);

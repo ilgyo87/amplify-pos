@@ -683,9 +683,7 @@ const styles = StyleSheet.create({
   },
   dashedLine: {
     height: 1,
-    borderTopWidth: 1,
-    borderTopColor: '#000',
-    borderStyle: 'dashed',
+    backgroundColor: '#000',
     marginVertical: 8,
   },
   

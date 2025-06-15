@@ -25,6 +25,7 @@ export const useCustomer = (customerId: string) => {
 
     const initializeAndSubscribe = async () => {
       try {
+        console.log(`🔄 useCustomer initializing for customer ID: ${customerId}`);
         setLoading(true);
         setError(null);
         
@@ -33,10 +34,20 @@ export const useCustomer = (customerId: string) => {
         
         // Get initial customer data
         const initialCustomer = await customerService.getCustomerById(customerId);
+        console.log(`📋 useCustomer initial customer data:`, {
+          id: initialCustomer?.id,
+          emailNotifications: initialCustomer?.emailNotifications,
+          textNotifications: initialCustomer?.textNotifications
+        });
         setCustomer(initialCustomer);
         
         // Subscribe to changes for this specific customer
         unsubscribe = customerService.subscribeToCustomerChanges(customerId, (updatedCustomer) => {
+          console.log(`🔔 useCustomer hook received updated customer:`, {
+            id: updatedCustomer?.id,
+            emailNotifications: updatedCustomer?.emailNotifications,
+            textNotifications: updatedCustomer?.textNotifications
+          });
           setCustomer(updatedCustomer);
         });
         

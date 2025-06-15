@@ -43,6 +43,7 @@ import { RootStackParamList } from '../../navigation/types';
 import { toPreciseAmount } from '../../utils/monetaryUtils';
 import { useEmployeeAuth } from '../../context/EmployeeAuthContext';
 import { useEmployees } from '../../database/hooks/useEmployees';
+import { customerService } from '../../database/services/customerService';
 
 type CheckoutScreenRouteProp = RouteProp<RootStackParamList, 'Checkout'>;
 type CheckoutScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Checkout'>;
@@ -319,6 +320,7 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
   
   // Use reactive customer data if available, fallback to route customer
   const customer = reactiveCustomer || routeCustomer;
+  
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [showReceiptPreview, setShowReceiptPreview] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -344,6 +346,7 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
   const [employeeDuplicateError, setEmployeeDuplicateError] = useState<string>('');
   const [businessDuplicateError, setBusinessDuplicateError] = useState<string>('');
   const [validationOverlayDismissed, setValidationOverlayDismissed] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<any>(null);
   
   // Database hooks
   const { categories, loading: categoriesLoading } = useCategories();
@@ -705,7 +708,21 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
   };
 
   // Handle customer edit
-  const handleEditCustomer = () => {
+  const handleEditCustomer = async () => {
+    // Force refresh customer data before opening form
+    try {
+      await customerService.initialize();
+      const freshCustomer = await customerService.getCustomerById(customer.id);
+      if (freshCustomer) {
+        setEditingCustomer(freshCustomer);
+      } else {
+        setEditingCustomer(customer);
+      }
+    } catch (error) {
+      console.error('Error refreshing customer:', error);
+      setEditingCustomer(customer);
+    }
+    
     setFormErrors({});
     setDuplicateError('');
     setShowEditCustomerModal(true);
@@ -719,8 +736,8 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
     const result = await updateCustomer(customer.id, data);
     
     if (result.success && result.customer) {
-      // No need to manually update customer state - reactive hook will handle it automatically
       setShowEditCustomerModal(false);
+      setEditingCustomer(null);
       Alert.alert('Success', 'Customer updated successfully');
     } else {
       if (result.errors) {
@@ -737,6 +754,7 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
     setShowEditCustomerModal(false);
     setFormErrors({});
     setDuplicateError('');
+    setEditingCustomer(null);
   };
 
   // Handle order history
@@ -1047,17 +1065,17 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
           mode="edit"
           entityType="customer"
           initialData={{
-            firstName: customer.firstName,
-            lastName: customer.lastName,
-            email: customer.email || '',
-            phone: customer.phone,
-            address: customer.address || '',
-            city: customer.city || '',
-            state: customer.state || '',
-            zipCode: customer.zipCode || '',
-            notes: customer.notes || '',
-            emailNotifications: false,
-            textNotifications: false
+            firstName: editingCustomer?.firstName || customer.firstName,
+            lastName: editingCustomer?.lastName || customer.lastName,
+            email: editingCustomer?.email || customer.email || '',
+            phone: editingCustomer?.phone || customer.phone,
+            address: editingCustomer?.address || customer.address || '',
+            city: editingCustomer?.city || customer.city || '',
+            state: editingCustomer?.state || customer.state || '',
+            zipCode: editingCustomer?.zipCode || customer.zipCode || '',
+            notes: editingCustomer?.notes || customer.notes || '',
+            emailNotifications: editingCustomer?.emailNotifications === true,
+            textNotifications: editingCustomer?.textNotifications === true
           }}
           onSubmit={handleUpdateCustomer}
           onCancel={handleCloseEditModal}

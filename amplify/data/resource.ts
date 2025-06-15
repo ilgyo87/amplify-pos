@@ -58,11 +58,21 @@ const schema = a.schema({
       customerId: a.string().required(),
       employeeId: a.string().required(),
       items: a.hasMany('OrderItem', 'orderId'),
-      paymentMethod: a.string().required(),
+      orderNumber: a.string(),
+      customerName: a.string(),
+      customerPhone: a.string(),
+      employeeName: a.string(),
+      subtotal: a.float(),
+      tax: a.float(),
       total: a.float().required(),
+      paymentMethod: a.string().required(),
+      paymentInfo: a.string(), // JSON string of payment details
+      selectedDate: a.string(),
       status: a.string().required(),
+      statusHistory: a.string(), // JSON string of status history array
+      notes: a.string(),
+      barcodeData: a.string(),
       rackNumber: a.string(),
-      statusHistory: a.string().array(),
     })
     .authorization((allow) => [
       allow.authenticated().to(['read']),

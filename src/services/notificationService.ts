@@ -77,7 +77,7 @@ class DefaultNotificationService implements NotificationService {
       // Use direct HTTP request to Lambda function URL
       console.log('📧 Making HTTP request to Lambda function...');
       
-      const functionUrl = 'https://qf6cws4uvrkamfb7op44m7yjby0xdgaw.lambda-url.us-east-1.on.aws/';
+      const functionUrl = 'https://s3wx5owluxhawjmveb5xtwuqnm0qempa.lambda-url.us-east-1.on.aws/';
       
       const response = await fetch(functionUrl, {
         method: 'POST',
@@ -130,7 +130,7 @@ class DefaultNotificationService implements NotificationService {
       // Use direct HTTP request to Lambda function URL
       console.log('📱 Making HTTP request to Lambda function...');
       
-      const functionUrl = 'https://xdw5dlboiupjsvczusr2vcyaqe0rzlik.lambda-url.us-east-1.on.aws/';
+      const functionUrl = 'https://xnvku25wro3kehnllb37e4sa6u0dadfe.lambda-url.us-east-1.on.aws/';
       
       const response = await fetch(functionUrl, {
         method: 'POST',

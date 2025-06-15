@@ -189,8 +189,8 @@ export function DynamicForm({
           state: initialData?.state || '',
           zipCode: initialData?.zipCode || '',
           notes: initialData?.notes || '',
-          emailNotifications: initialData?.emailNotifications || false,
-          textNotifications: initialData?.textNotifications || false
+          emailNotifications: initialData?.emailNotifications === true,
+          textNotifications: initialData?.textNotifications === true
         };
       } else if (entityType === 'employee') {
         return {
