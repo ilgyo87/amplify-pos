@@ -1,5 +1,11 @@
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import Stripe from 'stripe';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
+
+const dynamoClient = new DynamoDBClient({});
+const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const STRIPE_TOKENS_TABLE_NAME = process.env.STRIPE_TOKENS_TABLE_NAME;
 
 export const handler = async (
   event: APIGatewayProxyEvent
@@ -43,7 +49,7 @@ export const handler = async (
     });
 
     const body = JSON.parse(event.body || '{}');
-    const { token, amount, description, metadata } = body;
+    const { token, amount, description, metadata, userId } = body;
 
     // Validate required fields
     if (!token || !amount) {
@@ -70,14 +76,44 @@ export const handler = async (
 
     console.log(`Processing payment: $${amount} (${amountInCents} cents)`);
 
-    // Create the charge
-    const charge = await stripe.charges.create({
+    // Get connected account ID if userId is provided
+    let connectedAccountId = null;
+    if (userId && STRIPE_TOKENS_TABLE_NAME) {
+      try {
+        const result = await docClient.send(new GetCommand({
+          TableName: STRIPE_TOKENS_TABLE_NAME,
+          Key: { userId }
+        }));
+        
+        if (result.Item?.stripeAccountId) {
+          connectedAccountId = result.Item.stripeAccountId;
+          console.log('Using connected account:', connectedAccountId);
+        }
+      } catch (error) {
+        console.log('Could not get connected account, proceeding with direct charge:', error);
+      }
+    }
+
+    // Create the charge with destination if connected account exists
+    const chargeParams: any = {
       amount: amountInCents,
       currency: 'usd',
       source: token,
       description: description || 'POS Transaction',
       metadata: metadata || {}
-    });
+    };
+
+    // If we have a connected account, use destination charges
+    if (connectedAccountId) {
+      // With destination charges, the platform charges the customer
+      // and transfers funds to the connected account
+      chargeParams.destination = {
+        account: connectedAccountId,
+        amount: Math.round(amountInCents * 0.95) // Keep 5% as platform fee
+      };
+    }
+
+    const charge = await stripe.charges.create(chargeParams);
 
     console.log('Payment successful:', charge.id);
 

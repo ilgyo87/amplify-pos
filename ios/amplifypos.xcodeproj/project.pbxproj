@@ -12,6 +12,7 @@
 		4D17E3794B7765DC98051014 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24631DDD13AC973EB308572C /* ExpoModulesProvider.swift */; };
 		9096E7C521A6F6B6B466EE88 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 5EDD535E46D80CD90A6D9E57 /* PrivacyInfo.xcprivacy */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
+		DC437E552E013EF500749AD3 /* StripeTerminalBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = DC437E542E013EF500749AD3 /* StripeTerminalBridge.m */; };
 		EDE1B0C708CFDD1B8DDFE2F6 /* libPods-amplifypos.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 55A58E18C2D2B46C4B3E1D1C /* libPods-amplifypos.a */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
@@ -22,11 +23,13 @@
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = amplifypos/Info.plist; sourceTree = "<group>"; };
 		24631DDD13AC973EB308572C /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-amplifypos/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		55A58E18C2D2B46C4B3E1D1C /* libPods-amplifypos.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-amplifypos.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		5EDD535E46D80CD90A6D9E57 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = amplifypos/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		5EDD535E46D80CD90A6D9E57 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = amplifypos/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		7E8A2F266B7949C8785FA7A9 /* Pods-amplifypos.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-amplifypos.release.xcconfig"; path = "Target Support Files/Pods-amplifypos/Pods-amplifypos.release.xcconfig"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = amplifypos/SplashScreen.storyboard; sourceTree = "<group>"; };
 		B84B7F30AE6A63FD504ED891 /* Pods-amplifypos.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-amplifypos.debug.xcconfig"; path = "Target Support Files/Pods-amplifypos/Pods-amplifypos.debug.xcconfig"; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
+		DC437E532E013EF500749AD3 /* StripeTerminalBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = StripeTerminalBridge.h; sourceTree = "<group>"; };
+		DC437E542E013EF500749AD3 /* StripeTerminalBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = StripeTerminalBridge.m; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = amplifypos/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* amplifypos-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "amplifypos-Bridging-Header.h"; path = "amplifypos/amplifypos-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -89,7 +92,6 @@
 				B84B7F30AE6A63FD504ED891 /* Pods-amplifypos.debug.xcconfig */,
 				7E8A2F266B7949C8785FA7A9 /* Pods-amplifypos.release.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -103,6 +105,8 @@
 		83CBB9F61A601CBA00E9B192 = {
 			isa = PBXGroup;
 			children = (
+				DC437E532E013EF500749AD3 /* StripeTerminalBridge.h */,
+				DC437E542E013EF500749AD3 /* StripeTerminalBridge.m */,
 				13B07FAE1A68108700A75B9A /* amplifypos */,
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
@@ -380,6 +384,7 @@
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
 				4D17E3794B7765DC98051014 /* ExpoModulesProvider.swift in Sources */,
+				DC437E552E013EF500749AD3 /* StripeTerminalBridge.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -513,10 +518,7 @@
 				LIBRARY_SEARCH_PATHS = "$(SDKROOT)/usr/lib/swift\"$(inherited)\"";
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					" ",
-				);
+				OTHER_LDFLAGS = "$(inherited)  ";
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
@@ -571,10 +573,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(SDKROOT)/usr/lib/swift\"$(inherited)\"";
 				MTL_ENABLE_DEBUG_INFO = NO;
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					" ",
-				);
+				OTHER_LDFLAGS = "$(inherited)  ";
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				USE_HERMES = false;

@@ -41,6 +41,8 @@ target 'amplifypos' do
     :app_path => "#{Pod::Config.instance.installation_root}/..",
     :privacy_file_aggregation_enabled => podfile_properties['apple.privacyManifestAggregationEnabled'] != 'false',
   )
+  
+  # Native StripeTerminal SDK is already included via stripe-terminal-react-native
 
   post_install do |installer|
     react_native_post_install(

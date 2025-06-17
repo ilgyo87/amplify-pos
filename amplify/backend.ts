@@ -31,6 +31,19 @@ backend.emailNotificationFunction.resources.lambda.addToRolePolicy(
 
 // Grant stripeConnectFunction access to the StripeToken table
 const stripeTokenTableName = backend.data.resources.tables.StripeToken.tableName;
+
+// Grant stripePaymentFunction access to the StripeToken table
+backend.stripePaymentFunction.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['dynamodb:GetItem'],
+    resources: [`arn:aws:dynamodb:*:*:table/${stripeTokenTableName}`],
+  })
+);
+
+// Pass table name to payment function
+const stripePaymentLambda = backend.stripePaymentFunction.resources.lambda as LambdaFunction;
+stripePaymentLambda.addEnvironment('STRIPE_TOKENS_TABLE_NAME', stripeTokenTableName);
+stripePaymentLambda.addEnvironment('STRIPE_SECRET_KEY', process.env.STRIPE_SECRET_KEY || '');
 backend.stripeConnectFunction.resources.lambda.addToRolePolicy(
   new PolicyStatement({
     actions: ['dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:UpdateItem', 'dynamodb:DeleteItem'],
@@ -45,9 +58,9 @@ stripeConnectLambda.addEnvironment('STRIPE_TOKENS_TABLE_NAME', stripeTokenTableN
 
 // Add Stripe environment variables from process.env
 // Set these in your deployment environment or use AWS Secrets Manager
-stripeConnectLambda.addEnvironment('STRIPE_CLIENT_ID', process.env.STRIPE_CLIENT_ID || 'your-stripe-client-id');
-stripeConnectLambda.addEnvironment('STRIPE_SECRET_KEY', process.env.STRIPE_SECRET_KEY || 'your-stripe-secret-key');
-stripeConnectLambda.addEnvironment('FRONTEND_URL', process.env.FRONTEND_URL || 'https://example.com');
+stripeConnectLambda.addEnvironment('STRIPE_CLIENT_ID', process.env.STRIPE_CLIENT_ID || '');
+stripeConnectLambda.addEnvironment('STRIPE_SECRET_KEY', process.env.STRIPE_SECRET_KEY || '');
+stripeConnectLambda.addEnvironment('FRONTEND_URL', process.env.FRONTEND_URL || 'https://stripe-callback.vercel.app');
 
 // Add SNS permissions to SMS notification function
 backend.smsNotificationFunction.resources.lambda.addToRolePolicy(
@@ -92,10 +105,22 @@ const stripeApi = backend.stripeConnectFunction.resources.lambda.addFunctionUrl(
   }
 });
 
+const stripePaymentUrl = backend.stripePaymentFunction.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+  cors: {
+    allowedOrigins: ['*'],
+    allowedMethods: [HttpMethod.POST],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowCredentials: false,
+    maxAge: Duration.seconds(86400)
+  }
+});
+
 backend.addOutput({
   custom: {
     emailNotificationUrl: emailFunctionUrl.url,
     smsNotificationUrl: smsFunctionUrl.url,
-    stripeConnectApiEndpoint: stripeApi.url
+    stripeConnectApiEndpoint: stripeApi.url,
+    stripePaymentEndpoint: stripePaymentUrl.url
   }
 });

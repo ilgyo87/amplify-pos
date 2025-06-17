@@ -30,6 +30,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { LogBox } from 'react-native';
 import { StripeProvider } from '@stripe/stripe-react-native';
+import { StripeTerminalProvider } from '@stripe/stripe-terminal-react-native';
 
 import outputs from './amplify_outputs.json';
 import AppNavigator from './src/navigation/AppNavigator';
@@ -38,6 +39,7 @@ import { customerService } from './src/database/services/customerService';
 import { EmployeeAuthProvider } from './src/context/EmployeeAuthContext';
 import { stripeService } from './src/services/stripeService';
 import { StripeConnectHandler } from './src/components/stripe/StripeConnectHandler';
+import { StripeTerminalInitializer } from './src/components/stripe/StripeTerminalInitializer';
 
 // Configure Amplify
 Amplify.configure(outputs);
@@ -90,6 +92,24 @@ const App = () => {
     return unsubscribe;
   }, []);
 
+  // Token provider for Stripe Terminal
+  const fetchConnectionToken = async () => {
+    try {
+      const { getCurrentUser } = await import('aws-amplify/auth');
+      const currentUser = await getCurrentUser();
+      const userId = currentUser.userId;
+      
+      const token = await stripeService.createConnectionToken(userId);
+      if (!token) {
+        throw new Error('Failed to fetch connection token');
+      }
+      return token;
+    } catch (error) {
+      console.error('Error in fetchConnectionToken:', error);
+      throw error;
+    }
+  };
+
   return (
     <SafeAreaProvider>
       <StatusBar style="auto" />
@@ -97,14 +117,21 @@ const App = () => {
         publishableKey={stripePublishableKey || 'pk_test_placeholder'}
         merchantIdentifier="merchant.identifier"
       >
-        <NavigationContainer>
-          <Authenticator.Provider>
-            <EmployeeAuthProvider>
-              <StripeConnectHandler />
-              <AppNavigator />
-            </EmployeeAuthProvider>
-          </Authenticator.Provider>
-        </NavigationContainer>
+        <StripeTerminalProvider
+          logLevel="verbose"
+          tokenProvider={fetchConnectionToken}
+        >
+          <StripeTerminalInitializer>
+            <NavigationContainer>
+              <Authenticator.Provider>
+                <EmployeeAuthProvider>
+                  <StripeConnectHandler />
+                  <AppNavigator />
+                </EmployeeAuthProvider>
+              </Authenticator.Provider>
+            </NavigationContainer>
+          </StripeTerminalInitializer>
+        </StripeTerminalProvider>
       </StripeProvider>
     </SafeAreaProvider>
   );

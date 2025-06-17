@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,13 @@ import {
   Alert,
   ActivityIndicator,
   Linking,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { stripeService } from '../../services/stripeService';
 import { getCurrentUser } from 'aws-amplify/auth';
+import { useFocusEffect } from '@react-navigation/native';
 
 export function StripeSettingsCard() {
   const [isLoading, setIsLoading] = useState(true);
@@ -19,15 +22,46 @@ export function StripeSettingsCard() {
 
   useEffect(() => {
     loadStripeSettings();
+    
+    // Listen for app state changes
+    const appStateListener = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        // Reload settings when app comes to foreground
+        loadStripeSettings();
+      }
+    });
+    
+    return () => {
+      appStateListener.remove();
+    };
   }, []);
+  
+  // Reload settings when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      loadStripeSettings();
+      
+      // Also set up an interval to check for updates
+      const interval = setInterval(() => {
+        if (!isConnected) {
+          loadStripeSettings();
+        }
+      }, 2000); // Check every 2 seconds if not connected
+      
+      return () => clearInterval(interval);
+    }, [isConnected])
+  );
 
   const loadStripeSettings = async () => {
     try {
+      console.log('Loading Stripe settings...');
       const currentUser = await getCurrentUser();
       const currentUserId = currentUser.userId;
+      console.log('Current user ID:', currentUserId);
       setUserId(currentUserId);
 
       const connectionStatus = await stripeService.getStripeConnectionStatus(currentUserId);
+      console.log('Stripe connection status:', connectionStatus);
       setIsConnected(connectionStatus);
     } catch (error) {
       console.error('Failed to load Stripe settings:', error);
@@ -47,21 +81,8 @@ export function StripeSettingsCard() {
       const authData = await stripeService.getStripeConnectAuthUrl(userId);
       if (authData && authData.url) {
         await Linking.openURL(authData.url);
-        Alert.alert(
-          'Stripe Connect',
-          'You will be redirected to Stripe to complete the connection. Please return to the app when finished.',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                // Set up a listener for when the user returns to check connection status
-                setTimeout(() => {
-                  loadStripeSettings();
-                }, 2000);
-              }
-            }
-          ]
-        );
+        // Don't show alert, just let the redirect happen
+        // The app state listener and focus effect will handle reloading when user returns
       } else {
         Alert.alert('Error', 'Could not get Stripe Connect URL. Please try again.');
       }

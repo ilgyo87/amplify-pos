@@ -1,5 +1,6 @@
 import { initStripe } from '@stripe/stripe-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { stripeLocationService } from './stripeLocationService';
 
 const STRIPE_SETTINGS_KEY = 'stripe_settings';
 
@@ -115,11 +116,17 @@ class StripeService {
 
   async getStripeConnectAuthUrl(userId: string): Promise<{ url: string } | null> {
     try {
-      // Use the direct Stripe Connect URL with your client ID
-      const stripeConnectUrl = `https://connect.stripe.com/oauth/authorize?response_type=code&client_id=ca_SVBQ4Xdq1CkP9yivzAT9KGviMk6HbfrW&scope=read_write&state=${encodeURIComponent(userId)}&redirect_uri=${encodeURIComponent('https://example.com/stripe-connect-callback')}`;
+      // Use the backend endpoint to get the properly configured Stripe Connect URL
+      const baseUrl = await this.getBaseUrl();
+      const response = await fetch(`${baseUrl}/connect/authorize?userId=${encodeURIComponent(userId)}`);
+      const data = await response.json();
       
-      console.log('Generated Stripe Connect URL:', stripeConnectUrl);
-      return { url: stripeConnectUrl };
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to get authorization URL');
+      }
+      
+      console.log('Generated Stripe Connect URL from backend:', data.url);
+      return { url: data.url };
     } catch (error) {
       console.error('Error generating Stripe Connect URL:', error);
       return null;
@@ -184,11 +191,13 @@ class StripeService {
 
   async getStripeConnectionStatus(userId: string): Promise<boolean> {
     try {
+      console.log('Checking Stripe connection for user:', userId);
       const accountInfo = await this.getConnectedAccountInfo(userId);
+      console.log('Account info response:', accountInfo);
       return !!accountInfo.id;
-    } catch (error) {
+    } catch (error: any) {
       // If we get a 404 or any error, assume not connected
-      console.log('User not connected to Stripe:', error);
+      console.log('User not connected to Stripe:', error.message || error);
       return false;
     }
   }
@@ -204,6 +213,7 @@ class StripeService {
         ? STRIPE_CONNECT_API_ENDPOINT.slice(0, -1) 
         : STRIPE_CONNECT_API_ENDPOINT;
 
+      console.log(`Creating connection token at: ${baseUrl}/connection_token`);
       const response = await fetch(`${baseUrl}/connection_token`, {
         method: 'POST',
         headers: {
@@ -212,13 +222,31 @@ class StripeService {
         body: JSON.stringify({ userId }),
       });
 
+      const responseText = await response.text();
+      console.log('Connection token response:', response.status, responseText);
+
       if (!response.ok) {
-        const errorData = await response.json();
+        let errorData;
+        try {
+          errorData = JSON.parse(responseText);
+        } catch {
+          errorData = { error: responseText };
+        }
         console.error('Failed to create connection token:', response.status, errorData);
         throw new Error(errorData.error || 'Failed to create connection token');
       }
 
-      const data = await response.json();
+      const data = JSON.parse(responseText);
+      if (!data.secret) {
+        console.error('Connection token response missing secret:', data);
+        throw new Error('Connection token response missing secret');
+      }
+      
+      // Save location ID if provided
+      if (data.location_id) {
+        await stripeLocationService.setLocationId(data.location_id);
+      }
+      
       return data.secret;
     } catch (error) {
       console.error('Error creating connection token:', error);
@@ -232,7 +260,63 @@ class StripeService {
     return await this.initialize();
   }
 
-  async processPayment(amount: number, currency: string = 'usd', description?: string): Promise<any> {
+  async processPayment(tokenOrAmount: string | number, amountOrCurrency?: number | string, descriptionOrDescription?: string, metadata?: any): Promise<any> {
+    // Handle overloaded method signatures
+    let token: string | undefined;
+    let amount: number;
+    let currency: string = 'usd';
+    let description: string | undefined;
+    
+    if (typeof tokenOrAmount === 'string') {
+      // New signature: processPayment(token, amount, description, metadata)
+      token = tokenOrAmount;
+      amount = amountOrCurrency as number;
+      description = descriptionOrDescription;
+    } else {
+      // Old signature: processPayment(amount, currency, description)
+      amount = tokenOrAmount;
+      currency = (amountOrCurrency as string) || 'usd';
+      description = descriptionOrDescription;
+    }
+    
+    // If we have a token, use the Lambda payment endpoint
+    if (token) {
+      try {
+        console.log('Processing payment with token via Lambda...');
+        const { getCurrentUser } = await import('aws-amplify/auth');
+        const currentUser = await getCurrentUser();
+        const userId = currentUser.userId;
+        
+        const paymentEndpoint = await this.getPaymentEndpoint();
+        const response = await fetch(paymentEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            token,
+            amount,
+            description,
+            metadata,
+            userId // Include userId for destination charges
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Payment processing failed');
+        }
+
+        const result = await response.json();
+        console.log('Payment processed successfully:', result.chargeId);
+        return result;
+      } catch (error: any) {
+        console.error('Payment processing error:', error);
+        throw error;
+      }
+    }
+    
+    // Original implementation for payment intents (kept for backward compatibility)
     try {
       console.log('Processing payment via backend API...');
       
@@ -370,6 +454,19 @@ class StripeService {
     return STRIPE_CONNECT_API_ENDPOINT.endsWith('/') 
       ? STRIPE_CONNECT_API_ENDPOINT.slice(0, -1) 
       : STRIPE_CONNECT_API_ENDPOINT;
+  }
+
+  async getPaymentEndpoint(): Promise<string> {
+    const amplifyConfig = await import('../../amplify_outputs.json');
+    const customConfig = amplifyConfig.default.custom as any;
+    const paymentEndpoint = customConfig?.stripePaymentEndpoint;
+    if (!paymentEndpoint) {
+      // Fallback to a known endpoint if not configured yet
+      console.warn('Stripe payment endpoint not found in config, using fallback');
+      // You'll need to update this with your actual payment Lambda URL
+      throw new Error('Stripe payment endpoint not configured');
+    }
+    return paymentEndpoint;
   }
 }
 

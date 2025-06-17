@@ -1,11 +1,12 @@
 import React, { useEffect } from 'react';
 import { Linking } from 'react-native';
-import { stripeService } from '../../services/stripeService';
-import { getCurrentUser } from 'aws-amplify/auth';
+import { stripeConnectService } from '../../services/stripeConnectService';
 
 export function StripeConnectHandler() {
   useEffect(() => {
     const handleDeepLink = async (url: string) => {
+      console.log('Received deep link:', url);
+      
       if (url.includes('stripe-connect-callback')) {
         try {
           const parsedUrl = new URL(url);
@@ -19,19 +20,19 @@ export function StripeConnectHandler() {
           }
 
           if (code && state) {
-            // Get current user to verify the state
-            const currentUser = await getCurrentUser();
-            const userId = currentUser.userId;
-
-            // Process the callback
-            const success = await stripeService.handleStripeConnectCallback(code, userId);
+            console.log('Processing Stripe Connect callback with code:', code.substring(0, 10) + '...');
+            
+            // Process the callback using the new service
+            const success = await stripeConnectService.handleCallback(code, state);
             
             if (success) {
-              console.log('Stripe Connect callback processed successfully');
-              // You might want to emit an event here to update the UI
+              console.log('✅ Stripe Connect setup completed successfully!');
+              // You can emit an event or call a callback here to update the UI
             } else {
-              console.error('Failed to process Stripe Connect callback');
+              console.error('❌ Failed to process Stripe Connect callback');
             }
+          } else {
+            console.error('Missing code or state parameters in callback URL');
           }
         } catch (error) {
           console.error('Error handling Stripe Connect deep link:', error);

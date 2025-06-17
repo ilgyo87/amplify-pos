@@ -48,6 +48,16 @@
     <string>Allow $(PRODUCT_NAME) to access your camera</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your microphone</string>
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>$(PRODUCT_NAME) uses Bluetooth to connect to card readers for payment processing</string>
+    <key>NSBluetoothPeripheralUsageDescription</key>
+    <string>$(PRODUCT_NAME) uses Bluetooth to connect to card readers for payment processing</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>$(PRODUCT_NAME) needs location access to connect to nearby card readers</string>
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>bluetooth-central</string>
+    </array>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
     <key>UIRequiredDeviceCapabilities</key>
