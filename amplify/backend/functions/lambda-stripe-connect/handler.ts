@@ -303,6 +303,56 @@ export const handler = async (event: any) => {
       }
     }
     
+    // 5. Handle disconnect request
+    if (path.includes('/disconnect') && method === 'POST') {
+      console.log('Processing disconnect request');
+      
+      const body = JSON.parse(event.body || '{}');
+      const userId = body.userId;
+      
+      if (!userId) {
+        return {
+          statusCode: 400,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+          body: JSON.stringify({ error: 'Missing userId' })
+        };
+      }
+      
+      try {
+        // Delete the Stripe account info from DynamoDB
+        const { DeleteCommand } = await import('@aws-sdk/lib-dynamodb');
+        const deleteParams = {
+          TableName: STRIPE_TOKENS_TABLE_NAME,
+          Key: {
+            userId: userId
+          }
+        };
+        
+        await docClient.send(new DeleteCommand(deleteParams));
+        console.log('Successfully disconnected Stripe account for user:', userId);
+        
+        return {
+          statusCode: 200,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+          body: JSON.stringify({ 
+            success: true,
+            message: 'Stripe account disconnected successfully'
+          })
+        };
+        
+      } catch (error: any) {
+        console.error('Error disconnecting Stripe account:', error);
+        return {
+          statusCode: 500,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+          body: JSON.stringify({ 
+            error: 'Failed to disconnect Stripe account',
+            details: error.message
+          })
+        };
+      }
+    }
+    
     // Default response
     return {
       statusCode: 200,

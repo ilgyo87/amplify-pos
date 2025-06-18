@@ -40,6 +40,7 @@ class StripeService {
         this.initialized = true;
         this.currentSettings = settings;
         console.log('Stripe initialized with key:', settings.publishableKey.substring(0, 12) + '...');
+        console.log('Key type:', settings.publishableKey.startsWith('pk_test') ? 'TEST MODE' : 'LIVE MODE');
         return true;
       }
       console.log('No Stripe settings found, skipping initialization');
@@ -90,6 +91,41 @@ class StripeService {
     } catch (error) {
       console.error('Failed to clear Stripe settings:', error);
       throw error;
+    }
+  }
+
+  async disconnectStripeAccount(userId: string): Promise<boolean> {
+    try {
+      await initializeEndpoint();
+      if (!STRIPE_CONNECT_API_ENDPOINT) {
+        throw new Error('Stripe Connect API endpoint not configured');
+      }
+
+      const baseUrl = STRIPE_CONNECT_API_ENDPOINT.endsWith('/') 
+        ? STRIPE_CONNECT_API_ENDPOINT.slice(0, -1) 
+        : STRIPE_CONNECT_API_ENDPOINT;
+
+      console.log(`Disconnecting Stripe account at: ${baseUrl}/disconnect`);
+      const response = await fetch(`${baseUrl}/disconnect`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to disconnect');
+      }
+
+      // Clear local settings after successful backend disconnect
+      await this.clearStripeSettings();
+      
+      return true;
+    } catch (error) {
+      console.error('Error disconnecting Stripe account:', error);
+      return false;
     }
   }
 
@@ -194,6 +230,14 @@ class StripeService {
       console.log('Checking Stripe connection for user:', userId);
       const accountInfo = await this.getConnectedAccountInfo(userId);
       console.log('Account info response:', accountInfo);
+      
+      // Check if we need to ensure test mode (based on connection token being test mode)
+      const currentSettings = await this.getStripeSettings();
+      if (currentSettings?.publishableKey && !currentSettings.publishableKey.startsWith('pk_test')) {
+        console.log('WARNING: Live mode key detected but backend is in test mode. Clearing settings.');
+        await this.clearStripeSettings();
+      }
+      
       return !!accountInfo.id;
     } catch (error: any) {
       // If we get a 404 or any error, assume not connected

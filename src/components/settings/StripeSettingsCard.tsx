@@ -78,6 +78,10 @@ export function StripeSettingsCard() {
     }
     try {
       setIsLoading(true);
+      
+      // First, clear any existing settings to ensure clean state
+      await stripeService.clearStripeSettings();
+      
       const authData = await stripeService.getStripeConnectAuthUrl(userId);
       if (authData && authData.url) {
         await Linking.openURL(authData.url);
@@ -105,13 +109,22 @@ export function StripeSettingsCard() {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Clear stored Stripe settings
-              await stripeService.clearStripeSettings();
-              setIsConnected(false);
-              Alert.alert('Success', 'Stripe account disconnected. Please restart the app.');
+              setIsLoading(true);
+              
+              // Disconnect from backend and clear local settings
+              const success = await stripeService.disconnectStripeAccount(userId!);
+              
+              if (success) {
+                setIsConnected(false);
+                Alert.alert('Success', 'Stripe account disconnected successfully.');
+              } else {
+                throw new Error('Failed to disconnect from backend');
+              }
             } catch (error) {
               console.error('Failed to disconnect:', error);
               Alert.alert('Error', 'Failed to disconnect Stripe account');
+            } finally {
+              setIsLoading(false);
             }
           }
         }

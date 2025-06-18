@@ -181,6 +181,32 @@ export default function PaymentSettingsScreen() {
               </Text>
             </View>
           </View>
+          
+          {/* Temporary debug button */}
+          <TouchableOpacity
+            style={[styles.infoCard, { backgroundColor: '#fff5f5', borderColor: '#ffcccc', marginTop: 16 }]}
+            onPress={async () => {
+              try {
+                const { clearStripeCache } = await import('../../utils/clearStripeCache');
+                await clearStripeCache();
+                Alert.alert(
+                  'Cache Cleared',
+                  'Stripe cache has been cleared. Please restart the app completely.',
+                  [{ text: 'OK' }]
+                );
+              } catch (error) {
+                Alert.alert('Error', 'Failed to clear cache');
+              }
+            }}
+          >
+            <Ionicons name="trash" size={24} color="#dc3545" />
+            <View style={styles.infoContent}>
+              <Text style={[styles.infoTitle, { color: '#dc3545' }]}>Clear Stripe Cache</Text>
+              <Text style={[styles.infoText, { color: '#dc3545' }]}>
+                Use this if you're having issues with mismatched test/live modes
+              </Text>
+            </View>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </BaseScreen>
@@ -315,7 +341,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     borderWidth: 1,
     borderColor: '#b3d9ff',
-  },
+  } as any,
   infoContent: {
     flex: 1,
     marginLeft: 16,
