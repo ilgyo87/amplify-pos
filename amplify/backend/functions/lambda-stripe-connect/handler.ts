@@ -5,7 +5,7 @@ import axios from 'axios';
 
 const STRIPE_CLIENT_ID = process.env.STRIPE_CLIENT_ID;
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'amplifypos://stripe-connect-callback';
 const STRIPE_TOKENS_TABLE_NAME = process.env.STRIPE_TOKENS_TABLE_NAME!;
 
 const dynamoClient = new DynamoDBClient({});

@@ -7,7 +7,8 @@ export function StripeConnectHandler() {
     const handleDeepLink = async (url: string) => {
       console.log('Received deep link:', url);
       
-      if (url.includes('stripe-connect-callback')) {
+      // Handle both deep links and web redirects
+      if (url.includes('stripe-connect-callback') || url.includes('code=ac_') || url.includes('state=')) {
         try {
           const parsedUrl = new URL(url);
           const code = parsedUrl.searchParams.get('code');

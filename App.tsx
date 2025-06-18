@@ -117,21 +117,21 @@ const App = () => {
         publishableKey={stripePublishableKey || 'pk_test_placeholder'}
         merchantIdentifier="merchant.identifier"
       >
-        <StripeTerminalProvider
-          logLevel="verbose"
-          tokenProvider={fetchConnectionToken}
-        >
-          <StripeTerminalInitializer>
-            <NavigationContainer>
-              <Authenticator.Provider>
+        <NavigationContainer>
+          <Authenticator.Provider>
+            <StripeTerminalProvider
+              logLevel="verbose"
+              tokenProvider={fetchConnectionToken}
+            >
+              <StripeTerminalInitializer>
                 <EmployeeAuthProvider>
                   <StripeConnectHandler />
                   <AppNavigator />
                 </EmployeeAuthProvider>
-              </Authenticator.Provider>
-            </NavigationContainer>
-          </StripeTerminalInitializer>
-        </StripeTerminalProvider>
+              </StripeTerminalInitializer>
+            </StripeTerminalProvider>
+          </Authenticator.Provider>
+        </NavigationContainer>
       </StripeProvider>
     </SafeAreaProvider>
   );

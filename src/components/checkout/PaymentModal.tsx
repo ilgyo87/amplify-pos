@@ -10,23 +10,16 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  ActivityIndicator,
-  Switch
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { PaymentMethod, PaymentInfo } from '../../types/order';
 import { CardFieldInput, useStripe } from '@stripe/stripe-react-native';
 import { stripeService } from '../../services/stripeService';
-import { stripeTerminalService } from '../../services/stripeTerminalService';
 import { StripeCardForm } from './StripeCardForm';
 import { 
   useStripeTerminal,
 } from '@stripe/stripe-terminal-react-native';
-import { checkBluetoothPermissions, handleBluetoothError } from '../../utils/bluetoothPermissions';
-import { SafeTerminalDiscovery } from './SafeTerminalDiscovery';
-import { NativeTerminalDiscovery } from './NativeTerminalDiscovery';
-import { ErrorBoundary } from '../ErrorBoundary';
-import { stripeLocationService } from '../../services/stripeLocationService';
 
 interface PaymentModalProps {
   visible: boolean;
@@ -48,60 +41,32 @@ export function PaymentModal({
   const { createToken } = useStripe();
   const [checkNumber, setCheckNumber] = useState('');
   const [accountId, setAccountId] = useState('');
-  const [isDiscoveringReaders, setIsDiscoveringReaders] = useState(false);
-  const [discoveredReaders, setDiscoveredReaders] = useState<any[]>([]);
-  const [selectedReader, setSelectedReader] = useState<any>(null);
   const [currentPaymentIntent, setCurrentPaymentIntent] = useState<any>(null);
-  const [useSimulatedReaders, setUseSimulatedReaders] = useState(true); // Default to simulated to avoid crashes
-  const [connectionToken, setConnectionToken] = useState<string>('');
   
-  // Stripe Terminal hooks
+  // Stripe Terminal hooks - simplified for checkout
   const {
-    discoverReaders,
-    connectReader,
-    disconnectReader,
     connectedReader,
     createPaymentIntent,
     collectPaymentMethod,
     confirmPaymentIntent,
     cancelPaymentIntent,
     isInitialized,
-  } = useStripeTerminal({
-    onUpdateDiscoveredReaders: (readers) => {
-      console.log('[STRIPE TERMINAL] Discovered readers:', readers);
-      console.log('[STRIPE TERMINAL] Reader details:', readers.map(r => ({
-        serialNumber: r.serialNumber,
-        simulated: r.simulated,
-        deviceType: r.deviceType,
-        label: r.label
-      })));
-      setDiscoveredReaders(readers);
-      setIsDiscoveringReaders(false);
-    },
-  });
+  } = useStripeTerminal();
 
-  // Check if Terminal is ready
-  const checkTerminalReady = () => {
+  const handleTerminalPayment = async () => {
+    if (!connectedReader) {
+      Alert.alert(
+        'No Reader Connected',
+        'Please connect a card reader in Settings → Payment Settings → Card Reader'
+      );
+      return;
+    }
+    
     if (!isInitialized) {
-      console.log('[STRIPE TERMINAL] Terminal not initialized yet');
       Alert.alert(
         'Terminal Not Ready',
         'Stripe Terminal is still initializing. Please wait a moment and try again.'
       );
-      return false;
-    }
-    return true;
-  };
-
-  const handleTerminalPayment = async () => {
-    if (!connectedReader) {
-      // If no reader connected, start discovery process
-      handleDiscoverReaders();
-      return;
-    }
-    
-    // Ensure terminal is initialized before payment
-    if (!checkTerminalReady()) {
       return;
     }
 
@@ -171,192 +136,12 @@ export function PaymentModal({
     }
   };
 
-  const handleDiscoverReaders = async () => {
-    // Prevent multiple discovery attempts
-    if (isDiscoveringReaders) {
-      console.log('[STRIPE TERMINAL] Discovery already in progress');
-      return;
-    }
-
-    // Add a small delay to prevent rapid switching issues
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    // Check if Terminal is initialized
-    if (!checkTerminalReady()) {
-      return;
-    }
-
-    // If already connected to a reader, disconnect first
-    if (connectedReader) {
-      console.log('[STRIPE TERMINAL] Already connected to reader:', connectedReader.serialNumber);
-      Alert.alert(
-        'Reader Connected',
-        `Already connected to ${connectedReader.label || connectedReader.serialNumber}. Disconnect first to discover new readers.`
-      );
-      return;
-    }
-
-    try {
-      setIsDiscoveringReaders(true);
-      setDiscoveredReaders([]); // Clear previous results
-      
-      // Use the user's preference for simulated vs real readers
-      const isSimulated = useSimulatedReaders;
-      
-      console.log('[STRIPE TERMINAL] Starting reader discovery (simulated:', isSimulated, ')');
-      console.log('[STRIPE TERMINAL] Discovery method:', isSimulated ? 'internet' : 'bluetoothScan');
-      
-      // For real Bluetooth readers on iOS, check permissions first
-      if (!isSimulated && Platform.OS === 'ios') {
-        const hasPermission = await checkBluetoothPermissions();
-        if (!hasPermission) {
-          console.log('[STRIPE TERMINAL] User declined Bluetooth permission');
-          return;
-        }
-      }
-      
-      // Wrap in try-catch to prevent crashes
-      let error;
-      try {
-        const result = await discoverReaders({
-          discoveryMethod: isSimulated ? 'internet' : 'bluetoothScan',
-          simulated: isSimulated,
-          timeout: 30000, // 30 seconds timeout for discovery
-          autoReconnectOnUnexpectedDisconnect: true, // Fix for M2 reader crashes
-        });
-        error = result.error;
-      } catch (e: any) {
-        console.error('[STRIPE TERMINAL] Critical error during discovery:', e);
-        error = { message: e.message || 'Bluetooth discovery failed. Please try using test readers instead.' };
-      }
-
-      if (error) {
-        console.error('[STRIPE TERMINAL] Discovery error:', error);
-        throw new Error(error.message || 'Failed to discover readers');
-      }
-      
-      console.log('[STRIPE TERMINAL] Discovery started successfully');
-      
-    } catch (error: any) {
-      console.error('[STRIPE TERMINAL] Failed to discover readers:', error);
-      
-      // Handle Bluetooth-specific errors
-      if (error.message?.includes('bluetooth') || error.message?.includes('Bluetooth')) {
-        handleBluetoothError(error);
-      } else {
-        Alert.alert(
-          'Discovery Failed', 
-          error.message || 'Failed to discover card readers. Please ensure Bluetooth is enabled and try again.'
-        );
-      }
-    } finally {
-      setIsDiscoveringReaders(false);
-    }
-  };
-
-  const handleConnectReader = async (reader: any) => {
-    try {
-      setIsProcessingPayment(true);
-      console.log('[STRIPE TERMINAL] Connecting to reader:', reader);
-      
-      // Ensure terminal is initialized before connecting
-      if (!checkTerminalReady()) {
-        return;
-      }
-      
-      // Get the location ID from our service
-      const locationId = await stripeLocationService.getLocationId();
-      console.log('[STRIPE TERMINAL] Retrieved location ID:', locationId);
-      
-      if (!locationId && !reader.simulated) {
-        console.error('[STRIPE TERMINAL] No location ID available for physical reader');
-        Alert.alert(
-          'Location Required',
-          'A location is required to connect to physical readers. Please ensure your Stripe account has a location configured.'
-        );
-        return;
-      }
-      
-      console.log('[STRIPE TERMINAL] Connecting with config:', {
-        readerSerial: reader.serialNumber,
-        locationId: locationId || reader.location?.id,
-        simulated: reader.simulated
-      });
-      
-      // For Bluetooth readers (M2), we need specific connection parameters
-      // The reader object might be missing the ID, which causes connection issues
-      if (!reader.id && reader.deviceType === 'stripeM2') {
-        console.warn('[STRIPE TERMINAL] M2 reader has null ID - this is a known SDK issue');
-        Alert.alert(
-          'Known SDK Issue',
-          'The M2 reader connection is not working due to a known issue in the beta SDK (reader ID is null). ' +
-          'Please use simulated readers for testing or wait for a stable SDK release.\n\n' +
-          'Reader Serial: ' + reader.serialNumber
-        );
-        return;
-      }
-      
-      const connectionParams = {
-        reader,
-        locationId: locationId, // Required for Bluetooth readers
-      };
-      
-      console.log('[STRIPE TERMINAL] Connection params:', connectionParams);
-      
-      const { reader: connectedReaderResult, error } = await connectReader(connectionParams);
-
-      if (error) {
-        console.error('[STRIPE TERMINAL] Connection error:', error);
-        
-        // Provide more specific error messages for common issues
-        if (error.code === 'InvalidConnectionConfiguration') {
-          throw new Error(
-            'Unable to connect to the reader. Please ensure:\n\n' +
-            '1. The reader is NOT paired in your device\'s Bluetooth settings\n' +
-            '2. The reader has at least 10% battery (50% if updates needed)\n' +
-            '3. The reader is registered to a location in your Stripe Dashboard\n' +
-            '4. You\'re using the latest version of the Stripe app on the reader'
-          );
-        }
-        
-        throw new Error(error.message || 'Failed to connect to reader');
-      }
-      
-      setSelectedReader(connectedReaderResult);
-      console.log('[STRIPE TERMINAL] Successfully connected to reader:', connectedReaderResult);
-      Alert.alert('Success', 'Card reader connected successfully');
-    } catch (error: any) {
-      console.error('Failed to connect reader:', error);
-      Alert.alert(
-        'Connection Error', 
-        error && typeof error === 'object' && 'message' in error 
-          ? error.message 
-          : 'Failed to connect to card reader. Please try again.'
-      );
-    } finally {
-      setIsProcessingPayment(false);
-    }
-  };
 
 
   useEffect(() => {
     const checkStripeConfig = async () => {
       const isConfigured = stripeService.isInitialized();
       setIsStripeEnabled(isConfigured);
-      
-      // Fetch connection token for native terminal
-      if (isConfigured && Platform.OS === 'ios') {
-        try {
-          const { getCurrentUser } = await import('aws-amplify/auth');
-          const currentUser = await getCurrentUser();
-          const token = await stripeService.createConnectionToken(currentUser.userId);
-          if (token) {
-            setConnectionToken(token);
-          }
-        } catch (error) {
-          console.error('Failed to fetch connection token:', error);
-        }
-      }
     };
 
     checkStripeConfig();
@@ -374,24 +159,9 @@ export function PaymentModal({
     console.log('[STRIPE TERMINAL] State update:', {
       isInitialized,
       connectedReader: !!connectedReader,
-      isStripeEnabled,
-      isDiscoveringReaders
+      isStripeEnabled
     });
-  }, [isInitialized, connectedReader, isStripeEnabled, isDiscoveringReaders]);
-
-  // Reset discovery state when modal closes or when toggle changes
-  useEffect(() => {
-    if (!visible) {
-      setIsDiscoveringReaders(false);
-      setDiscoveredReaders([]);
-    }
-  }, [visible]);
-
-  // Clear discovered readers when switching between simulated and real
-  useEffect(() => {
-    setDiscoveredReaders([]);
-    setIsDiscoveringReaders(false);
-  }, [useSimulatedReaders]);
+  }, [isInitialized, connectedReader, isStripeEnabled]);
 
   const validatePayment = (): boolean => {
     if (selectedMethod === 'card') {
@@ -563,9 +333,15 @@ export function PaymentModal({
             ) : connectedReader ? (
               <View>
                 <Text style={styles.detailsHint}>
-                  Reader connected: {connectedReader.label || connectedReader.serialNumber}
-                  {connectedReader.simulated ? ' (Simulated)' : ''}
+                  Reader: {connectedReader.label || connectedReader.serialNumber}
                 </Text>
+                
+                {connectedReader.batteryLevel && (
+                  <Text style={styles.detailsHint}>
+                    Battery: {Math.round(connectedReader.batteryLevel * 100)}%
+                  </Text>
+                )}
+                
                 <TouchableOpacity
                   style={styles.terminalButton}
                   onPress={handleTerminalPayment}
@@ -573,60 +349,21 @@ export function PaymentModal({
                 >
                   <Ionicons name="card" size={20} color="#007AFF" />
                   <Text style={styles.terminalButtonText}>
-                    {isProcessingPayment ? 'Processing...' : 'Start Payment'}
+                    {isProcessingPayment ? 'Processing...' : 'Tap Card on Reader'}
                   </Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.terminalButton, { backgroundColor: '#fff', borderColor: '#dc3545' }]}
-                  onPress={async () => {
-                    try {
-                      await disconnectReader();
-                      setSelectedReader(null);
-                      Alert.alert('Disconnected', 'Reader disconnected successfully');
-                    } catch (error: any) {
-                      Alert.alert('Error', 'Failed to disconnect reader');
-                    }
-                  }}
-                >
-                  <Ionicons name="close-circle" size={20} color="#dc3545" />
-                  <Text style={[styles.terminalButtonText, { color: '#dc3545' }]}>
-                    Disconnect Reader
-                  </Text>
-                </TouchableOpacity>
+                
+                <Text style={styles.terminalInstructions}>
+                  Customer should tap, insert, or swipe their card on the reader
+                </Text>
               </View>
             ) : (
-              <View>
-                <View style={styles.simulatedToggleContainer}>
-                  <Text style={styles.simulatedToggleLabel}>Use Test Readers</Text>
-                  <Switch
-                    value={useSimulatedReaders}
-                    onValueChange={setUseSimulatedReaders}
-                    trackColor={{ false: '#767577', true: '#81b0ff' }}
-                    thumbColor={useSimulatedReaders ? '#007AFF' : '#f4f3f4'}
-                  />
-                </View>
-                <ErrorBoundary
-                  fallback={
-                    <View>
-                      <Text style={styles.detailsHint}>
-                        Terminal discovery encountered an error. Please try again.
-                      </Text>
-                    </View>
-                  }
-                >
-                  {Platform.OS === 'ios' && connectionToken ? (
-                    <NativeTerminalDiscovery
-                      onReaderSelected={handleConnectReader}
-                      useSimulated={useSimulatedReaders}
-                      connectionToken={connectionToken}
-                    />
-                  ) : (
-                    <SafeTerminalDiscovery
-                      onReaderSelected={handleConnectReader}
-                      useSimulated={useSimulatedReaders}
-                    />
-                  )}
-                </ErrorBoundary>
+              <View style={styles.noReaderContainer}>
+                <Ionicons name="alert-circle" size={48} color="#ff9500" />
+                <Text style={styles.noReaderTitle}>No Card Reader Connected</Text>
+                <Text style={styles.noReaderText}>
+                  Please connect a card reader in Settings → Payment Settings → Card Reader
+                </Text>
               </View>
             )}
           </View>
@@ -943,5 +680,89 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     fontWeight: '500',
+  },
+  updateContainer: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: '#f0f7ff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#007AFF20',
+  },
+  updateHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  updateTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  updateDescription: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  progressContainer: {
+    marginBottom: 12,
+  },
+  progressBarBackground: {
+    height: 8,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#007AFF',
+    borderRadius: 4,
+    transition: 'width 0.3s ease',
+  },
+  progressText: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#007AFF',
+    textAlign: 'center',
+  },
+  updateEstimate: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  updateWarning: {
+    fontSize: 13,
+    color: '#ff9500',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  noReaderContainer: {
+    alignItems: 'center',
+    paddingVertical: 32,
+  },
+  noReaderTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  noReaderText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: 20,
+  },
+  terminalInstructions: {
+    fontSize: 13,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 12,
+    fontStyle: 'italic',
   },
 });

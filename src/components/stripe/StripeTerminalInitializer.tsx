@@ -2,9 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useStripeTerminal } from '@stripe/stripe-terminal-react-native';
 import { Platform, Alert } from 'react-native';
 import { requestNeededAndroidPermissions } from '@stripe/stripe-terminal-react-native';
+import { useAuthenticator } from '@aws-amplify/ui-react-native';
 
 export function StripeTerminalInitializer({ children }: { children: React.ReactNode }) {
   const { initialize, isInitialized } = useStripeTerminal();
+  const { authStatus } = useAuthenticator();
   const [isInitializing, setIsInitializing] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
 
@@ -12,6 +14,12 @@ export function StripeTerminalInitializer({ children }: { children: React.ReactN
     const initializeTerminal = async () => {
       // Skip if already initialized or currently initializing
       if (isInitialized || isInitializing) {
+        return;
+      }
+
+      // Only initialize if user is authenticated
+      if (authStatus !== 'authenticated') {
+        console.log('[STRIPE TERMINAL INITIALIZER] Waiting for user authentication...');
         return;
       }
 
@@ -65,9 +73,9 @@ export function StripeTerminalInitializer({ children }: { children: React.ReactN
       }
     };
 
-    // Initialize on mount
+    // Initialize when user becomes authenticated
     initializeTerminal();
-  }, []); // Empty dependency array - only run once on mount
+  }, [authStatus]); // Depend on authStatus to reinitialize when user logs in
 
   // Log the current state
   useEffect(() => {

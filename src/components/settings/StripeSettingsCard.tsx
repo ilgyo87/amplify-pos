@@ -104,8 +104,15 @@ export function StripeSettingsCard() {
           text: 'Disconnect',
           style: 'destructive',
           onPress: async () => {
-            // TODO: Implement disconnect functionality
-            console.log('Disconnect Stripe account');
+            try {
+              // Clear stored Stripe settings
+              await stripeService.clearStripeSettings();
+              setIsConnected(false);
+              Alert.alert('Success', 'Stripe account disconnected. Please restart the app.');
+            } catch (error) {
+              console.error('Failed to disconnect:', error);
+              Alert.alert('Error', 'Failed to disconnect Stripe account');
+            }
           }
         }
       ]

@@ -77,7 +77,13 @@ class DefaultNotificationService implements NotificationService {
       // Use direct HTTP request to Lambda function URL
       console.log('📧 Making HTTP request to Lambda function...');
       
-      const functionUrl = 'https://s3wx5owluxhawjmveb5xtwuqnm0qempa.lambda-url.us-east-1.on.aws/';
+      // Get the function URL from amplify_outputs.json
+      const amplifyConfig = await import('../../amplify_outputs.json');
+      const functionUrl = (amplifyConfig.default.custom as any)?.emailNotificationUrl;
+      
+      if (!functionUrl) {
+        throw new Error('Email notification URL not configured');
+      }
       
       const response = await fetch(functionUrl, {
         method: 'POST',
@@ -130,7 +136,13 @@ class DefaultNotificationService implements NotificationService {
       // Use direct HTTP request to Lambda function URL
       console.log('📱 Making HTTP request to Lambda function...');
       
-      const functionUrl = 'https://xnvku25wro3kehnllb37e4sa6u0dadfe.lambda-url.us-east-1.on.aws/';
+      // Get the function URL from amplify_outputs.json
+      const amplifyConfig = await import('../../amplify_outputs.json');
+      const functionUrl = (amplifyConfig.default.custom as any)?.smsNotificationUrl;
+      
+      if (!functionUrl) {
+        throw new Error('SMS notification URL not configured');
+      }
       
       const response = await fetch(functionUrl, {
         method: 'POST',

@@ -13,10 +13,10 @@ import { useStripeTerminal } from '@stripe/stripe-terminal-react-native';
 
 interface SafeTerminalDiscoveryProps {
   onReaderSelected: (reader: any) => void;
-  useSimulated: boolean;
+  useSimulated?: boolean; // Keep for backwards compatibility but ignore
 }
 
-export function SafeTerminalDiscovery({ onReaderSelected, useSimulated }: SafeTerminalDiscoveryProps) {
+export function SafeTerminalDiscovery({ onReaderSelected }: SafeTerminalDiscoveryProps) {
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [readers, setReaders] = useState<any[]>([]);
   const [hasStartedDiscovery, setHasStartedDiscovery] = useState(false);
@@ -47,15 +47,6 @@ export function SafeTerminalDiscovery({ onReaderSelected, useSimulated }: SafeTe
     };
   }, []); // Empty deps - only run on mount/unmount
 
-  // Reset when switching between simulated and real
-  useEffect(() => {
-    setReaders([]);
-    setHasStartedDiscovery(false);
-    if (isDiscovering) {
-      cancelDiscovering().catch(console.error);
-      setIsDiscovering(false);
-    }
-  }, [useSimulated]);
 
   const startDiscovery = async () => {
     if (!isInitialized) {
@@ -64,7 +55,7 @@ export function SafeTerminalDiscovery({ onReaderSelected, useSimulated }: SafeTe
     }
 
     if (isDiscovering) {
-      console.log('[SAFE DISCOVERY] Already discovering');
+      console.log('[SAFE DISCOVERY] Already discovering, skipping');
       return;
     }
 
@@ -73,29 +64,38 @@ export function SafeTerminalDiscovery({ onReaderSelected, useSimulated }: SafeTe
       setHasStartedDiscovery(true);
       setReaders([]);
 
-      console.log('[SAFE DISCOVERY] Starting discovery with simulated:', useSimulated);
+      console.log('[SAFE DISCOVERY] Starting discovery for physical readers');
 
       // For iOS, we need to handle Bluetooth discovery carefully
-      if (!useSimulated && Platform.OS === 'ios') {
+      if (Platform.OS === 'ios') {
         // Add a delay to ensure system is ready
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
       const { error } = await discoverReaders({
-        discoveryMethod: useSimulated ? 'internet' : 'bluetoothScan',
-        simulated: useSimulated,
+        discoveryMethod: 'bluetoothScan',
+        simulated: false,
         // Don't use timeout for bluetooth - let user control when to stop
       });
 
       if (error) {
         console.error('[SAFE DISCOVERY] Discovery error:', error);
-        // Don't show error if it's just a cancellation and we have readers
-        if (error.code === 'Canceled' && readers.length > 0) {
-          console.log('[SAFE DISCOVERY] Discovery cancelled but readers found, ignoring error');
+        
+        // Handle "AlreadyDiscovering" error specifically
+        if (error.code === 'AlreadyDiscovering') {
+          console.log('[SAFE DISCOVERY] Already discovering, waiting for results...');
+          // Don't set discovering to false, wait for actual results
           return;
         }
         
-        if (error.message?.includes('Bluetooth') && !useSimulated) {
+        // Don't show error if it's just a cancellation and we have readers
+        if (error.code === 'Canceled' && readers.length > 0) {
+          console.log('[SAFE DISCOVERY] Discovery cancelled but readers found, ignoring error');
+          setIsDiscovering(false);
+          return;
+        }
+        
+        if (error.message?.includes('Bluetooth')) {
           Alert.alert(
             'Bluetooth Error',
             'Please ensure Bluetooth is enabled and try again.',
@@ -104,8 +104,13 @@ export function SafeTerminalDiscovery({ onReaderSelected, useSimulated }: SafeTe
               { text: 'Retry', onPress: () => startDiscovery() }
             ]
           );
-        } else if (error.code !== 'Canceled') {
+        } else if (error.code !== 'Canceled' && error.code !== 'AlreadyDiscovering') {
           Alert.alert('Discovery Error', error.message || 'Failed to discover readers');
+        }
+        
+        // Only set discovering to false if it's not an "AlreadyDiscovering" error
+        if (error.code !== 'AlreadyDiscovering') {
+          setIsDiscovering(false);
         }
       }
     } catch (error: any) {
@@ -115,8 +120,6 @@ export function SafeTerminalDiscovery({ onReaderSelected, useSimulated }: SafeTe
         'An unexpected error occurred. Please try again.',
         [{ text: 'OK' }]
       );
-    } finally {
-      // Always set discovering to false when discovery completes
       setIsDiscovering(false);
     }
   };
@@ -135,17 +138,15 @@ export function SafeTerminalDiscovery({ onReaderSelected, useSimulated }: SafeTe
       {!hasStartedDiscovery ? (
         <View style={styles.startContainer}>
           <Ionicons 
-            name={useSimulated ? "phone-portrait" : "bluetooth"} 
+            name="bluetooth" 
             size={48} 
             color="#007AFF" 
           />
           <Text style={styles.title}>
-            {useSimulated ? 'Find Test Readers' : 'Find M2 Reader'}
+            Find M2 Reader
           </Text>
           <Text style={styles.subtitle}>
-            {useSimulated 
-              ? 'Discover simulated readers for testing'
-              : 'Make sure your M2 reader is powered on'}
+            Make sure your M2 reader is powered on
           </Text>
           <TouchableOpacity
             style={styles.primaryButton}
@@ -161,12 +162,10 @@ export function SafeTerminalDiscovery({ onReaderSelected, useSimulated }: SafeTe
             <View style={styles.discoveringSection}>
               <ActivityIndicator size="large" color="#007AFF" />
               <Text style={styles.discoveringText}>
-                {useSimulated ? 'Finding test readers...' : 'Searching for M2 readers...'}
+                Searching for M2 readers...
               </Text>
               <Text style={styles.discoveringHint}>
-                {useSimulated 
-                  ? 'This should only take a moment'
-                  : 'Make sure Bluetooth is enabled and your M2 is nearby'}
+                Make sure Bluetooth is enabled and your M2 is nearby
               </Text>
               <TouchableOpacity
                 style={[styles.secondaryButton, { marginTop: 20 }]}
@@ -194,7 +193,7 @@ export function SafeTerminalDiscovery({ onReaderSelected, useSimulated }: SafeTe
                       {reader.label || reader.serialNumber}
                     </Text>
                     <Text style={styles.readerDetails}>
-                      {reader.deviceType} • {reader.simulated ? 'Test Reader' : 'Physical Reader'}
+                      {reader.deviceType} • Physical Reader
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color="#007AFF" />

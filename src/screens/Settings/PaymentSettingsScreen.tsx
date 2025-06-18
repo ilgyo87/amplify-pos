@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { BaseScreen } from '../BaseScreen';
 import { StripeSettingsCard } from '../../components/settings/StripeSettingsCard';
+import { StripeTerminalSettingsCard } from '../../components/settings/StripeTerminalSettingsCard';
 
 export default function PaymentSettingsScreen() {
   const [isLoading, setIsLoading] = useState(false);
@@ -93,6 +94,9 @@ export default function PaymentSettingsScreen() {
               </View>
             ))
           }
+          
+          {/* Add Terminal Settings Card */}
+          <StripeTerminalSettingsCard />
         </View>
 
         <View style={styles.section}>
