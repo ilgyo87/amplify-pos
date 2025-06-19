@@ -4,6 +4,7 @@ import { BusinessDocument, BusinessDocType, BusinessCollection } from '../schema
 export class BusinessRepository extends BaseRepository<BusinessDocType, BusinessCollection> {
   constructor(collection: BusinessCollection) {
     super(collection);
+    this.idPrefix = 'business_';
   }
 
   async getBusinessById(id: string): Promise<BusinessDocument | null> {

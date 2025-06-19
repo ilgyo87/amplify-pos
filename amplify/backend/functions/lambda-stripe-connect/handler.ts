@@ -137,7 +137,7 @@ export const handler = async (event: any) => {
       
       try {
         // First, ensure we have a location for Terminal readers
-        let locationId = null;
+        let locationId: string | null = null;
         
         try {
           // Try to get existing locations

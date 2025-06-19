@@ -171,7 +171,7 @@ const AppNavigator = () => {
 
   return (
     <Stack.Navigator screenOptions={{
-      headerBackTitleVisible: false,
+      headerBackTitle: '',
     }}>
       {!user ? (
         <Stack.Screen 

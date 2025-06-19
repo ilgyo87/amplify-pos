@@ -63,7 +63,7 @@ export function PickupModal({ visible, onClose, onOrderPickedUp }: PickupModalPr
               id: order.id,
               orderNumber: order.orderNumber,
               customerName: customer ? `${customer.firstName} ${customer.lastName}` : order.customerName,
-              customerPhone: customer ? customer.phone : order.customerPhone,
+              customerPhone: customer?.phone || order.customerPhone || '',
               total: order.total,
               createdAt: order.createdAt,
               items: order.items

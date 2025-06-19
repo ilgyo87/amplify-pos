@@ -34,7 +34,7 @@ export function DatePickerModal({
     const startDate = new Date(firstDay);
     startDate.setDate(startDate.getDate() - firstDay.getDay());
     
-    const days = [];
+    const days: Date[] = [];
     const current = new Date(startDate);
     
     for (let i = 0; i < 42; i++) {

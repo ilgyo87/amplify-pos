@@ -68,7 +68,7 @@ const createDatabase = async (): Promise<AppDatabase> => {
 
   try {
     const database = await createRxDatabase<DatabaseCollections>({
-      name: 'amplifyposdb_v5',
+      name: 'amplifyposdb_v7',
       storage,
       multiInstance: false, // Set to false in React Native
       ignoreDuplicate: true,

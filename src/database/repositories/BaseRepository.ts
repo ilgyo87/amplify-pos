@@ -1,12 +1,20 @@
 import { RxDocument, RxCollection } from 'rxdb';
 import { v4 as uuidv4 } from 'uuid';
 
+// Interface for sync-related properties that all documents should have
+interface SyncableDocument {
+  isLocalOnly?: boolean;
+  lastSyncedAt?: string;
+  amplifyId?: string;
+  updatedAt: string;
+}
+
 /**
  * Base repository class that provides common CRUD operations
  * @template T - The document type this repository works with
  * @template C - The collection type (extends RxCollection)
  */
-export abstract class BaseRepository<T, C extends RxCollection = RxCollection> {
+export abstract class BaseRepository<T extends SyncableDocument, C extends RxCollection = RxCollection> {
   /** The RxDB collection instance */
   protected collection: C;
   protected idPrefix: string;

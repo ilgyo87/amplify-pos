@@ -1,4 +1,4 @@
-import { stripeService } from '../services/stripeService';
+import { stripeService } from '../services/stripe';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export async function clearStripeCache() {

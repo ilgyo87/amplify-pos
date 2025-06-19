@@ -82,14 +82,14 @@ export function SafeTerminalDiscovery({ onReaderSelected }: SafeTerminalDiscover
         console.error('[SAFE DISCOVERY] Discovery error:', error);
         
         // Handle "AlreadyDiscovering" error specifically
-        if (error.code === 'AlreadyDiscovering') {
+        if (error.message?.includes('Already discovering')) {
           console.log('[SAFE DISCOVERY] Already discovering, waiting for results...');
           // Don't set discovering to false, wait for actual results
           return;
         }
         
         // Don't show error if it's just a cancellation and we have readers
-        if (error.code === 'Canceled' && readers.length > 0) {
+        if (error.message?.includes('Cancel') && readers.length > 0) {
           console.log('[SAFE DISCOVERY] Discovery cancelled but readers found, ignoring error');
           setIsDiscovering(false);
           return;
@@ -104,12 +104,12 @@ export function SafeTerminalDiscovery({ onReaderSelected }: SafeTerminalDiscover
               { text: 'Retry', onPress: () => startDiscovery() }
             ]
           );
-        } else if (error.code !== 'Canceled' && error.code !== 'AlreadyDiscovering') {
+        } else if (!error.message?.includes('Cancel') && !error.message?.includes('Already discovering')) {
           Alert.alert('Discovery Error', error.message || 'Failed to discover readers');
         }
         
         // Only set discovering to false if it's not an "AlreadyDiscovering" error
-        if (error.code !== 'AlreadyDiscovering') {
+        if (!error.message?.includes('Already discovering')) {
           setIsDiscovering(false);
         }
       }

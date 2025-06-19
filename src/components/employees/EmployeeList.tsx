@@ -56,7 +56,7 @@ function EmployeeItem({
   };
 
   const formatAddress = () => {
-    const parts = [];
+    const parts: string[] = [];
     if (employee.address) parts.push(employee.address);
     if (employee.city) parts.push(employee.city);
     if (employee.state) parts.push(employee.state);

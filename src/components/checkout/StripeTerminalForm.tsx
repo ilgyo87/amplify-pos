@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import type { PaymentIntent } from '../../services/stripeTerminalService';
+import type { PaymentIntent } from '@stripe/stripe-terminal-react-native';
 
 interface StripeTerminalFormProps {
   amount: number;
@@ -56,28 +56,132 @@ export function StripeTerminalForm({
       // Create a mock successful payment intent
       const mockPaymentIntent: PaymentIntent.Type = {
         id: 'pi_simulated_' + Date.now(),
-        object: 'payment_intent',
         amount: Math.round(amount * 100),
+        amountDetails: {
+          tip: { amount: 0 }
+        },
+        amountTip: 0,
+        captureMethod: 'automatic',
+        created: Math.floor(Date.now() / 1000).toString(),
         currency: 'usd',
+        statementDescriptor: '',
+        statementDescriptorSuffix: '',
         status: 'succeeded',
-        charges: {
-          object: 'list',
-          data: [{
-            id: 'ch_simulated_' + Date.now(),
-            object: 'charge',
-            amount: Math.round(amount * 100),
-            currency: 'usd',
-            status: 'succeeded',
-            paymentMethod: {
-              id: 'pm_simulated',
-              object: 'payment_method',
-              card: {
-                brand: 'visa',
-                last4: '4242'
-              }
+        sdkUuid: 'mock-sdk-uuid',
+        paymentMethodId: 'pm_simulated',
+        paymentMethod: {
+          id: 'pm_simulated',
+          type: 'cardPresent',
+          customer: '',
+          cardPresentDetails: {
+            brand: 'visa',
+            last4: '4242',
+            expMonth: '12',
+            expYear: '2025',
+            funding: 'credit',
+            preferredLocales: ['en'],
+            issuer: 'Simulated Bank',
+            iin: '424242',
+            network: 'visa',
+            description: 'Visa •••• 4242',
+            wallet: { type: 'none' },
+            cardholderName: undefined,
+            generatedCard: undefined,
+            receipt: undefined,
+            emvAuthData: undefined,
+            country: undefined,
+            location: undefined,
+            reader: undefined
+          },
+          interacPresentDetails: {
+            brand: '',
+            last4: '',
+            expMonth: '',
+            expYear: '',
+            funding: '',
+            preferredLocales: [],
+            issuer: '',
+            iin: '',
+            network: '',
+            description: '',
+            wallet: { type: '' },
+            cardholderName: undefined,
+            generatedCard: undefined,
+            receipt: undefined,
+            emvAuthData: undefined,
+            country: undefined,
+            location: undefined,
+            reader: undefined
+          },
+          wechatPayDetails: {
+            location: undefined,
+            reader: undefined,
+            transactionId: undefined
+          },
+          affirmDetails: {
+            location: undefined,
+            reader: undefined,
+            transactionId: undefined
+          },
+          metadata: {}
+        },
+        offlineDetails: {
+          storedAtMs: Math.floor(Date.now()).toString(),
+          requiresUpload: false,
+          cardPresentDetails: {
+            brand: 'visa',
+            cardholderName: '',
+            expMonth: 12,
+            expYear: 2025,
+            last4: '4242',
+            readMethod: 'contact',
+            receiptDetails: {
+              accountType: '',
+              applicationCryptogram: '',
+              applicationPreferredName: '',
+              authorizationCode: '',
+              authorizationResponseCode: '',
+              cvm: '',
+              dedicatedFileName: '',
+              terminalVerificationResult: '',
+              transactionStatusInformation: ''
             }
-          }]
-        }
+          },
+          amountDetails: {
+            tip: { amount: 0 }
+          }
+        },
+        metadata: {},
+        charges: [{
+          id: 'ch_simulated_' + Date.now(),
+          amount: Math.round(amount * 100),
+          description: 'Simulated payment',
+          currency: 'usd',
+          status: 'succeeded',
+          paymentMethodDetails: {
+            type: 'card_present',
+            cardPresentDetails: {
+              brand: 'visa',
+              last4: '4242',
+              expMonth: '12',
+              expYear: '2025',
+              funding: 'credit',
+              preferredLocales: ['en'],
+              issuer: 'Simulated Bank',
+              iin: '424242',
+              network: 'visa',
+              description: 'Visa •••• 4242',
+              wallet: { type: 'none' },
+              cardholderName: undefined,
+              generatedCard: undefined,
+              receipt: undefined,
+              emvAuthData: undefined,
+              country: undefined,
+              location: undefined,
+              reader: undefined
+            }
+          }
+        }]
       };
 
       onPaymentSuccess(mockPaymentIntent);

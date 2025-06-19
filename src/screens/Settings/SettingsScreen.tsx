@@ -13,7 +13,7 @@ import { syncService, SyncStatus } from '../../database/services';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
-import { TestNotificationButton } from '../../components/debug/TestNotificationButton';
+// Test notification button removed during cleanup
 
 interface SettingsOption {
   id: string;
@@ -152,9 +152,6 @@ export default function SettingsScreen() {
           {settingsOptions.map(renderSettingsOption)}
         </View>
 
-        <View style={{ padding: 20 }}>
-          <TestNotificationButton />
-        </View>
 
         <View style={styles.footer}>
           <TouchableOpacity

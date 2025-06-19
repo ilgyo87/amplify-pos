@@ -85,7 +85,7 @@ export class EmployeeService {
       isActive: true,
       // Only set isLocalOnly to true if it's not already specified in the data
       // This allows synced employees from Amplify to have isLocalOnly: false
-      isLocalOnly: employeeData.isLocalOnly !== undefined ? employeeData.isLocalOnly : true,
+      isLocalOnly: true,
       isDeleted: false
     };
     

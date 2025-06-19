@@ -475,7 +475,7 @@ export default function ProductsScreen() {
 
   // Rack label functions
   const generateRackLabels = () => {
-    const labels = [];
+    const labels: { id: string; rackCode: string; number: number }[] = [];
     const numLabels = parseInt(numberOfLabels);
     const startNum = parseInt(startingNumber);
     

@@ -8,6 +8,7 @@ import { ProductDocType, ProductDocument, ProductCollection } from '../schemas/p
 export class ProductRepository extends BaseRepository<ProductDocType, ProductCollection> {
   constructor(collection: ProductCollection) {
     super(collection);
+    this.idPrefix = 'product_';
   }
 
   /**

@@ -8,6 +8,7 @@ import { EmployeeDocType, EmployeeDocument, EmployeeCollection } from '../schema
 export class EmployeeRepository extends BaseRepository<EmployeeDocType, EmployeeCollection> {
   constructor(collection: EmployeeCollection) {
     super(collection);
+    this.idPrefix = 'employee_';
   }
 
   /**

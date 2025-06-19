@@ -54,10 +54,10 @@ export const stripeTerminalService = {
   // Helper method to get connection token from your backend
   async fetchConnectionToken(userId: string): Promise<string | null> {
     try {
-      // Import stripeService to use the existing connection token method
-      const { stripeService } = await import('./stripeService');
-      console.log('[STRIPE TERMINAL] Fetching connection token from backend (Stripe Connect)...');
-      return await stripeService.createConnectionToken(userId);
+      console.log('[STRIPE TERMINAL] Fetching connection token...');
+      // This is now handled by the App.tsx tokenProvider
+      // to avoid circular dependencies
+      return null;
     } catch (error) {
       console.error('[STRIPE TERMINAL] Failed to fetch connection token:', error);
       return null;
@@ -67,7 +67,7 @@ export const stripeTerminalService = {
   async getStripeConnectUrl(userId: string): Promise<string | null> {
     try {
       // Import stripeService to use the existing auth URL method
-      const { stripeService } = await import('./stripeService');
+      const { stripeService } = await import('./index');
       const authData = await stripeService.getStripeConnectAuthUrl(userId);
       return authData?.url || null;
     } catch (error) {

@@ -28,7 +28,14 @@ export function PickupCalendar({
 
   // Generate available dates (next 14 days, excluding Sundays)
   const availableDates = useMemo(() => {
-    const dates = [];
+    const dates: Array<{
+      date: string;
+      dayName: string;
+      dayNumber: number;
+      month: string;
+      isToday: boolean;
+      isTomorrow: boolean;
+    }> = [];
     const today = new Date();
     
     for (let i = 1; i <= 14; i++) {
@@ -61,7 +68,11 @@ export function PickupCalendar({
       return [];
     }
 
-    const slots = [];
+    const slots: Array<{
+      time: string;
+      display: string;
+      available: boolean;
+    }> = [];
     const [openHour, openMinute] = hours.open.split(':').map(Number);
     const [closeHour, closeMinute] = hours.close.split(':').map(Number);
     

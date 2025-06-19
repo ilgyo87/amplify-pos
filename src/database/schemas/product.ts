@@ -17,6 +17,15 @@ export interface ProductDocType {
   barcode?: string | null;
   quantity?: number | null;
   isActive?: boolean;
+  // Fields from backend
+  imageUrl?: string | null;
+  image?: string | null;
+  trackInventory?: boolean;
+  inventoryCount?: number;
+  lowStockThreshold?: number;
+  variants?: any;
+  customizations?: any;
+  displayOrder?: number;
   // Local-only fields for sync management
   isLocalOnly: boolean;
   isDeleted?: boolean; // For soft deletes
@@ -100,6 +109,44 @@ export const productSchema: RxJsonSchema<ProductDocType> = {
     isActive: {
       type: 'boolean',
       default: true
+    },
+    imageUrl: {
+      type: ['string', 'null'],
+      maxLength: 500
+    },
+    image: {
+      type: ['string', 'null'],
+      maxLength: 500
+    },
+    trackInventory: {
+      type: 'boolean',
+      default: false
+    },
+    inventoryCount: {
+      type: 'number',
+      minimum: 0,
+      maximum: 999999,
+      default: 0
+    },
+    lowStockThreshold: {
+      type: 'number',
+      minimum: 0,
+      maximum: 999999,
+      default: 0
+    },
+    variants: {
+      type: ['string', 'null'],
+      maxLength: 5000
+    },
+    customizations: {
+      type: ['string', 'null'],
+      maxLength: 5000
+    },
+    displayOrder: {
+      type: 'number',
+      minimum: 0,
+      maximum: 999999,
+      default: 0
     },
     isLocalOnly: {
       type: 'boolean'

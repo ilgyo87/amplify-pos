@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useStripeTerminal } from '@stripe/stripe-terminal-react-native';
-import { stripeTerminalService } from '../../services/stripeTerminalService';
+import { stripeTerminalService } from '../../services/stripe/StripeTerminalService';
 import { SafeTerminalDiscovery } from '../checkout/SafeTerminalDiscovery';
 import { getCurrentUser } from 'aws-amplify/auth';
 
@@ -52,13 +52,13 @@ export function StripeTerminalSettingsCard() {
       const percentComplete = Math.round(parseFloat(progress) * 100);
       setReaderUpdateProgress(percentComplete);
     },
-    onDidFinishInstallingUpdate: (update, error) => {
-      console.log('[TERMINAL SETTINGS] Update finished:', { update, error });
+    onDidFinishInstallingUpdate: (update) => {
+      console.log('[TERMINAL SETTINGS] Update finished:', { update });
       setIsUpdatingReader(false);
       setReaderUpdateProgress(null);
       setUpdateEstimate('');
       
-      if (error) {
+      if (update?.error) {
         Alert.alert('Update Failed', 'The reader update failed. Please try connecting again.');
       } else {
         Alert.alert('Update Complete', 'Your reader has been updated successfully!');
@@ -89,7 +89,7 @@ export function StripeTerminalSettingsCard() {
       console.log('[TERMINAL SETTINGS] Connecting to reader:', reader);
       
       // Get the location ID from our service
-      const { stripeLocationService } = await import('../../services/stripeLocationService');
+      const { stripeLocationService } = await import('../../services/stripe/StripeLocationService');
       const locationId = await stripeLocationService.getLocationId();
       
       if (!locationId) {

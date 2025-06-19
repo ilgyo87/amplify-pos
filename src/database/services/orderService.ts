@@ -460,3 +460,4 @@ export class OrderService {
     this.notifiedOrders.clear();
   }
 }
+export const orderService = new OrderService();

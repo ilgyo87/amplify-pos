@@ -31,9 +31,9 @@ export function StripeTerminalInitializer({ children }: { children: React.ReactN
 
         // Request permissions on Android
         if (Platform.OS === 'android') {
-          const { granted } = await requestNeededAndroidPermissions();
-          if (!granted) {
-            throw new Error('Required permissions not granted for Stripe Terminal');
+          const result = await requestNeededAndroidPermissions();
+          if ('error' in result && result.error) {
+            throw new Error(result.error.message || 'Required permissions not granted for Stripe Terminal');
           }
           console.log('[STRIPE TERMINAL INITIALIZER] Android permissions granted');
         }

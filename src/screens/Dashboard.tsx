@@ -212,14 +212,13 @@ export default function Dashboard() {
         console.log('Business created successfully:', result.business.name);
         return { business: result.business };
       } else {
-        // Convert string array errors to BusinessValidationErrors format
-        const formattedErrors: BusinessValidationErrors = {};
-        if (result.errors && result.errors.length > 0) {
-          formattedErrors.name = result.errors.join('\n');
-        } else if (result.duplicateError) {
-          formattedErrors.name = result.duplicateError;
+        // Return the errors from the result
+        if (result.errors) {
+          return { errors: result.errors };
+        } else {
+          // Fallback error if no specific errors were provided
+          return { errors: { name: 'Failed to create business' } };
         }
-        return { errors: formattedErrors };
       }
     } catch (error) {
       console.error('Error creating business:', error);

@@ -8,6 +8,7 @@ import { CategoryDocType, CategoryDocument, CategoryCollection } from '../schema
 export class CategoryRepository extends BaseRepository<CategoryDocType, CategoryCollection> {
   constructor(collection: CategoryCollection) {
     super(collection);
+    this.idPrefix = 'category_';
   }
 
   /**

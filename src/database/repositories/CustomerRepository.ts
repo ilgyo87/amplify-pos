@@ -8,6 +8,7 @@ import { CustomerDocType, CustomerDocument, CustomerCollection } from '../schema
 export class CustomerRepository extends BaseRepository<CustomerDocType, CustomerCollection> {
   constructor(collection: CustomerCollection) {
     super(collection);
+    this.idPrefix = 'customer_';
   }
 
   /**

@@ -79,7 +79,7 @@ export function PinInput({
   };
 
   const renderPinDots = () => {
-    const dots = [];
+    const dots: React.ReactElement[] = [];
     for (let i = 0; i < 4; i++) {
       dots.push(
         <View key={i} style={[styles.pinDot, pin.length > i && styles.pinDotFilled]} />

@@ -1,4 +1,5 @@
 import { a, defineData, type ClientSchema } from "@aws-amplify/backend";
+// Schema updated to include all sync fields
 
 const schema = a.schema({
 
@@ -25,6 +26,12 @@ const schema = a.schema({
       logoUrl: a.url(),
       logoSource: a.string(),
       userId: a.string(),
+      taxRate: a.float(),
+      currency: a.string(),
+      timezone: a.string(),
+      isActive: a.boolean().default(true),
+      logo: a.string(),
+      settings: a.string(),
       orders: a.hasMany('Order', 'businessId'),
     })
     .authorization((allow) => [
@@ -47,6 +54,8 @@ const schema = a.schema({
       emailNotifications: a.boolean(),
       textNotifications: a.boolean(),
       totalRefunds: a.float(),
+      notes: a.string(),
+      joinDate: a.string(),
     })
     .authorization((allow) => [
       allow.authenticated().to(['read']),
@@ -77,6 +86,14 @@ const schema = a.schema({
       cancellationReason: a.string(),
       refundAmount: a.float(),
       refundDate: a.string(),
+      customerEmail: a.email(),
+      paymentStatus: a.string(),
+      cardLast4: a.string(),
+      checkNumber: a.string(),
+      accountId: a.string(),
+      stripePaymentIntentId: a.string(),
+      stripeChargeId: a.string(),
+      refundReason: a.string(),
     })
     .authorization((allow) => [
       allow.authenticated().to(['read']),
@@ -117,6 +134,10 @@ const schema = a.schema({
       businessId: a.string(),
       cognitoId: a.string(),
       pin: a.string(),
+      role: a.string(),
+      isActive: a.boolean().default(true),
+      permissions: a.string().array(),
+      amplifyId: a.string(),
     })
     .authorization((allow) => [
       allow.authenticated().to(['read']),
@@ -130,6 +151,9 @@ const schema = a.schema({
       displayOrder: a.integer(),
       isActive: a.boolean().default(true),
       businessId: a.string(),
+      sortOrder: a.integer(),
+      image: a.string(),
+      icon: a.string(),
       products: a.hasMany('Product', 'categoryId')
     })
     .authorization((allow) => [
@@ -150,7 +174,14 @@ const schema = a.schema({
       isActive: a.boolean().default(true),
       businessId: a.string(),
       cost: a.float(),
-      quantity: a.integer()
+      quantity: a.integer(),
+      image: a.string(),
+      trackInventory: a.boolean(),
+      inventoryCount: a.integer(),
+      lowStockThreshold: a.integer(),
+      variants: a.string(),
+      customizations: a.string(),
+      displayOrder: a.integer()
     })
     .authorization((allow) => [
       allow.authenticated().to(['read']),

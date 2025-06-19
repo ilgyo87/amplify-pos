@@ -11,7 +11,7 @@ import {
   AppStateStatus,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { stripeService } from '../../services/stripeService';
+import { stripeService } from '../../services/stripe';
 import { getCurrentUser } from 'aws-amplify/auth';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -60,7 +60,7 @@ export function StripeSettingsCard() {
       console.log('Current user ID:', currentUserId);
       setUserId(currentUserId);
 
-      const connectionStatus = await stripeService.getStripeConnectionStatus(currentUserId);
+      const connectionStatus = await stripeService.getStripeConnectionStatus();
       console.log('Stripe connection status:', connectionStatus);
       setIsConnected(connectionStatus);
     } catch (error) {

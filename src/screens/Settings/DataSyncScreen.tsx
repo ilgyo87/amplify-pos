@@ -39,9 +39,7 @@ export default function DataSyncScreen() {
     businessesUploaded: 0,
     businessesDownloaded: 0,
     ordersUploaded: 0,
-    ordersDownloaded: 0,
-    startTime: new Date(),
-    success: false
+    ordersDownloaded: 0
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -65,7 +63,7 @@ export default function DataSyncScreen() {
         await new Promise(resolve => setTimeout(resolve, 200));
       }
       
-      const status = await syncService.getSyncStatus(forceRefresh);
+      const status = await syncService.getSyncStatus();
       setSyncStatus(status);
       
       // Log the status for debugging
@@ -133,15 +131,19 @@ export default function DataSyncScreen() {
         ...results.businesses.errors
       ];
       
-      const combinedResult = {
+      const combinedResult: SyncResult = {
         success: allErrors.length === 0,
-        uploadedCount: totalUploaded,
-        downloadedCount: 0,
+        stats: {
+          total: totalUploaded,
+          synced: totalUploaded,
+          failed: allErrors.length,
+          skipped: 0
+        },
         errors: allErrors
       };
       
       await loadSyncStatus(true);
-      showSyncResult('Upload', combinedResult);
+      showSyncResult('Upload', combinedResult, totalUploaded, 0);
     } catch (error) {
       Alert.alert('Upload Error', error instanceof Error ? error.message : 'Unknown error');
     } finally {
@@ -175,15 +177,19 @@ export default function DataSyncScreen() {
         ...results.businesses.errors
       ];
       
-      const combinedResult = {
+      const combinedResult: SyncResult = {
         success: allErrors.length === 0,
-        uploadedCount: 0,
-        downloadedCount: totalDownloaded,
+        stats: {
+          total: totalDownloaded,
+          synced: totalDownloaded,
+          failed: allErrors.length,
+          skipped: 0
+        },
         errors: allErrors
       };
       
       await loadSyncStatus(true);
-      showSyncResult('Download', combinedResult);
+      showSyncResult('Download', combinedResult, 0, totalDownloaded);
     } catch (error) {
       Alert.alert('Download Error', error instanceof Error ? error.message : 'Unknown error');
     } finally {
@@ -202,9 +208,22 @@ export default function DataSyncScreen() {
           onPress: async () => {
             try {
               setSyncStatus(prev => ({ ...prev, isUploading: true, isDownloading: true }));
-              const result = await syncService.fullSync();
+              const fullResult = await syncService.fullSync();
+              
+              // Convert FullSyncResult to SyncResult for showSyncResult
+              const syncResult: SyncResult = {
+                success: fullResult.success,
+                stats: {
+                  total: fullResult.summary.totalSynced + fullResult.summary.totalFailed,
+                  synced: fullResult.summary.totalSynced,
+                  failed: fullResult.summary.totalFailed,
+                  skipped: 0
+                },
+                errors: fullResult.summary.totalErrors
+              };
+              
               await loadSyncStatus(true);
-              showSyncResult('Full Sync', result);
+              showSyncResult('Full Sync', syncResult, fullResult.summary.totalSynced, 0);
             } catch (error) {
               Alert.alert('Sync Error', error instanceof Error ? error.message : 'Unknown error');
             } finally {
@@ -228,14 +247,10 @@ export default function DataSyncScreen() {
             try {
               const result = await syncService.fixProductCategoryRelationships();
               
-              if (result.fixed > 0) {
-                Alert.alert(
-                  'Relationships Fixed',
-                  `Fixed ${result.fixed} product-category relationships.${result.errors.length > 0 ? `\n\nWarnings: ${result.errors.length}` : ''}`
-                );
-              } else {
-                Alert.alert('No Issues Found', 'All product-category relationships are already correct.');
-              }
+              Alert.alert(
+                result.success ? 'Success' : 'Error',
+                result.message
+              );
             } catch (error) {
               Alert.alert('Error', 'Failed to fix category relationships. Please try again.');
             }
@@ -245,15 +260,15 @@ export default function DataSyncScreen() {
     );
   };
 
-  const showSyncResult = (operation: string, result: SyncResult) => {
+  const showSyncResult = (operation: string, result: SyncResult, uploadedCount: number = 0, downloadedCount: number = 0) => {
     const title = `${operation} Complete`;
     let message = '';
     
-    if (result.uploadedCount > 0) {
-      message += `Uploaded: ${result.uploadedCount} items\n`;
+    if (uploadedCount > 0) {
+      message += `Uploaded: ${uploadedCount} items\n`;
     }
-    if (result.downloadedCount > 0) {
-      message += `Downloaded: ${result.downloadedCount} items\n`;
+    if (downloadedCount > 0) {
+      message += `Downloaded: ${downloadedCount} items\n`;
     }
     if (result.errors && result.errors.length > 0) {
       message += `\nErrors (${result.errors.length}):\n${result.errors.slice(0, 3).join('\n')}`;
@@ -387,7 +402,7 @@ export default function DataSyncScreen() {
 
             <View style={styles.lastSyncContainer}>
               <Text style={styles.lastSyncLabel}>Last Sync:</Text>
-              <Text style={styles.lastSyncValue}>{formatDate(syncStatus.lastSyncDate)}</Text>
+              <Text style={styles.lastSyncValue}>{formatDate(syncStatus.lastSyncedAt ? new Date(syncStatus.lastSyncedAt) : undefined)}</Text>
             </View>
           </View>
         </View>

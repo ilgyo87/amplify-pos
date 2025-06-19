@@ -61,6 +61,8 @@ export interface PaymentInfo {
   stripeChargeId?: string; // Stripe charge ID for successful payments
 }
 
+export type OrderStatus = 'pending' | 'in_progress' | 'ready' | 'completed' | 'cancelled' | 'picked_up';
+
 export interface Order {
   id: string;
   customerId: string;
@@ -70,7 +72,7 @@ export interface Order {
   pickupDate: string; // ISO date string
   pickupTime: string; // Time in HH:MM format
   payment: PaymentInfo;
-  status: 'pending' | 'in_progress' | 'ready' | 'completed' | 'cancelled';
+  status: OrderStatus;
   specialInstructions?: string;
   createdAt: string;
   updatedAt: string;

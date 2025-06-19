@@ -1,7 +1,8 @@
 import { Linking } from 'react-native';
 import { getCurrentUser } from 'aws-amplify/auth';
 
-const STRIPE_CONNECT_CLIENT_ID = 'ca_SVBQ4Xdq1CkP9yivzAT9KGviMk6HbfrW';
+// This should be configured in your environment variables
+const STRIPE_CONNECT_CLIENT_ID = '';
 
 export class StripeConnectService {
   private static instance: StripeConnectService;
@@ -23,7 +24,7 @@ export class StripeConnectService {
       const userId = currentUser.userId;
 
       // Use your Lambda endpoint to get the OAuth URL
-      const amplifyConfig = await import('../../amplify_outputs.json');
+      const amplifyConfig = await import('../../../amplify_outputs.json');
       const stripeEndpoint = (amplifyConfig.default.custom as any)?.stripeConnectApiEndpoint;
       
       if (!stripeEndpoint) {
@@ -61,7 +62,7 @@ export class StripeConnectService {
       console.log('Processing Stripe Connect callback...');
       
       // Get your Lambda endpoint
-      const amplifyConfig = await import('../../amplify_outputs.json');
+      const amplifyConfig = await import('../../../amplify_outputs.json');
       const stripeEndpoint = (amplifyConfig.default.custom as any)?.stripeConnectApiEndpoint;
       
       if (!stripeEndpoint) {
@@ -127,7 +128,7 @@ export class StripeConnectService {
       const currentUser = await getCurrentUser();
       const userId = currentUser.userId;
 
-      const amplifyConfig = await import('../../amplify_outputs.json');
+      const amplifyConfig = await import('../../../amplify_outputs.json');
       const stripeEndpoint = (amplifyConfig.default.custom as any)?.stripeConnectApiEndpoint;
       
       if (!stripeEndpoint) {
@@ -156,7 +157,7 @@ export class StripeConnectService {
       const currentUser = await getCurrentUser();
       const userId = currentUser.userId;
 
-      const amplifyConfig = await import('../../amplify_outputs.json');
+      const amplifyConfig = await import('../../../amplify_outputs.json');
       const stripeEndpoint = (amplifyConfig.default.custom as any)?.stripeConnectApiEndpoint;
       
       if (!stripeEndpoint) {

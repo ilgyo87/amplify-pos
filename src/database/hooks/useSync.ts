@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { syncService, SyncStatus, SyncResult } from '../services';
+import { FullSyncResult } from '../services/sync/SyncCoordinator';
 
 export const useSync = () => {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
@@ -28,9 +29,7 @@ export const useSync = () => {
     businessesUploaded: 0,
     businessesDownloaded: 0,
     ordersUploaded: 0,
-    ordersDownloaded: 0,
-    startTime: new Date(),
-    success: false
+    ordersDownloaded: 0
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +53,17 @@ export const useSync = () => {
       setSyncStatus(prev => ({ ...prev, isUploading: true }));
       const result = await syncService.uploadCustomers();
       await refreshStatus();
-      return result;
+      // Convert the result to SyncResult format
+      return {
+        success: result.errors.length === 0,
+        stats: {
+          total: result.uploadedCount,
+          synced: result.uploadedCount,
+          failed: result.errors.length,
+          skipped: 0
+        },
+        errors: result.errors
+      };
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed');
       return null;
@@ -69,7 +78,17 @@ export const useSync = () => {
       setSyncStatus(prev => ({ ...prev, isDownloading: true }));
       const result = await syncService.downloadCustomers();
       await refreshStatus();
-      return result;
+      // Convert the result to SyncResult format
+      return {
+        success: result.errors.length === 0,
+        stats: {
+          total: result.downloadedCount,
+          synced: result.downloadedCount,
+          failed: result.errors.length,
+          skipped: 0
+        },
+        errors: result.errors
+      };
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Download failed');
       return null;
@@ -78,7 +97,7 @@ export const useSync = () => {
     }
   }, [refreshStatus]);
 
-  const fullSync = useCallback(async (): Promise<SyncStatus | null> => {
+  const fullSync = useCallback(async (): Promise<FullSyncResult | null> => {
     try {
       setError(null);
       setSyncStatus(prev => ({ ...prev, isUploading: true, isDownloading: true }));

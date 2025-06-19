@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Linking } from 'react-native';
-import { stripeConnectService } from '../../services/stripeConnectService';
+import { stripeConnectService } from '../../services/stripe';
 
 export function StripeConnectHandler() {
   useEffect(() => {

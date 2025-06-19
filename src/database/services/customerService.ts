@@ -87,6 +87,7 @@ export class CustomerService {
       ...customerData,
       phone: cleanPhoneNumber(customerData.phone),
       businessId: businessId,
+      isLocalOnly: true,
       isDeleted: false
     };
     

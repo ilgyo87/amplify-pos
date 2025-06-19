@@ -112,11 +112,13 @@ export default function BusinessSettingsScreen() {
           setEditingBusiness(null);
           return { business: result.business };
         } else {
-          const formattedErrors: BusinessValidationErrors = {};
-          if (result.errors && result.errors.length > 0) {
-            formattedErrors.name = result.errors.join('\n');
+          // Return the errors from the result
+          if (result.errors) {
+            return { errors: result.errors };
+          } else {
+            // Fallback error if no specific errors were provided
+            return { errors: { name: 'Failed to update business' } };
           }
-          return { errors: formattedErrors };
         }
       }
       return { errors: { name: 'No business selected for editing' } };

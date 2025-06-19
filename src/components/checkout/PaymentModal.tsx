@@ -15,8 +15,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { PaymentMethod, PaymentInfo } from '../../types/order';
 import { CardFieldInput, useStripe } from '@stripe/stripe-react-native';
-import { stripeService } from '../../services/stripeService';
+import { stripeService } from '../../services/stripe';
 import { StripeCardForm } from './StripeCardForm';
+import { StripeConnectCardForm } from './StripeConnectCardForm';
 import { 
   useStripeTerminal,
 } from '@stripe/stripe-terminal-react-native';
@@ -37,6 +38,7 @@ export function PaymentModal({
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('cash');
   const [cardDetails, setCardDetails] = useState<CardFieldInput.Details | null>(null);
   const [isStripeEnabled, setIsStripeEnabled] = useState(false);
+  const [isStripeConnect, setIsStripeConnect] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const { createToken } = useStripe();
   const [checkNumber, setCheckNumber] = useState('');
@@ -140,15 +142,23 @@ export function PaymentModal({
 
   useEffect(() => {
     const checkStripeConfig = async () => {
-      const isConfigured = stripeService.isInitialized();
+      const isConfigured = await stripeService.isInitialized();
       setIsStripeEnabled(isConfigured);
+      
+      // Check if using Stripe Connect
+      const connectStatus = await stripeService.getStripeConnectionStatus();
+      setIsStripeConnect(connectStatus);
     };
 
     checkStripeConfig();
 
     // Subscribe to Stripe settings changes
-    const unsubscribe = stripeService.onSettingsChange((settings) => {
-      setIsStripeEnabled(!!settings?.publishableKey);
+    const unsubscribe = stripeService.onSettingsChange(async (settings) => {
+      const isConfigured = await stripeService.isInitialized();
+      setIsStripeEnabled(isConfigured);
+      
+      const connectStatus = await stripeService.getStripeConnectionStatus();
+      setIsStripeConnect(connectStatus);
     });
 
     return unsubscribe;
@@ -212,45 +222,72 @@ export function PaymentModal({
       let stripeChargeId;
       
       if (selectedMethod === 'card' && cardDetails?.complete) {
-        if (!stripeService.isInitialized()) {
+        const isStripeReady = await stripeService.isInitialized();
+        if (!isStripeReady) {
           Alert.alert('Error', 'Stripe is not properly initialized. Please check your Stripe configuration in settings.');
           return;
         }
 
-        const { error, token } = await createToken({
-          type: 'Card',
-        });
-        if (error) {
-          console.error('Stripe token creation error:', error);
-          Alert.alert('Payment Error', error.message || 'Failed to process card payment. Please check your card details and try again.');
-          return;
-        }
-        
-        if (!token) {
-          Alert.alert('Error', 'Failed to create payment token. Please try again.');
-          return;
-        }
-        
-        stripeToken = token;
+        if (isStripeConnect) {
+          // For Stripe Connect, send card details directly to backend
+          try {
+            const paymentResult = await stripeService.processConnectPayment({
+              cardNumber: (cardDetails as any).number,
+              expMonth: (cardDetails as any).expiryMonth,
+              expYear: (cardDetails as any).expiryYear,
+              cvc: (cardDetails as any).cvc,
+              amount: orderTotal,
+              description: `POS Order Payment - Amount: $${orderTotal.toFixed(2)}`,
+              metadata: {
+                order_total: orderTotal
+              }
+            });
+            
+            stripeChargeId = paymentResult.chargeId;
+            console.log('Stripe Connect payment processed successfully:', stripeChargeId);
+            
+          } catch (paymentError: any) {
+            console.error('Stripe Connect payment processing failed:', paymentError);
+            Alert.alert('Payment Failed', paymentError.message || 'Payment could not be processed. Please try again.');
+            return;
+          }
+        } else {
+          // Traditional Stripe payment with SDK token
+          const { error, token } = await createToken({
+            type: 'Card',
+          });
+          if (error) {
+            console.error('Stripe token creation error:', error);
+            Alert.alert('Payment Error', error.message || 'Failed to process card payment. Please check your card details and try again.');
+            return;
+          }
+          
+          if (!token) {
+            Alert.alert('Error', 'Failed to create payment token. Please try again.');
+            return;
+          }
+          
+          stripeToken = token;
 
-        // Process the actual payment through backend
-        try {
-          const paymentResult = await stripeService.processPayment(
-            token.id,
-            orderTotal,
-            `POS Order Payment - Amount: $${orderTotal.toFixed(2)}`,
-            {
-              order_total: orderTotal
-            }
-          );
-          
-          stripeChargeId = paymentResult.chargeId;
-          console.log('Payment processed successfully:', stripeChargeId);
-          
-        } catch (paymentError: any) {
-          console.error('Payment processing failed:', paymentError);
-          Alert.alert('Payment Failed', paymentError.message || 'Payment could not be processed. Please try again.');
-          return;
+          // Process the actual payment through backend
+          try {
+            const paymentResult = await stripeService.processPayment(
+              token.id,
+              orderTotal,
+              `POS Order Payment - Amount: $${orderTotal.toFixed(2)}`,
+              {
+                order_total: orderTotal
+              }
+            );
+            
+            stripeChargeId = paymentResult.chargeId;
+            console.log('Payment processed successfully:', stripeChargeId);
+            
+          } catch (paymentError: any) {
+            console.error('Payment processing failed:', paymentError);
+            Alert.alert('Payment Failed', paymentError.message || 'Payment could not be processed. Please try again.');
+            return;
+          }
         }
       }
 
@@ -316,7 +353,11 @@ export function PaymentModal({
         return (
           <View style={styles.detailsContainer}>
             <Text style={styles.detailsLabel}>Enter card details:</Text>
-            <StripeCardForm onCardChange={setCardDetails} />
+            {isStripeConnect ? (
+              <StripeConnectCardForm onCardChange={setCardDetails} />
+            ) : (
+              <StripeCardForm onCardChange={setCardDetails} />
+            )}
           </View>
         );
       
@@ -720,7 +761,6 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: '#007AFF',
     borderRadius: 4,
-    transition: 'width 0.3s ease',
   },
   progressText: {
     fontSize: 24,

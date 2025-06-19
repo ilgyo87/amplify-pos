@@ -11,6 +11,18 @@ export interface BusinessDocType {
   email?: string;
   taxId?: string;
   website?: string;
+  userId?: string; // User who owns this business
+  firstName?: string;
+  lastName?: string;
+  hours?: string;
+  logoUrl?: string;
+  logoSource?: string;
+  taxRate?: number;
+  currency?: string;
+  timezone?: string;
+  isActive?: boolean;
+  logo?: string;
+  settings?: any;
   // Local-only fields for sync management
   isLocalOnly: boolean;
   isDeleted?: boolean; // For soft deletes
@@ -64,6 +76,55 @@ export const businessSchema: RxJsonSchema<BusinessDocType> = {
     website: {
       type: 'string',
       maxLength: 500
+    },
+    userId: {
+      type: 'string',
+      maxLength: 100
+    },
+    firstName: {
+      type: 'string',
+      maxLength: 100
+    },
+    lastName: {
+      type: 'string',
+      maxLength: 100
+    },
+    hours: {
+      type: 'string',
+      maxLength: 1000
+    },
+    logoUrl: {
+      type: 'string',
+      maxLength: 500
+    },
+    logoSource: {
+      type: 'string',
+      maxLength: 500
+    },
+    taxRate: {
+      type: 'number',
+      minimum: 0,
+      maximum: 100
+    },
+    currency: {
+      type: 'string',
+      maxLength: 10
+    },
+    timezone: {
+      type: 'string',
+      maxLength: 100
+    },
+    isActive: {
+      type: 'boolean',
+      default: true
+    },
+    logo: {
+      type: 'string',
+      maxLength: 500
+    },
+    settings: {
+      type: ['string', 'null'],
+      maxLength: 5000
     },
     isLocalOnly: {
       type: 'boolean'

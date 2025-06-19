@@ -9,7 +9,7 @@ import {
   Linking,
 } from 'react-native';
 import { getCurrentUser } from 'aws-amplify/auth';
-import { stripeService } from '../../services/stripeService';
+import { stripeService } from '../../services/stripe';
 
 interface StripeConnectOnboardingProps {
   onSuccess?: () => void;
@@ -28,7 +28,7 @@ export function StripeConnectOnboarding({ onSuccess, onError }: StripeConnectOnb
   const checkConnectionStatus = async () => {
     try {
       const user = await getCurrentUser();
-      const connected = await stripeService.getStripeConnectionStatus(user.userId);
+      const connected = await stripeService.getStripeConnectionStatus();
       setIsConnected(connected);
     } catch (error) {
       console.error('Error checking connection status:', error);

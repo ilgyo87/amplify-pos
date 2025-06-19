@@ -56,7 +56,7 @@ function CustomerItem({
   };
 
   const formatAddress = () => {
-    const parts = [];
+    const parts: string[] = [];
     if (customer.address) parts.push(customer.address);
     if (customer.city) parts.push(customer.city);
     if (customer.state) parts.push(customer.state);
