@@ -60,6 +60,7 @@ stripeConnectLambda.addEnvironment('STRIPE_TOKENS_TABLE_NAME', stripeTokenTableN
 // Set these in your deployment environment or use AWS Secrets Manager
 stripeConnectLambda.addEnvironment('STRIPE_CLIENT_ID', process.env.STRIPE_CLIENT_ID || '');
 stripeConnectLambda.addEnvironment('STRIPE_SECRET_KEY', process.env.STRIPE_SECRET_KEY || '');
+stripeConnectLambda.addEnvironment('STRIPE_PUBLISHABLE_KEY', process.env.STRIPE_PUBLISHABLE_KEY || '');
 stripeConnectLambda.addEnvironment('FRONTEND_URL', process.env.FRONTEND_URL || 'https://stripe-callback.vercel.app');
 
 // Add SNS permissions to SMS notification function

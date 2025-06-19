@@ -64,6 +64,18 @@ export default function PaymentSettingsScreen() {
             Configure how customers can pay for orders
           </Text>
         </View>
+        
+        {/* Information Banner */}
+        <View style={styles.infoBanner}>
+          <Ionicons name="information-circle" size={24} color="#007AFF" />
+          <View style={styles.infoBannerText}>
+            <Text style={styles.infoBannerTitle}>Two Ways to Accept Card Payments</Text>
+            <Text style={styles.infoBannerDescription}>
+              1. Enter your own Stripe API keys for direct processing{'\n'}
+              2. Use Stripe Connect (if available) for simplified setup
+            </Text>
+          </View>
+        </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Card Payments</Text>
@@ -223,6 +235,30 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
     backgroundColor: '#fff',
     marginBottom: 16,
+  },
+  infoBanner: {
+    flexDirection: 'row',
+    backgroundColor: '#e3f2fd',
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'flex-start',
+  },
+  infoBannerText: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  infoBannerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0d47a1',
+    marginBottom: 4,
+  },
+  infoBannerDescription: {
+    fontSize: 14,
+    color: '#1565c0',
+    lineHeight: 20,
   },
   headerTitle: {
     fontSize: 28,

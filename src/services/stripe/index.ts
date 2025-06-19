@@ -83,6 +83,32 @@ class StripeService {
   getLocationId = stripeLocationService.getLocationId.bind(stripeLocationService);
   setLocationId = stripeLocationService.setLocationId.bind(stripeLocationService);
   
+  // Get platform publishable key from backend
+  async getPlatformPublishableKey(): Promise<{ publishableKey: string } | null> {
+    try {
+      const amplifyConfig = await import('../../../amplify_outputs.json');
+      const endpoint = (amplifyConfig.default.custom as any)?.stripeConnectApiEndpoint;
+      
+      if (!endpoint) {
+        throw new Error('Stripe Connect API endpoint not configured');
+      }
+
+      const baseUrl = endpoint.endsWith('/') ? endpoint.slice(0, -1) : endpoint;
+
+      const response = await fetch(`${baseUrl}/platform_key`);
+      
+      if (!response.ok) {
+        return null;
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error getting platform key:', error);
+      return null;
+    }
+  }
+  
   // New disconnect method
   async disconnectStripeAccount(userId: string): Promise<boolean> {
     try {

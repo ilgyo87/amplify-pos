@@ -78,11 +78,20 @@ const App = () => {
           await stripeService.initialize();
           console.log('Stripe initialized successfully with publishable key');
         } else if (isConnected) {
-          // For Stripe Connect, we don't use the SDK for card tokenization
-          // Payments will be processed through our backend
-          console.log('Stripe Connect is active - card processing through backend');
+          // For Stripe Connect, we need a publishable key for the SDK to create tokens
+          // This should be provided via environment variables
+          const platformKey = process.env.STRIPE_PUBLISHABLE_KEY || '';
+          if (platformKey) {
+            setStripePublishableKey(platformKey);
+            console.log('Stripe Connect is active - using platform key for tokenization');
+          } else {
+            console.error('Stripe Connect is active but no platform publishable key is configured');
+          }
         } else {
           console.log('Stripe not configured - skipping initialization');
+          console.log('Users can either:');
+          console.log('1. Enter their own Stripe keys in Settings → Payment Settings');
+          console.log('2. Use Stripe Connect (coming soon) to receive payments');
         }
       } catch (error) {
         console.error('Failed to initialize services:', error);

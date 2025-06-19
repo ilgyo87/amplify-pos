@@ -228,66 +228,42 @@ export function PaymentModal({
           return;
         }
 
-        if (isStripeConnect) {
-          // For Stripe Connect, send card details directly to backend
-          try {
-            const paymentResult = await stripeService.processConnectPayment({
-              cardNumber: (cardDetails as any).number,
-              expMonth: (cardDetails as any).expiryMonth,
-              expYear: (cardDetails as any).expiryYear,
-              cvc: (cardDetails as any).cvc,
-              amount: orderTotal,
-              description: `POS Order Payment - Amount: $${orderTotal.toFixed(2)}`,
-              metadata: {
-                order_total: orderTotal
-              }
-            });
-            
-            stripeChargeId = paymentResult.chargeId;
-            console.log('Stripe Connect payment processed successfully:', stripeChargeId);
-            
-          } catch (paymentError: any) {
-            console.error('Stripe Connect payment processing failed:', paymentError);
-            Alert.alert('Payment Failed', paymentError.message || 'Payment could not be processed. Please try again.');
-            return;
-          }
-        } else {
-          // Traditional Stripe payment with SDK token
-          const { error, token } = await createToken({
-            type: 'Card',
-          });
-          if (error) {
-            console.error('Stripe token creation error:', error);
-            Alert.alert('Payment Error', error.message || 'Failed to process card payment. Please check your card details and try again.');
-            return;
-          }
-          
-          if (!token) {
-            Alert.alert('Error', 'Failed to create payment token. Please try again.');
-            return;
-          }
-          
-          stripeToken = token;
+        // For both Stripe Connect and traditional Stripe, use the SDK token approach
+        // The backend will handle the destination charges for Stripe Connect
+        const { error, token } = await createToken({
+          type: 'Card',
+        });
+        if (error) {
+          console.error('Stripe token creation error:', error);
+          Alert.alert('Payment Error', error.message || 'Failed to process card payment. Please check your card details and try again.');
+          return;
+        }
+        
+        if (!token) {
+          Alert.alert('Error', 'Failed to create payment token. Please try again.');
+          return;
+        }
+        
+        stripeToken = token;
 
-          // Process the actual payment through backend
-          try {
-            const paymentResult = await stripeService.processPayment(
-              token.id,
-              orderTotal,
-              `POS Order Payment - Amount: $${orderTotal.toFixed(2)}`,
-              {
-                order_total: orderTotal
-              }
-            );
-            
-            stripeChargeId = paymentResult.chargeId;
-            console.log('Payment processed successfully:', stripeChargeId);
-            
-          } catch (paymentError: any) {
-            console.error('Payment processing failed:', paymentError);
-            Alert.alert('Payment Failed', paymentError.message || 'Payment could not be processed. Please try again.');
-            return;
-          }
+        // Process the actual payment through backend
+        try {
+          const paymentResult = await stripeService.processPayment(
+            token.id,
+            orderTotal,
+            `POS Order Payment - Amount: $${orderTotal.toFixed(2)}`,
+            {
+              order_total: orderTotal
+            }
+          );
+          
+          stripeChargeId = paymentResult.chargeId;
+          console.log('Payment processed successfully:', stripeChargeId);
+          
+        } catch (paymentError: any) {
+          console.error('Payment processing failed:', paymentError);
+          Alert.alert('Payment Failed', paymentError.message || 'Payment could not be processed. Please try again.');
+          return;
         }
       }
 
@@ -353,11 +329,7 @@ export function PaymentModal({
         return (
           <View style={styles.detailsContainer}>
             <Text style={styles.detailsLabel}>Enter card details:</Text>
-            {isStripeConnect ? (
-              <StripeConnectCardForm onCardChange={setCardDetails} />
-            ) : (
-              <StripeCardForm onCardChange={setCardDetails} />
-            )}
+            <StripeCardForm onCardChange={setCardDetails} />
           </View>
         );
       

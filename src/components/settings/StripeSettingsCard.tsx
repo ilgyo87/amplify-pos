@@ -76,6 +76,29 @@ export function StripeSettingsCard() {
       Alert.alert('Error', 'User ID is missing. Cannot connect to Stripe.');
       return;
     }
+    
+    // Check if we have existing Stripe settings
+    const existingSettings = await stripeService.getStripeSettings();
+    if (existingSettings?.publishableKey) {
+      Alert.alert(
+        'Existing Configuration',
+        'You already have Stripe configured with your own API keys. Connecting with Stripe Connect will replace this configuration. Continue?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Continue', 
+            onPress: async () => {
+              await proceedWithStripeConnect();
+            }
+          }
+        ]
+      );
+    } else {
+      await proceedWithStripeConnect();
+    }
+  };
+  
+  const proceedWithStripeConnect = async () => {
     try {
       setIsLoading(true);
       
@@ -88,11 +111,27 @@ export function StripeSettingsCard() {
         // Don't show alert, just let the redirect happen
         // The app state listener and focus effect will handle reloading when user returns
       } else {
-        Alert.alert('Error', 'Could not get Stripe Connect URL. Please try again.');
+        Alert.alert(
+          'Stripe Connect Not Available', 
+          'The platform has not configured Stripe Connect. You can still use Stripe by entering your own API keys in Payment Settings.',
+          [
+            { text: 'OK' }
+          ]
+        );
       }
     } catch (error: any) {
       console.error('Stripe Connect error:', error);
-      Alert.alert('Error', error.message || 'Could not start Stripe Connect onboarding.');
+      if (error.message?.includes('not configured')) {
+        Alert.alert(
+          'Stripe Connect Not Available', 
+          'The platform has not configured Stripe Connect. You can still use Stripe by entering your own API keys in Payment Settings.',
+          [
+            { text: 'OK' }
+          ]
+        );
+      } else {
+        Alert.alert('Error', error.message || 'Could not start Stripe Connect onboarding.');
+      }
     } finally {
       setIsLoading(false);
     }

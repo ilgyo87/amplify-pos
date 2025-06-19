@@ -303,7 +303,64 @@ export const handler = async (event: any) => {
       }
     }
     
-    // 5. Handle disconnect request
+    // 5. Get platform publishable key
+    if (path.includes('/platform_key') && method === 'GET') {
+      console.log('Getting platform publishable key');
+      
+      // For Stripe Connect, we need the PLATFORM's publishable key
+      // This should be YOUR (the app owner's) Stripe account publishable key
+      // Users will connect their accounts to receive payments
+      
+      // Option 1: Use environment variable (recommended for production)
+      let platformPublishableKey = process.env.STRIPE_PUBLISHABLE_KEY;
+      
+      // Option 2: For development/testing, detect which Stripe account owns this app
+      if (!platformPublishableKey && STRIPE_SECRET_KEY && stripe) {
+        try {
+          // Get account info to determine if we're in test or live mode
+          const account = await stripe.accounts.retrieve();
+          // This gives us the platform account info
+          console.log('Platform account:', account.id, 'Test mode:', !account.charges_enabled);
+          
+          // In a real app, you'd store your platform's publishable key in AWS Secrets Manager
+          // For now, we'll return an error telling users how to set it up
+          return {
+            statusCode: 200,
+            headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+            body: JSON.stringify({ 
+              error: 'Platform publishable key not configured',
+              instructions: 'As the platform owner, you need to set STRIPE_PUBLISHABLE_KEY environment variable with your Stripe account\'s publishable key',
+              platformAccountId: account.id,
+              testMode: !account.charges_enabled
+            })
+          };
+        } catch (error) {
+          console.error('Error getting platform account:', error);
+        }
+      }
+      
+      if (!platformPublishableKey) {
+        return {
+          statusCode: 404,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+          body: JSON.stringify({ 
+            error: 'Platform key not configured',
+            message: 'The platform needs to configure their Stripe publishable key'
+          })
+        };
+      }
+      
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ 
+          publishableKey: platformPublishableKey,
+          mode: platformPublishableKey.startsWith('pk_test') ? 'test' : 'live'
+        })
+      };
+    }
+    
+    // 6. Handle disconnect request
     if (path.includes('/disconnect') && method === 'POST') {
       console.log('Processing disconnect request');
       
