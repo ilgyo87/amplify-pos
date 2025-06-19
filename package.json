@@ -7,6 +7,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios --device",
     "web": "expo start --web",
+    "sandbox": "export $(cat .env | grep -v '^#' | xargs) && npx ampx sandbox",
+    "sandbox:delete": "npx ampx sandbox delete",
     "fix:watchman": "watchman watch-del '/Users/iggy/coding_projects/amplify_pos' && watchman watch-project '/Users/iggy/coding_projects/amplify_pos'",
     "clean": "rm -rf node_modules package-lock.json && npm install",
     "clean:ios": "rm -rf ios/build && rm -rf ios/Pods ios/Podfile.lock && rm -rf ~/Library/Developer/Xcode/DerivedData/* && cd ios && pod install --repo-update && cd ..",

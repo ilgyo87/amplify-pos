@@ -1,4 +1,4 @@
-import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+// Removed specific type imports to handle both API Gateway and Function URL events
 import Stripe from 'stripe';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
@@ -7,10 +7,13 @@ const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const STRIPE_TOKENS_TABLE_NAME = process.env.STRIPE_TOKENS_TABLE_NAME;
 
-export const handler = async (
-  event: APIGatewayProxyEvent
-): Promise<APIGatewayProxyResult> => {
+export const handler = async (event: any): Promise<any> => {
   console.log('Stripe payment handler called', event);
+
+  // Get HTTP method and path (Lambda function URLs use different properties)
+  const method = event.requestContext?.http?.method || event.httpMethod || '';
+  const path = event.rawPath || event.path || '';
+  console.log('HTTP method:', method, 'Path:', path);
 
   // Set CORS headers
   const headers = {
@@ -21,7 +24,7 @@ export const handler = async (
   };
 
   // Handle preflight OPTIONS request
-  if (event.httpMethod === 'OPTIONS') {
+  if (method === 'OPTIONS') {
     return {
       statusCode: 200,
       headers,
@@ -29,7 +32,7 @@ export const handler = async (
     };
   }
 
-  if (event.httpMethod !== 'POST') {
+  if (method !== 'POST') {
     return {
       statusCode: 405,
       headers,
@@ -49,6 +52,52 @@ export const handler = async (
     });
 
     const body = JSON.parse(event.body || '{}');
+
+    // Handle refund requests
+    if (path.includes('/refund')) {
+      const { chargeId, amount, reason } = body;
+
+      if (!chargeId) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ 
+            error: 'Missing required field: chargeId' 
+          })
+        };
+      }
+
+      console.log(`Processing refund for charge: ${chargeId}`);
+
+      const refundParams: any = {
+        charge: chargeId,
+        reason: reason || 'requested_by_customer'
+      };
+
+      // If amount is specified, use it (should be in cents)
+      if (amount) {
+        refundParams.amount = amount;
+      }
+
+      const refund = await stripe.refunds.create(refundParams);
+
+      console.log('Refund successful:', refund.id);
+
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          success: true,
+          refundId: refund.id,
+          amount: refund.amount / 100, // Convert back to dollars
+          currency: refund.currency,
+          status: refund.status,
+          created: refund.created
+        })
+      };
+    }
+
+    // Handle payment requests (default)
     const { token, amount, description, metadata, userId } = body;
 
     // Validate required fields

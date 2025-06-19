@@ -79,13 +79,20 @@ const App = () => {
           console.log('Stripe initialized successfully with publishable key');
         } else if (isConnected) {
           // For Stripe Connect, we need a publishable key for the SDK to create tokens
-          // This should be provided via environment variables
-          const platformKey = process.env.STRIPE_PUBLISHABLE_KEY || '';
-          if (platformKey) {
-            setStripePublishableKey(platformKey);
-            console.log('Stripe Connect is active - using platform key for tokenization');
-          } else {
-            console.error('Stripe Connect is active but no platform publishable key is configured');
+          // Get the platform key from the backend
+          console.log('Stripe Connect is connected, fetching platform key...');
+          try {
+            const platformKeyData = await stripeService.getPlatformPublishableKey();
+            console.log('Platform key response:', platformKeyData);
+            if (platformKeyData?.publishableKey) {
+              setStripePublishableKey(platformKeyData.publishableKey);
+              console.log('Stripe Connect is active - using platform key:', platformKeyData.publishableKey);
+            } else {
+              console.error('Stripe Connect is active but no platform publishable key is configured');
+              console.log('Platform key data received:', platformKeyData);
+            }
+          } catch (error) {
+            console.error('Failed to get platform publishable key:', error);
           }
         } else {
           console.log('Stripe not configured - skipping initialization');
@@ -133,12 +140,15 @@ const App = () => {
     }
   };
 
+  console.log('[APP] Current stripePublishableKey:', stripePublishableKey);
+  
   return (
     <SafeAreaProvider>
       <StatusBar style="auto" />
       <StripeProvider
         publishableKey={stripePublishableKey || 'pk_test_placeholder'}
         merchantIdentifier="merchant.identifier"
+        urlScheme="amplifypos"
       >
         <NavigationContainer>
           <Authenticator.Provider>

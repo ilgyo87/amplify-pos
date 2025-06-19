@@ -125,7 +125,15 @@ export class StripeConnectService {
    */
   async isConnected(): Promise<boolean> {
     try {
-      const currentUser = await getCurrentUser();
+      // Try to get the current user - this will throw if user is not authenticated
+      let currentUser: { userId: string };
+      try {
+        currentUser = await getCurrentUser();
+      } catch (authError) {
+        // User is not authenticated yet, return false silently
+        return false;
+      }
+      
       const userId = currentUser.userId;
 
       const amplifyConfig = await import('../../../amplify_outputs.json');
@@ -143,8 +151,11 @@ export class StripeConnectService {
       }
       
       return false;
-    } catch (error) {
-      console.error('Error checking Stripe connection status:', error);
+    } catch (error: any) {
+      // Only log non-authentication errors
+      if (!error?.message?.includes('User needs to be authenticated')) {
+        console.error('Error checking Stripe connection status:', error);
+      }
       return false;
     }
   }

@@ -102,7 +102,7 @@ export function StripeTerminalSettingsCard() {
       
       // For M2 readers, handle the null ID issue
       if (!reader.id && reader.deviceType === 'stripeM2') {
-        console.warn('[TERMINAL SETTINGS] M2 reader has null ID - using serialNumber as fallback');
+        console.log('[TERMINAL SETTINGS] M2 reader has null ID - using serialNumber as fallback');
         reader = { ...reader, id: reader.serialNumber };
       }
       
