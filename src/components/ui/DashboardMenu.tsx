@@ -4,7 +4,6 @@ import {
   StyleSheet, 
   TouchableOpacity, 
   Text,
-  useWindowDimensions,
   Dimensions
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -24,44 +23,12 @@ interface DashboardMenuProps {
   menuItems: MenuItem[];
 }
 
-// Custom hook to get device orientation
-const useOrientation = (): 'portrait' | 'landscape' => {
-  const getScreenOrientation = () => {
-    const screen = Dimensions.get('screen');
-    return screen.width > screen.height ? 'landscape' : 'portrait';
-  };
-
-  const [orientation, setOrientation] = useState<'portrait' | 'landscape'>(getScreenOrientation());
-
-  useEffect(() => {
-    const handleChange = () => {
-      setOrientation(getScreenOrientation());
-    };
-    const subscription = Dimensions.addEventListener('change', handleChange);
-    handleChange(); // Initial check after mount
-
-    return () => {
-      subscription?.remove();
-    };
-  }, []);
-
-  return orientation;
-};
-
-
-
 export const DashboardMenu = memo(({ menuItems }: DashboardMenuProps) => {
-  const { width, height } = useWindowDimensions();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const orientation = useOrientation();
   
   const handlePress = (href: keyof Omit<RootStackParamList, 'Checkout'>) => {
     navigation.navigate(href as any);
   };
-
-  // Simple responsive layout
-  const isLandscape = orientation === 'landscape';
-  const itemHeight = isLandscape ? 187 : 238;
 
   return (
     <View style={styles.container}>
@@ -71,10 +38,8 @@ export const DashboardMenu = memo(({ menuItems }: DashboardMenuProps) => {
             key={item.id}
             style={[
               styles.itemWrapper,
-              { 
-                flexBasis: isLandscape ? '31%' : '48%',
-                height: itemHeight,
-              }
+              // Add margin-right except for the last item in each row
+              index % 2 === 1 && { marginRight: 0 }
             ]}
           >
             <TouchableOpacity
@@ -93,16 +58,13 @@ export const DashboardMenu = memo(({ menuItems }: DashboardMenuProps) => {
                   <View style={styles.iconBackground}>
                     <Icon 
                       name={item.icon} 
-                      size={isLandscape ? 26 : 32} 
+                      size={28} 
                       color="#fff" 
                     />
                   </View>
                 </View>
                 <Text 
-                  style={[
-                    styles.menuItemText, 
-                    isLandscape && styles.landscapeText
-                  ]} 
+                  style={styles.menuItemText} 
                   numberOfLines={1}
                   adjustsFontSizeToFit
                 >
@@ -120,18 +82,19 @@ export const DashboardMenu = memo(({ menuItems }: DashboardMenuProps) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 24,
-    justifyContent: 'flex-start',
+    padding: 16,
     backgroundColor: '#f8f9fa',
   },
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
     width: '100%',
+    justifyContent: 'space-between',
   },
   itemWrapper: {
-    marginBottom: 20,
+    width: '48%',
+    height: 160,
+    marginBottom: 16,
   },
   menuItem: {
     flex: 1,
@@ -167,9 +130,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   iconBackground: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -178,7 +141,7 @@ const styles = StyleSheet.create({
   },
   menuItemText: {
     color: '#fff',
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '700',
     textAlign: 'center',
     includeFontPadding: false,
@@ -186,8 +149,5 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.3)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
-  },
-  landscapeText: {
-    fontSize: 15,
   },
 });
