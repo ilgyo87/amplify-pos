@@ -59,6 +59,7 @@ export interface OrderDocType {
   isDeleted?: boolean;
   lastSyncedAt?: string;
   amplifyId?: string;
+  version?: number; // Version number for conflict detection
   createdAt: string;
   updatedAt: string;
 }
@@ -259,6 +260,11 @@ export const orderSchema: RxJsonSchema<OrderDocType> = {
     amplifyId: {
       type: 'string',
       maxLength: 100
+    },
+    version: {
+      type: 'number',
+      minimum: 0,
+      default: 1
     },
     createdAt: {
       type: 'string',

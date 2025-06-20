@@ -1,6 +1,7 @@
 import { BaseSyncService, SyncResult, SyncStats } from './BaseSyncService';
 import { Order } from '../../../types/order';
 import { Order as GraphQLOrder, OrderItem as GraphQLOrderItem } from '../../../API';
+import { SyncNotificationBuilder } from './SyncNotification';
 
 export class OrderSyncService extends BaseSyncService<Order> {
   async sync(): Promise<SyncResult> {
@@ -10,19 +11,44 @@ export class OrderSyncService extends BaseSyncService<Order> {
 
     const stats: SyncStats = { total: 0, synced: 0, failed: 0, skipped: 0 };
     this.errors = [];
+    this.notificationBuilder = new SyncNotificationBuilder();
 
     try {
-      // Get all local orders that need syncing
-      const localOrders = await this.db.orders
-        .find({ selector: { isLocalOnly: true } })
-        .exec();
+      // Get both new/updated orders and deleted orders that need syncing
+      const [localOrders, deletedOrders] = await Promise.all([
+        this.db.orders
+          .find({ 
+            selector: { 
+              isLocalOnly: true,
+              $or: [
+                { isDeleted: false },
+                { isDeleted: { $exists: false } }
+              ]
+            } 
+          })
+          .exec(),
+        this.db.orders
+          .find({ 
+            selector: { 
+              isDeleted: true,
+              amplifyId: { $ne: null }
+            } 
+          })
+          .exec()
+      ]);
 
-      stats.total = localOrders.length;
+      const allOrdersToSync = [...localOrders, ...deletedOrders];
+      stats.total = allOrdersToSync.length;
+      
+      // Only log if there are items to sync
+      if (stats.total > 0) {
+        console.log(`[SYNC] Found ${stats.total} orders to sync (${deletedOrders.length} deletions)`);
+      }
 
       // Process in batches to avoid overwhelming the API
       const batchSize = 5;
-      for (let i = 0; i < localOrders.length; i += batchSize) {
-        const batch = localOrders.slice(i, i + batchSize);
+      for (let i = 0; i < allOrdersToSync.length; i += batchSize) {
+        const batch = allOrdersToSync.slice(i, i + batchSize);
         await Promise.all(
           batch.map(async (order) => {
             try {
@@ -38,7 +64,7 @@ export class OrderSyncService extends BaseSyncService<Order> {
         );
         
         // Small delay between batches
-        if (i + batchSize < localOrders.length) {
+        if (i + batchSize < allOrdersToSync.length) {
           await this.sleep(100);
         }
       }
@@ -50,20 +76,68 @@ export class OrderSyncService extends BaseSyncService<Order> {
         success: stats.failed === 0,
         stats,
         errors: this.errors,
+        notificationBuilder: this.notificationBuilder,
       };
     } catch (error) {
       console.error('[SYNC] Order sync failed:', error);
       this.errors.push(error instanceof Error ? error.message : 'Unknown error');
+      this.notificationBuilder.addError(error instanceof Error ? error.message : 'Unknown error');
       return {
         success: false,
         stats,
         errors: this.errors,
+        notificationBuilder: this.notificationBuilder,
       };
     }
   }
 
   private async syncOrder(localOrder: any): Promise<void> {
     const orderData = localOrder.toJSON();
+    
+    // Check if this is a deletion
+    if (orderData.isDeleted && orderData.amplifyId) {
+      try {
+        // First delete all order items
+        if (orderData.items && orderData.items.length > 0) {
+          await this.deleteOrderItems(orderData.items);
+        }
+        
+        // Then delete the order
+        const deleteResult = await this.client.graphql({
+          query: /* GraphQL */ `
+            mutation DeleteOrder($input: DeleteOrderInput!) {
+              deleteOrder(input: $input) {
+                id
+              }
+            }
+          `,
+          variables: { 
+            input: { 
+              id: orderData.amplifyId || orderData.id 
+            } 
+          },
+        });
+
+        const data = await this.handleGraphQLResult(deleteResult, 'DeleteOrder');
+        if (data) {
+          // Remove the order from local database after successful deletion
+          await localOrder.remove();
+          console.log('[SYNC] Order deleted from cloud and removed locally:', orderData.orderNumber || orderData.id);
+          this.notificationBuilder.addOperation(
+            'orders',
+            'orders',
+            'deleted',
+            'to-cloud',
+            1,
+            [orderData.orderNumber || orderData.id]
+          );
+        }
+        return;
+      } catch (error: any) {
+        console.error('[SYNC] Failed to delete order from cloud:', orderData.id, error);
+        throw error;
+      }
+    }
     
     // First, sync all order items
     const syncedItems = await this.syncOrderItems(orderData.items);
@@ -100,6 +174,7 @@ export class OrderSyncService extends BaseSyncService<Order> {
       rackNumber: orderData.rackNumber || null,
       cancellationReason: orderData.cancellationReason || null,
       refundDate: orderData.refundDate || null,
+      version: orderData.version || 1,
     };
 
     try {
@@ -138,6 +213,7 @@ export class OrderSyncService extends BaseSyncService<Order> {
               rackNumber
               cancellationReason
               refundDate
+              version
               createdAt
               updatedAt
             }
@@ -148,8 +224,19 @@ export class OrderSyncService extends BaseSyncService<Order> {
 
       const data = await this.handleGraphQLResult(createResult, 'CreateOrder');
       if (data) {
-        await localOrder.update({ $set: { isLocalOnly: false } });
+        await localOrder.update({ $set: { 
+          isLocalOnly: false,
+          amplifyId: orderData.id // Store the ID used in Amplify
+        } });
         console.log('[SYNC] Order uploaded:', orderData.orderNumber);
+        this.notificationBuilder.addOperation(
+          'orders',
+          'orders',
+          'added',
+          'to-cloud',
+          1,
+          [orderData.orderNumber]
+        );
       }
     } catch (createError: any) {
       // If creation fails due to existing record, try update
@@ -200,6 +287,7 @@ export class OrderSyncService extends BaseSyncService<Order> {
                   rackNumber
                   cancellationReason
                   refundDate
+                  version
                   createdAt
                   updatedAt
                 }
@@ -210,8 +298,19 @@ export class OrderSyncService extends BaseSyncService<Order> {
 
           const data = await this.handleGraphQLResult(updateResult, 'UpdateOrder');
           if (data) {
-            await localOrder.update({ $set: { isLocalOnly: false } });
+            await localOrder.update({ $set: { 
+              isLocalOnly: false,
+              amplifyId: orderData.id // Store the ID used in Amplify
+            } });
             console.log('[SYNC] Order updated:', orderData.orderNumber);
+            this.notificationBuilder.addOperation(
+              'orders',
+              'orders',
+              'updated',
+              'to-cloud',
+              1,
+              [orderData.orderNumber]
+            );
           }
         } catch (updateError: any) {
           // If update also fails, log the specific error
@@ -247,6 +346,7 @@ export class OrderSyncService extends BaseSyncService<Order> {
           pressOnly: item.pressOnly || false,
           notes: item.notes ? (Array.isArray(item.notes) ? item.notes : [item.notes]) : null,  // Backend expects array of strings
           addOns: item.addOns ? JSON.stringify(item.addOns) : null,  // Store add-ons as JSON string
+          version: item.version || 1,
         };
 
         const createResult = await this.client.graphql({
@@ -258,6 +358,7 @@ export class OrderSyncService extends BaseSyncService<Order> {
                 name
                 price
                 addOns
+                version
               }
             }
           `,
@@ -279,6 +380,34 @@ export class OrderSyncService extends BaseSyncService<Order> {
     }
     
     return syncedItemIds;
+  }
+
+  private async deleteOrderItems(items: any[]): Promise<void> {
+    for (const item of items) {
+      try {
+        const deleteResult = await this.client.graphql({
+          query: /* GraphQL */ `
+            mutation DeleteOrderItem($input: DeleteOrderItemInput!) {
+              deleteOrderItem(input: $input) {
+                id
+              }
+            }
+          `,
+          variables: { 
+            input: { 
+              id: item.id 
+            } 
+          },
+        });
+
+        const data = await this.handleGraphQLResult(deleteResult, 'DeleteOrderItem');
+        if (data) {
+          console.log('[SYNC] Order item deleted from cloud:', item.id);
+        }
+      } catch (error: any) {
+        console.error('[SYNC] Failed to delete order item from cloud:', item.id, error);
+      }
+    }
   }
 
   private async downloadOrders(stats: SyncStats): Promise<void> {
@@ -318,6 +447,7 @@ export class OrderSyncService extends BaseSyncService<Order> {
                 rackNumber
                 cancellationReason
                 refundDate
+                version
                 createdAt
                 updatedAt
               }
@@ -345,6 +475,7 @@ export class OrderSyncService extends BaseSyncService<Order> {
             orderData.items = items;
             // Order downloaded from cloud is not local-only
             orderData.isLocalOnly = false;
+            orderData.amplifyId = cloudOrder.id; // Store the Amplify ID
             
             // Parse JSON fields
             if (orderData.paymentInfo && typeof orderData.paymentInfo === 'string') {
@@ -364,6 +495,14 @@ export class OrderSyncService extends BaseSyncService<Order> {
             }
             
             await this.db!.orders.insert(orderData);
+            this.notificationBuilder.addOperation(
+              'orders',
+              'orders',
+              'added',
+              'from-cloud',
+              1,
+              [orderData.orderNumber]
+            );
             downloadedCount++;
           }
         } catch (error) {
@@ -402,6 +541,7 @@ export class OrderSyncService extends BaseSyncService<Order> {
                 pressOnly
                 notes
                 addOns
+                version
                 createdAt
                 updatedAt
               }

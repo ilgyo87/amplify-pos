@@ -120,8 +120,8 @@ export function OrderSummary({
             {item.addOns && item.addOns.length > 0 && (
               <View style={styles.addOnsContainer}>
                 {item.addOns.map((addOn, index) => (
-                  <Text key={index} style={styles.addOnText}>
-                    + {addOn.name} {addOn.quantity > 1 ? `(${addOn.quantity}x)` : ''} - ${(addOn.price * addOn.quantity).toFixed(2)}
+                  <Text key={index} style={styles.addOnText} numberOfLines={1} ellipsizeMode="tail">
+                    + {addOn.name} {addOn.quantity > 1 ? `x${addOn.quantity}` : ''} (${(addOn.price * addOn.quantity).toFixed(2)})
                   </Text>
                 ))}
               </View>
@@ -354,6 +354,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginTop: 8,
   },
   itemNameContainer: {
     flex: 1,
@@ -545,13 +546,13 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   addOnsContainer: {
-    marginTop: 4,
-    paddingLeft: 8,
+    marginTop: 2,
+    paddingLeft: 4,
   },
   addOnText: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#666',
     fontStyle: 'italic',
-    marginBottom: 2,
+    marginBottom: 1,
   },
 });

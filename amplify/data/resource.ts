@@ -32,6 +32,7 @@ const schema = a.schema({
       isActive: a.boolean().default(true),
       logo: a.string(),
       settings: a.string(),
+      version: a.integer().default(1),
       orders: a.hasMany('Order', 'businessId'),
     })
     .authorization((allow) => [
@@ -56,6 +57,7 @@ const schema = a.schema({
       totalRefunds: a.float(),
       notes: a.string(),
       joinDate: a.string(),
+      version: a.integer().default(1),
     })
     .authorization((allow) => [
       allow.authenticated().to(['read']),
@@ -94,6 +96,7 @@ const schema = a.schema({
       stripePaymentIntentId: a.string(),
       stripeChargeId: a.string(),
       refundReason: a.string(),
+      version: a.integer().default(1),
     })
     .authorization((allow) => [
       allow.authenticated().to(['read']),
@@ -116,6 +119,7 @@ const schema = a.schema({
       notes: a.string().array(), // <-- Added this line for notes
       addOns: a.string(), // JSON string of add-ons array
       order: a.belongsTo('Order', 'orderId'),
+      version: a.integer().default(1),
     })
     .authorization((allow) => [
       allow.authenticated().to(['read']),
@@ -139,6 +143,7 @@ const schema = a.schema({
       isActive: a.boolean().default(true),
       permissions: a.string().array(),
       amplifyId: a.string(),
+      version: a.integer().default(1),
     })
     .authorization((allow) => [
       allow.authenticated().to(['read']),
@@ -155,7 +160,8 @@ const schema = a.schema({
       sortOrder: a.integer(),
       image: a.string(),
       icon: a.string(),
-      products: a.hasMany('Product', 'categoryId')
+      products: a.hasMany('Product', 'categoryId'),
+      version: a.integer().default(1),
     })
     .authorization((allow) => [
       allow.authenticated().to(['read']),
@@ -182,7 +188,8 @@ const schema = a.schema({
       lowStockThreshold: a.integer(),
       variants: a.string(),
       customizations: a.string(),
-      displayOrder: a.integer()
+      displayOrder: a.integer(),
+      version: a.integer().default(1),
     })
     .authorization((allow) => [
       allow.authenticated().to(['read']),

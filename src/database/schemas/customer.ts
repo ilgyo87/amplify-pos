@@ -28,6 +28,7 @@ export interface CustomerDocType {
   isDeleted?: boolean; // For soft deletes
   lastSyncedAt?: string;
   amplifyId?: string; // Store the Amplify ID when synced
+  version?: number; // Version number for conflict detection
   createdAt: string;
   updatedAt: string;
 }
@@ -129,6 +130,11 @@ export const customerSchema: RxJsonSchema<CustomerDocType> = {
     amplifyId: {
       type: ['string', 'null'],
       maxLength: 100
+    },
+    version: {
+      type: 'number',
+      minimum: 0,
+      default: 1
     },
     createdAt: {
       type: 'string',

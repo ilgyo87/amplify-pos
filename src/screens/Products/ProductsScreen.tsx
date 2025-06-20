@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Text, TextInput, Alert, Modal, SafeAreaView } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Text, TextInput, Alert, Modal, SafeAreaView, Dimensions } from 'react-native';
 import { BaseScreen } from '../BaseScreen';
 import { CategoryList } from '../../components/categories/CategoryList';
 import { CreateCategoryButton } from '../../components/categories/CreateCategoryButton';
@@ -245,6 +245,7 @@ const styles = StyleSheet.create({
   // Preview Styles
   rackPreviewSection: {
     marginBottom: 24,
+    flex: 1,
   },
   rackPreviewTitle: {
     fontSize: 18,
@@ -253,7 +254,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   rackPreviewScrollView: {
-    maxHeight: 200,
+    flex: 1,
+    minHeight: 200,
+    maxHeight: Dimensions.get('window').height < 500 ? 250 : 400,
     borderWidth: 1,
     borderColor: '#e9ecef',
     borderRadius: 8,
@@ -814,7 +817,7 @@ export default function ProductsScreen() {
       
       case 'racks':
         return (
-          <View style={styles.contentContainer}>
+          <ScrollView style={styles.contentContainer} showsVerticalScrollIndicator={false}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Rack Labels</Text>
               <TouchableOpacity 
@@ -873,6 +876,7 @@ export default function ProductsScreen() {
                 style={styles.rackPreviewScrollView}
                 contentContainerStyle={styles.rackPreviewScrollContent}
                 showsVerticalScrollIndicator={true}
+                nestedScrollEnabled={true}
               >
                 <View style={styles.rackPreviewContainer}>
                   {generateRackLabels().map((label, index) => (
@@ -885,7 +889,7 @@ export default function ProductsScreen() {
                 </View>
               </ScrollView>
             </View>
-          </View>
+          </ScrollView>
         );
       
       default:

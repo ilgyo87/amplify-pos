@@ -100,7 +100,9 @@ export class BusinessService {
         phone: businessData.phone.trim(),
         taxId: businessData.taxId?.trim() || undefined,
         website: businessData.website?.trim() || undefined,
-        isLocalOnly: (businessData as any).isLocalOnly !== undefined ? (businessData as any).isLocalOnly : true
+        isLocalOnly: (businessData as any).isLocalOnly !== undefined ? (businessData as any).isLocalOnly : true,
+        version: (existingBusiness.version || 1) + 1,
+        updatedAt: new Date().toISOString()
       };
 
       const business = await this.businessRepository!.updateBusiness(id, updates);

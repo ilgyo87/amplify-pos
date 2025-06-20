@@ -2,6 +2,7 @@ import { generateClient, GraphQLResult } from 'aws-amplify/api';
 import { AppSyncClient } from '../../../types/api';
 import { RxDatabase } from 'rxdb';
 import { DatabaseCollections } from '../../schema';
+import { SyncNotificationBuilder } from './SyncNotification';
 
 export interface SyncStats {
   total: number;
@@ -14,15 +15,18 @@ export interface SyncResult {
   success: boolean;
   stats: SyncStats;
   errors: string[];
+  notificationBuilder?: SyncNotificationBuilder;
 }
 
 export abstract class BaseSyncService<T> {
   protected client: AppSyncClient;
   protected db: RxDatabase<DatabaseCollections> | null = null;
   protected errors: string[] = [];
+  protected notificationBuilder: SyncNotificationBuilder;
 
   constructor() {
     this.client = generateClient() as AppSyncClient;
+    this.notificationBuilder = new SyncNotificationBuilder();
   }
 
   setDatabase(db: RxDatabase<DatabaseCollections>) {

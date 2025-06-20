@@ -145,9 +145,17 @@ export class CustomerService {
       return { duplicateError: `A customer with this ${field} already exists` };
     }
 
+    // Get existing customer to access current version
+    const existingCustomer = await repository.findById(id);
+    if (!existingCustomer) {
+      return { errors: { firstName: 'Customer not found' } };
+    }
+
     const updateData = {
       ...customerData,
-      phone: cleanPhoneNumber(customerData.phone)
+      phone: cleanPhoneNumber(customerData.phone),
+      version: (existingCustomer.version || 1) + 1,
+      updatedAt: new Date().toISOString()
     };
 
     const customer = await repository.update(id, updateData) as CustomerDocument | null;

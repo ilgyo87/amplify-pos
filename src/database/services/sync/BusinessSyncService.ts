@@ -2,6 +2,7 @@ import { BaseSyncService, SyncResult, SyncStats } from './BaseSyncService';
 import { Business } from '../../../types/business';
 import { Business as GraphQLBusiness } from '../../../API';
 import { getCurrentUser } from 'aws-amplify/auth';
+import { SyncNotificationBuilder } from './SyncNotification';
 
 export class BusinessSyncService extends BaseSyncService<Business> {
   async sync(): Promise<SyncResult> {
@@ -11,19 +12,41 @@ export class BusinessSyncService extends BaseSyncService<Business> {
 
     const stats: SyncStats = { total: 0, synced: 0, failed: 0, skipped: 0 };
     this.errors = [];
+    this.notificationBuilder = new SyncNotificationBuilder();
 
     try {
-      const localBusinesses = await this.db.businesses
-        .find({ selector: { isLocalOnly: true } })
-        .exec();
+      // Get both new/updated businesses and deleted businesses that need syncing
+      const [localBusinesses, deletedBusinesses] = await Promise.all([
+        this.db.businesses
+          .find({ 
+            selector: { 
+              isLocalOnly: true,
+              $or: [
+                { isDeleted: false },
+                { isDeleted: { $exists: false } }
+              ]
+            } 
+          })
+          .exec(),
+        this.db.businesses
+          .find({ 
+            selector: { 
+              isDeleted: true,
+              amplifyId: { $ne: null }
+            } 
+          })
+          .exec()
+      ]);
 
-      stats.total = localBusinesses.length;
+      const allBusinessesToSync = [...localBusinesses, ...deletedBusinesses];
+      stats.total = allBusinessesToSync.length;
+      
       // Only log if there are items to sync
       if (stats.total > 0) {
-        console.log(`[SYNC] Found ${stats.total} businesses to sync`);
+        console.log(`[SYNC] Found ${stats.total} businesses to sync (${deletedBusinesses.length} deletions)`);
       }
 
-      for (const localBusiness of localBusinesses) {
+      for (const localBusiness of allBusinessesToSync) {
         try {
           await this.syncBusiness(localBusiness);
           stats.synced++;
@@ -41,20 +64,62 @@ export class BusinessSyncService extends BaseSyncService<Business> {
         success: stats.failed === 0,
         stats,
         errors: this.errors,
+        notificationBuilder: this.notificationBuilder,
       };
     } catch (error) {
       console.error('[SYNC] Business sync failed:', error);
       this.errors.push(error instanceof Error ? error.message : 'Unknown error');
+      this.notificationBuilder.addError(error instanceof Error ? error.message : 'Unknown error');
       return {
         success: false,
         stats,
         errors: this.errors,
+        notificationBuilder: this.notificationBuilder,
       };
     }
   }
 
   private async syncBusiness(localBusiness: any): Promise<void> {
     const businessData = localBusiness.toJSON();
+    
+    // Check if this is a deletion
+    if (businessData.isDeleted && businessData.amplifyId) {
+      try {
+        const deleteResult = await this.client.graphql({
+          query: /* GraphQL */ `
+            mutation DeleteBusiness($input: DeleteBusinessInput!) {
+              deleteBusiness(input: $input) {
+                id
+              }
+            }
+          `,
+          variables: { 
+            input: { 
+              id: businessData.amplifyId || businessData.id 
+            } 
+          },
+        });
+
+        const data = await this.handleGraphQLResult(deleteResult, 'DeleteBusiness');
+        if (data) {
+          // Remove the business from local database after successful deletion
+          await localBusiness.remove();
+          console.log('[SYNC] Business deleted from cloud and removed locally:', businessData.name || businessData.id);
+          this.notificationBuilder.addOperation(
+            'businesses',
+            'businesses',
+            'deleted',
+            'to-cloud',
+            1,
+            [businessData.name || businessData.id]
+          );
+        }
+        return;
+      } catch (error: any) {
+        console.error('[SYNC] Failed to delete business from cloud:', businessData.id, error);
+        throw error;
+      }
+    }
     
     // Get current user's email and ID
     let userEmail = 'noemail@example.com';
@@ -90,6 +155,7 @@ export class BusinessSyncService extends BaseSyncService<Business> {
       isActive: businessData.isActive !== false,
       logo: businessData.logo || null,
       settings: businessData.settings ? JSON.stringify(businessData.settings) : null,
+      version: businessData.version || 1,
     };
 
     try {
@@ -118,6 +184,7 @@ export class BusinessSyncService extends BaseSyncService<Business> {
               isActive
               logo
               settings
+              version
               createdAt
               updatedAt
             }
@@ -128,8 +195,19 @@ export class BusinessSyncService extends BaseSyncService<Business> {
 
       const data = await this.handleGraphQLResult(createResult, 'CreateBusiness');
       if (data) {
-        await localBusiness.update({ $set: { isLocalOnly: false } });
+        await localBusiness.update({ $set: { 
+          isLocalOnly: false,
+          amplifyId: businessData.id // Store the ID used in Amplify
+        } });
         console.log('[SYNC] Business uploaded:', businessData.name || businessData.id);
+        this.notificationBuilder.addOperation(
+          'businesses',
+          'businesses',
+          'added',
+          'to-cloud',
+          1,
+          [businessData.name || businessData.id]
+        );
       }
     } catch (createError: any) {
       // If creation fails due to existing record, try update
@@ -171,6 +249,7 @@ export class BusinessSyncService extends BaseSyncService<Business> {
                   isActive
                   logo
                   settings
+                  version
                   createdAt
                   updatedAt
                 }
@@ -181,8 +260,19 @@ export class BusinessSyncService extends BaseSyncService<Business> {
 
           const data = await this.handleGraphQLResult(updateResult, 'UpdateBusiness');
           if (data) {
-            await localBusiness.update({ $set: { isLocalOnly: false } });
+            await localBusiness.update({ $set: { 
+              isLocalOnly: false,
+              amplifyId: businessData.id // Store the ID used in Amplify
+            } });
             console.log('[SYNC] Business updated:', businessData.id, `(${businessData.name})`);
+            this.notificationBuilder.addOperation(
+              'businesses',
+              'businesses',
+              'updated',
+              'to-cloud',
+              1,
+              [businessData.name || businessData.id]
+            );
           }
         } catch (updateError: any) {
           // If update also fails, log the specific error
@@ -225,6 +315,7 @@ export class BusinessSyncService extends BaseSyncService<Business> {
                 isActive
                 logo
                 settings
+                version
                 createdAt
                 updatedAt
               }
@@ -251,6 +342,7 @@ export class BusinessSyncService extends BaseSyncService<Business> {
             const businessData = this.cleanGraphQLData(cloudBusiness);
             // Business downloaded from cloud is not local-only
             businessData.isLocalOnly = false;
+            businessData.amplifyId = cloudBusiness.id; // Store the Amplify ID
             
             // Map backend fields to local fields - backend has 'businessName', local has 'name'
             if (businessData.businessName) {
@@ -284,6 +376,14 @@ export class BusinessSyncService extends BaseSyncService<Business> {
             }
             
             await this.db!.businesses.insert(businessData);
+            this.notificationBuilder.addOperation(
+              'businesses',
+              'businesses',
+              'added',
+              'from-cloud',
+              1,
+              [businessData.name || businessData.id]
+            );
             downloadedCount++;
           }
         } catch (error) {

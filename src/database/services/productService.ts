@@ -131,9 +131,10 @@ export class ProductService {
       }
     }
 
-    // Update the product
+    // Update the product with incremented version
     const product = await repository.update(id, {
       ...productData,
+      version: (existingProduct.version || 1) + 1,
       updatedAt: new Date().toISOString(),
     }) as ProductDocument | null;
 

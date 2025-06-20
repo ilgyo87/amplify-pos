@@ -5,7 +5,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Dimensions
+  Dimensions,
+  ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -145,8 +146,165 @@ export function PinInput({
     );
   };
 
+  const { width, height } = Dimensions.get('window');
+  const buttonSize = Math.min(width / 4.5, 80); // Slightly smaller buttons
+  const isSmallScreen = height < 700;
+
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: '#f5f5f5',
+    },
+    scrollContent: {
+      flexGrow: 1,
+      paddingHorizontal: 20,
+      paddingTop: isSmallScreen ? 10 : 20,
+      paddingBottom: 20,
+    },
+    content: {
+      width: '100%',
+      maxWidth: 400,
+      alignItems: 'center',
+      alignSelf: 'center',
+    },
+    header: {
+      width: '100%',
+      alignItems: 'center',
+      marginBottom: isSmallScreen ? 20 : 30,
+    },
+    title: {
+      fontSize: isSmallScreen ? 22 : 24,
+      fontWeight: '600',
+      color: '#333',
+      marginBottom: 6,
+      textAlign: 'center',
+    },
+    subtitle: {
+      fontSize: isSmallScreen ? 14 : 16,
+      color: '#666',
+      textAlign: 'center',
+    },
+    pinContainer: {
+      alignItems: 'center',
+      marginBottom: isSmallScreen ? 15 : 20,
+    },
+    pinDotsContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: isSmallScreen ? 15 : 20,
+    },
+    pinDot: {
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      borderWidth: 2,
+      borderColor: '#ddd',
+      marginHorizontal: 8,
+      backgroundColor: 'transparent',
+    },
+    pinDotFilled: {
+      backgroundColor: '#007AFF',
+      borderColor: '#007AFF',
+    },
+    errorContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#FFE6E6',
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 8,
+      marginBottom: isSmallScreen ? 15 : 20,
+    },
+    errorText: {
+      color: '#FF3B30',
+      fontSize: 14,
+      marginLeft: 6,
+    },
+    loadingContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: isSmallScreen ? 15 : 20,
+    },
+    loadingText: {
+      color: '#007AFF',
+      fontSize: 14,
+      marginLeft: 8,
+    },
+    // Numeric keypad styles
+    keypadContainer: {
+      marginBottom: isSmallScreen ? 10 : 15,
+      width: '100%',
+      maxWidth: 350,
+      paddingHorizontal: 10,
+    },
+    keypadRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: isSmallScreen ? 12 : 15,
+    },
+    keypadButton: {
+      width: buttonSize,
+      height: buttonSize,
+      borderRadius: 12,
+      backgroundColor: 'white',
+      borderWidth: 1,
+      borderColor: '#e0e0e0',
+      justifyContent: 'center',
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 3,
+      elevation: 2,
+    },
+    keypadText: {
+      fontSize: isSmallScreen ? 24 : 28,
+      fontWeight: '600',
+    },
+    hint: {
+      fontSize: 11,
+      color: '#999',
+      textAlign: 'center',
+      fontStyle: 'italic',
+      marginBottom: 8,
+    },
+    setupHint: {
+      backgroundColor: '#E8F4FD',
+      borderRadius: 8,
+      padding: 12,
+      marginTop: 8,
+      borderWidth: 1,
+      borderColor: '#B3D9F2',
+    },
+    setupHintTitle: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: '#1565C0',
+      marginBottom: 6,
+      textAlign: 'center',
+    },
+    setupHintText: {
+      fontSize: 11,
+      color: '#1976D2',
+      textAlign: 'center',
+      lineHeight: 16,
+      marginBottom: 3,
+    },
+    setupPin: {
+      fontWeight: '700',
+      fontSize: 12,
+      color: '#0D47A1',
+    },
+  });
+
   return (
-    <View style={styles.container}>
+    <ScrollView 
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+    >
       <View style={styles.content}>
         <View style={styles.header}>
           <Text style={styles.title}>{title}</Text>
@@ -191,153 +349,6 @@ export function PinInput({
           </View>
         )}
       </View>
-    </View>
+    </ScrollView>
   );
 }
-
-const { width } = Dimensions.get('window');
-const buttonSize = Math.min(width / 4.5, 85);
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  content: {
-    width: '100%',
-    maxWidth: 400,
-    alignItems: 'center',
-  },
-  header: {
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-  },
-  pinContainer: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  pinDotsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  pinDot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#ddd',
-    marginHorizontal: 8,
-    backgroundColor: 'transparent',
-  },
-  pinDotFilled: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
-  },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFE6E6',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginBottom: 20,
-  },
-  errorText: {
-    color: '#FF3B30',
-    fontSize: 14,
-    marginLeft: 6,
-  },
-  loadingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  loadingText: {
-    color: '#007AFF',
-    fontSize: 14,
-    marginLeft: 8,
-  },
-  // Numeric keypad styles
-  keypadContainer: {
-    marginBottom: 20,
-    width: '100%',
-    maxWidth: 350,
-    padding: 24,
-    paddingHorizontal: 32,
-  },
-  keypadRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  keypadButton: {
-    width: buttonSize,
-    height: buttonSize,
-    borderRadius: 12,
-    backgroundColor: 'white',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  keypadText: {
-    fontSize: 28,
-    fontWeight: '600',
-  },
-  hint: {
-    fontSize: 12,
-    color: '#999',
-    textAlign: 'center',
-    fontStyle: 'italic',
-  },
-  setupHint: {
-    backgroundColor: '#E8F4FD',
-    borderRadius: 8,
-    padding: 16,
-    marginTop: 20,
-    borderWidth: 1,
-    borderColor: '#B3D9F2',
-  },
-  setupHintTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1565C0',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  setupHintText: {
-    fontSize: 12,
-    color: '#1976D2',
-    textAlign: 'center',
-    lineHeight: 18,
-    marginBottom: 4,
-  },
-  setupPin: {
-    fontWeight: '700',
-    fontSize: 14,
-    color: '#0D47A1',
-  },
-});

@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ScrollView,
   StyleSheet,
   ActivityIndicator
 } from 'react-native';
@@ -35,11 +34,7 @@ export function ServiceTabBar({
 
   return (
     <View style={[styles.container, style]}>
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
+      <View style={styles.flexContent}>
         {/* Individual Category Tabs - Filter out Add-ons category */}
         {categories.filter(category => category.name !== 'Add-ons').map((category) => (
           <TouchableOpacity
@@ -52,15 +47,19 @@ export function ServiceTabBar({
             onPress={() => onSelectCategory(category)}
           >
             <View style={[styles.categoryIndicator, { backgroundColor: category.color }]} />
-            <Text style={[
-              styles.tabText,
-              selectedCategory?.id === category.id && styles.activeTabText
-            ]}>
+            <Text 
+              style={[
+                styles.tabText,
+                selectedCategory?.id === category.id && styles.activeTabText
+              ]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
               {category.name}
             </Text>
           </TouchableOpacity>
         ))}
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -87,21 +86,26 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 14,
   },
-  scrollContent: {
+  flexContent: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: 8,
     paddingVertical: 8,
+    justifyContent: 'space-evenly',
   },
   tab: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginHorizontal: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    margin: 4,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#e0e0e0',
     backgroundColor: '#f8f9fa',
-    minWidth: 100,
+    minWidth: 80,
+    flex: 1,
+    minHeight: 40,
     justifyContent: 'center',
   },
   activeTab: {
@@ -115,10 +119,11 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   tabText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
     color: '#666',
     textAlign: 'center',
+    flexShrink: 1,
   },
   activeTabText: {
     color: 'white',

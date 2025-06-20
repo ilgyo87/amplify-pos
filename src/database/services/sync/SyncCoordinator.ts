@@ -4,9 +4,17 @@ import { CustomerSyncService } from './CustomerSyncService';
 import { OrderSyncService } from './OrderSyncService';
 import { EmployeeSyncService } from './EmployeeSyncService';
 import { BusinessSyncService } from './BusinessSyncService';
-import { CategorySyncService } from './CategorySyncService';
-import { ProductSyncService } from './ProductSyncService';
+import { CategorySyncService, CategoryConflict } from './CategorySyncService';
+import { ProductSyncService, ProductConflict } from './ProductSyncService';
 import { SyncResult } from './BaseSyncService';
+import { BaseConflict, AllConflicts } from './conflictTypes';
+import { SyncNotificationBuilder, SyncNotificationData } from './SyncNotification';
+
+export interface SyncConflicts extends AllConflicts {
+  // Keep backward compatibility
+  categories: CategoryConflict[];
+  products: ProductConflict[];
+}
 
 export interface FullSyncResult {
   success: boolean;
@@ -23,6 +31,8 @@ export interface FullSyncResult {
     totalFailed: number;
     totalErrors: string[];
   };
+  conflicts?: SyncConflicts;
+  notification?: SyncNotificationData;
 }
 
 export class SyncCoordinator {
@@ -52,6 +62,9 @@ export class SyncCoordinator {
   }
 
   async syncAll(): Promise<FullSyncResult> {
+    // Create a master notification builder
+    const masterNotificationBuilder = new SyncNotificationBuilder();
+    
     // Sync in dependency order
     const results = {
       customers: await this.customerSync.sync(),
@@ -62,7 +75,7 @@ export class SyncCoordinator {
       orders: await this.orderSync.sync(), // Orders depend on customers and products
     };
 
-    // Calculate summary
+    // Calculate summary and aggregate notifications
     let totalSynced = 0;
     let totalFailed = 0;
     const totalErrors: string[] = [];
@@ -73,6 +86,22 @@ export class SyncCoordinator {
       
       if (result.errors.length > 0) {
         totalErrors.push(`${entity}: ${result.errors.join(', ')}`);
+        result.errors.forEach(error => masterNotificationBuilder.addError(error));
+      }
+
+      // Aggregate operations from individual sync services
+      if (result.notificationBuilder) {
+        const notification = result.notificationBuilder.build(result.stats.synced, result.stats.failed);
+        notification.operations.forEach(op => {
+          masterNotificationBuilder.addOperation(
+            op.entity,
+            op.entityName,
+            op.operation,
+            op.direction,
+            op.count,
+            op.items
+          );
+        });
       }
     });
 
@@ -88,6 +117,14 @@ export class SyncCoordinator {
       });
     }
 
+    // Check for conflicts
+    const categoryConflicts = this.categorySync.getConflicts();
+    const productConflicts = this.productSync.getConflicts();
+    const hasConflicts = categoryConflicts.length > 0 || productConflicts.length > 0;
+    
+    // Build final notification
+    const notification = masterNotificationBuilder.build(totalSynced, totalFailed);
+    
     return {
       success,
       results,
@@ -96,7 +133,29 @@ export class SyncCoordinator {
         totalFailed,
         totalErrors,
       },
+      conflicts: hasConflicts ? {
+        categories: categoryConflicts,
+        products: productConflicts
+      } : undefined,
+      notification,
     };
+  }
+  
+  getConflicts(): SyncConflicts {
+    return {
+      categories: this.categorySync.getConflicts(),
+      products: this.productSync.getConflicts()
+    };
+  }
+  
+  async resolveConflicts(
+    categoryResolutions: Array<{categoryId: string, resolution: 'keep-local' | 'keep-cloud'}>,
+    productResolutions: Array<{productId: string, resolution: 'keep-local' | 'keep-cloud'}>
+  ): Promise<void> {
+    await Promise.all([
+      this.categorySync.resolveConflicts(categoryResolutions),
+      this.productSync.resolveConflicts(productResolutions)
+    ]);
   }
 
   async syncEntity(entityType: keyof FullSyncResult['results']): Promise<SyncResult> {
@@ -136,31 +195,43 @@ export class SyncCoordinator {
     ]);
 
     const getUnsyncedCount = (items: any[]) => 
-      items.filter(item => item.needsSync || item.isLocalOnly).length;
+      items.filter(item => {
+        // Count items that need sync:
+        // 1. New items (isLocalOnly = true)
+        // 2. Deleted items that were previously synced (isDeleted = true && amplifyId exists and not empty)
+        // 3. Items marked as needing sync
+        return item.isLocalOnly || 
+               (item.isDeleted && item.amplifyId && item.amplifyId !== '') || 
+               item.needsSync;
+      }).length;
+
+    // Helper to get active (non-deleted) items count
+    const getActiveCount = (items: any[]) => 
+      items.filter(item => !item.isDeleted).length;
 
     return {
       customers: {
-        total: customers.length,
+        total: getActiveCount(customers),
         unsynced: getUnsyncedCount(customers),
       },
       employees: {
-        total: employees.length,
+        total: getActiveCount(employees),
         unsynced: getUnsyncedCount(employees),
       },
       businesses: {
-        total: businesses.length,
+        total: getActiveCount(businesses),
         unsynced: getUnsyncedCount(businesses),
       },
       categories: {
-        total: categories.length,
+        total: getActiveCount(categories),
         unsynced: getUnsyncedCount(categories),
       },
       products: {
-        total: products.length,
+        total: getActiveCount(products),
         unsynced: getUnsyncedCount(products),
       },
       orders: {
-        total: orders.length,
+        total: getActiveCount(orders),
         unsynced: getUnsyncedCount(orders),
       },
     };

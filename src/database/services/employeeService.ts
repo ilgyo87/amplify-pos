@@ -157,9 +157,17 @@ export class EmployeeService {
       return { duplicateError: `An employee with this ${field} already exists` };
     }
 
+    // Get existing employee to access current version
+    const existingEmployee = await repository.findById(id);
+    if (!existingEmployee) {
+      return { errors: { firstName: 'Employee not found' } };
+    }
+
     const updateData = {
       ...employeeData,
-      phone: cleanPhoneNumber(employeeData.phone)
+      phone: cleanPhoneNumber(employeeData.phone),
+      version: (existingEmployee.version || 1) + 1,
+      updatedAt: new Date().toISOString()
     };
 
     const employee = await repository.update(id, updateData) as EmployeeDocument | null;

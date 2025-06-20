@@ -1,6 +1,10 @@
 import { RxDatabase } from 'rxdb';
 import { DatabaseCollections } from '../schema';
-import { SyncCoordinator } from './sync/SyncCoordinator';
+import { SyncCoordinator, SyncConflicts } from './sync/SyncCoordinator';
+import { SyncNotificationData } from './sync/SyncNotification';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const LAST_SYNC_NOTIFICATION_KEY = '@last_sync_notification';
 
 class SyncService {
   private coordinator: SyncCoordinator;
@@ -20,7 +24,14 @@ class SyncService {
       throw new Error('Database not initialized');
     }
 
-    return this.coordinator.syncAll();
+    const result = await this.coordinator.syncAll();
+    
+    // Save notification to storage
+    if (result.notification) {
+      await this.saveLastSyncNotification(result.notification);
+    }
+    
+    return result;
   }
 
   async syncEntity(entityType: 'customers' | 'orders' | 'employees' | 'businesses' | 'categories' | 'products') {
@@ -29,6 +40,17 @@ class SyncService {
     }
 
     return this.coordinator.syncEntity(entityType);
+  }
+  
+  getConflicts(): SyncConflicts {
+    return this.coordinator.getConflicts();
+  }
+  
+  async resolveConflicts(
+    categoryResolutions: Array<{categoryId: string, resolution: 'keep-local' | 'keep-cloud'}>,
+    productResolutions: Array<{productId: string, resolution: 'keep-local' | 'keep-cloud'}>
+  ): Promise<void> {
+    return this.coordinator.resolveConflicts(categoryResolutions, productResolutions);
   }
 
   async getSyncStatus(): Promise<SyncStatus> {
@@ -191,6 +213,35 @@ class SyncService {
   async fixProductCategoryRelationships() {
     return { success: true, message: 'Relationships are automatically maintained' };
   }
+
+  // Save last sync notification
+  private async saveLastSyncNotification(notification: SyncNotificationData) {
+    try {
+      await AsyncStorage.setItem(LAST_SYNC_NOTIFICATION_KEY, JSON.stringify(notification));
+    } catch (error) {
+      console.error('Failed to save last sync notification:', error);
+    }
+  }
+
+  // Get last sync notification
+  async getLastSyncNotification(): Promise<SyncNotificationData | null> {
+    try {
+      const data = await AsyncStorage.getItem(LAST_SYNC_NOTIFICATION_KEY);
+      return data ? JSON.parse(data) : null;
+    } catch (error) {
+      console.error('Failed to get last sync notification:', error);
+      return null;
+    }
+  }
+
+  // Clear last sync notification
+  async clearLastSyncNotification() {
+    try {
+      await AsyncStorage.removeItem(LAST_SYNC_NOTIFICATION_KEY);
+    } catch (error) {
+      console.error('Failed to clear last sync notification:', error);
+    }
+  }
 }
 
 export const syncService = new SyncService();
@@ -199,6 +250,8 @@ export { SyncService };
 // Re-export types for backward compatibility
 export type { SyncResult } from './sync/BaseSyncService';
 export type { FullSyncResult } from './sync/SyncCoordinator';
+export { SyncNotificationBuilder } from './sync/SyncNotification';
+export type { SyncNotificationData } from './sync/SyncNotification';
 
 // Define the SyncStatus type based on what DataSyncScreen expects
 export interface SyncStatus {

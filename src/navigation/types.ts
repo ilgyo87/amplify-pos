@@ -26,6 +26,7 @@ export interface SerializableCustomer {
 export type RootStackParamList = {
   Dashboard: undefined;
   Auth: undefined;
+  InitialSync: undefined;
   // Dashboard routes
   Customers: undefined;
   Products: undefined;

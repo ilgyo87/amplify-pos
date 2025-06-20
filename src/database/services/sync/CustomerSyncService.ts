@@ -2,6 +2,7 @@ import { BaseSyncService, SyncResult, SyncStats } from './BaseSyncService';
 import { Customer } from '../../../types/customer';
 import { Customer as GraphQLCustomer } from '../../../API';
 import { getCurrentUser } from 'aws-amplify/auth';
+import { SyncNotificationBuilder } from './SyncNotification';
 
 export class CustomerSyncService extends BaseSyncService<Customer> {
   async sync(): Promise<SyncResult> {
@@ -11,16 +12,41 @@ export class CustomerSyncService extends BaseSyncService<Customer> {
 
     const stats: SyncStats = { total: 0, synced: 0, failed: 0, skipped: 0 };
     this.errors = [];
+    this.notificationBuilder = new SyncNotificationBuilder();
 
     try {
-      // Get all local customers that need syncing
-      const localCustomers = await this.db.customers
-        .find({ selector: { isLocalOnly: true } })
-        .exec();
+      // Get both new/updated customers and deleted customers that need syncing
+      const [localCustomers, deletedCustomers] = await Promise.all([
+        this.db.customers
+          .find({ 
+            selector: { 
+              isLocalOnly: true,
+              $or: [
+                { isDeleted: false },
+                { isDeleted: { $exists: false } }
+              ]
+            } 
+          })
+          .exec(),
+        this.db.customers
+          .find({ 
+            selector: { 
+              isDeleted: true,
+              amplifyId: { $ne: null }
+            } 
+          })
+          .exec()
+      ]);
 
-      stats.total = localCustomers.length;
+      const allCustomersToSync = [...localCustomers, ...deletedCustomers];
+      stats.total = allCustomersToSync.length;
+      
+      // Only log if there are items to sync
+      if (stats.total > 0) {
+        console.log(`[SYNC] Found ${stats.total} customers to sync (${deletedCustomers.length} deletions)`);
+      }
 
-      for (const localCustomer of localCustomers) {
+      for (const localCustomer of allCustomersToSync) {
         try {
           await this.syncCustomer(localCustomer);
           stats.synced++;
@@ -39,20 +65,62 @@ export class CustomerSyncService extends BaseSyncService<Customer> {
         success: stats.failed === 0,
         stats,
         errors: this.errors,
+        notificationBuilder: this.notificationBuilder,
       };
     } catch (error) {
       console.error('[SYNC] Customer sync failed:', error);
       this.errors.push(error instanceof Error ? error.message : 'Unknown error');
+      this.notificationBuilder.addError(error instanceof Error ? error.message : 'Unknown error');
       return {
         success: false,
         stats,
         errors: this.errors,
+        notificationBuilder: this.notificationBuilder,
       };
     }
   }
 
   private async syncCustomer(localCustomer: any): Promise<void> {
     const customerData = localCustomer.toJSON();
+    
+    // Check if this is a deletion
+    if (customerData.isDeleted && customerData.amplifyId) {
+      try {
+        const deleteResult = await this.client.graphql({
+          query: /* GraphQL */ `
+            mutation DeleteCustomer($input: DeleteCustomerInput!) {
+              deleteCustomer(input: $input) {
+                id
+              }
+            }
+          `,
+          variables: { 
+            input: { 
+              id: customerData.amplifyId || customerData.id 
+            } 
+          },
+        });
+
+        const data = await this.handleGraphQLResult(deleteResult, 'DeleteCustomer');
+        if (data) {
+          // Remove the customer from local database after successful deletion
+          await localCustomer.remove();
+          console.log('[SYNC] Customer deleted from cloud and removed locally:', customerData.firstName || customerData.id);
+          this.notificationBuilder.addOperation(
+            'customers',
+            'customers',
+            'deleted',
+            'to-cloud',
+            1,
+            [`${customerData.firstName} ${customerData.lastName}`.trim() || customerData.id]
+          );
+        }
+        return;
+      } catch (error: any) {
+        console.error('[SYNC] Failed to delete customer from cloud:', customerData.id, error);
+        throw error;
+      }
+    }
     
     // Get current user's ID for cognitoId if customer doesn't have one
     let cognitoUserId = null;
@@ -82,6 +150,7 @@ export class CustomerSyncService extends BaseSyncService<Customer> {
       totalRefunds: customerData.totalRefunds || null,
       notes: customerData.notes || null,
       joinDate: customerData.joinDate || null,
+      version: customerData.version || 1,
     };
 
     try {
@@ -110,6 +179,7 @@ export class CustomerSyncService extends BaseSyncService<Customer> {
               totalRefunds
               notes
               joinDate
+              version
               createdAt
               updatedAt
             }
@@ -120,8 +190,19 @@ export class CustomerSyncService extends BaseSyncService<Customer> {
 
       const data = await this.handleGraphQLResult(createResult, 'CreateCustomer');
       if (data) {
-        await localCustomer.update({ $set: { isLocalOnly: false } });
+        await localCustomer.update({ $set: { 
+          isLocalOnly: false,
+          amplifyId: customerData.id // Store the ID used in Amplify
+        } });
         console.log('[SYNC] Customer uploaded:', customerData.id, `(${customerData.firstName} ${customerData.lastName})`);
+        this.notificationBuilder.addOperation(
+          'customers',
+          'customers',
+          'added',
+          'to-cloud',
+          1,
+          [`${customerData.firstName} ${customerData.lastName}`.trim()]
+        );
       }
     } catch (createError: any) {
       // If creation fails due to existing record, try update
@@ -162,6 +243,7 @@ export class CustomerSyncService extends BaseSyncService<Customer> {
                   totalRefunds
                   notes
                   joinDate
+                  version
                   createdAt
                   updatedAt
                 }
@@ -172,8 +254,19 @@ export class CustomerSyncService extends BaseSyncService<Customer> {
 
           const data = await this.handleGraphQLResult(updateResult, 'UpdateCustomer');
           if (data) {
-            await localCustomer.update({ $set: { isLocalOnly: false } });
+            await localCustomer.update({ $set: { 
+              isLocalOnly: false,
+              amplifyId: customerData.id // Store the ID used in Amplify
+            } });
             console.log('[SYNC] Customer updated:', customerData.id, `(${customerData.firstName} ${customerData.lastName})`);
+            this.notificationBuilder.addOperation(
+              'customers',
+              'customers',
+              'updated',
+              'to-cloud',
+              1,
+              [`${customerData.firstName} ${customerData.lastName}`.trim()]
+            );
           }
         } catch (updateError: any) {
           // If update also fails, log the specific error
@@ -215,6 +308,7 @@ export class CustomerSyncService extends BaseSyncService<Customer> {
                 totalRefunds
                 notes
                 joinDate
+                version
                 createdAt
                 updatedAt
               }
@@ -238,6 +332,7 @@ export class CustomerSyncService extends BaseSyncService<Customer> {
             const customerData = this.cleanGraphQLData(cloudCustomer);
             // Customer downloaded from cloud is not local-only
             customerData.isLocalOnly = false;
+            customerData.amplifyId = cloudCustomer.id; // Store the Amplify ID
             
             // Map backend fields to local fields - backend has firstName/lastName
             if (!customerData.firstName) {
@@ -248,6 +343,14 @@ export class CustomerSyncService extends BaseSyncService<Customer> {
             }
             
             await this.db!.customers.insert(customerData);
+            this.notificationBuilder.addOperation(
+              'customers',
+              'customers',
+              'added',
+              'from-cloud',
+              1,
+              [`${customerData.firstName} ${customerData.lastName}`.trim()]
+            );
             downloadedCount++;
           }
         } catch (error) {

@@ -308,6 +308,7 @@ export class OrderService {
     const updatedOrder = await repository.update(orderId, {
       status,
       statusHistory: updatedHistory,
+      version: (currentOrder.version || 1) + 1,
       updatedAt: now.toISOString()
     });
 
@@ -333,7 +334,15 @@ export class OrderService {
 
   async updateOrderRack(orderId: string, rackNumber: string): Promise<OrderDocument | null> {
     const repository = await this.getRepository();
-    return repository.update(orderId, { rackNumber, updatedAt: new Date().toISOString() });
+    const currentOrder = await repository.findById(orderId);
+    if (!currentOrder) {
+      return null;
+    }
+    return repository.update(orderId, { 
+      rackNumber, 
+      version: (currentOrder.version || 1) + 1,
+      updatedAt: new Date().toISOString() 
+    });
   }
 
   async updateOrderStatusAndRack(orderId: string, status: OrderDocType['status'], rackNumber?: string): Promise<OrderDocument | null> {
@@ -357,6 +366,7 @@ export class OrderService {
     const updateData: Partial<OrderDocType> = { 
       status,
       statusHistory: updatedHistory, 
+      version: (currentOrder.version || 1) + 1,
       updatedAt: now.toISOString() 
     };
     if (rackNumber) {
@@ -451,8 +461,13 @@ export class OrderService {
    */
   async updateOrder(id: string, updateData: Partial<OrderDocType>): Promise<OrderDocument | null> {
     const repository = await this.getRepository();
+    const currentOrder = await repository.findById(id);
+    if (!currentOrder) {
+      return null;
+    }
     return repository.update(id, {
       ...updateData,
+      version: (currentOrder.version || 1) + 1,
       updatedAt: new Date().toISOString()
     });
   }

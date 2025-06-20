@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,8 @@ import {
   StyleSheet,
   ActivityIndicator,
   Dimensions,
-  Image
+  Image,
+  useWindowDimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ProductDocument } from '../../database/schemas/product';
@@ -20,10 +21,7 @@ interface ProductGridProps {
   style?: any;
 }
 
-const { width } = Dimensions.get('window');
-const COLUMN_COUNT = 4; // Fixed 4x4 grid
-// Reduce item width by 15%
-const ITEM_WIDTH = ((width - 80) / COLUMN_COUNT) * 0.85;
+// Removed fixed row count - grid will show all products with scrolling
 
 export function ProductGrid(props: ProductGridProps) {
   const {
@@ -33,16 +31,51 @@ export function ProductGrid(props: ProductGridProps) {
     style
   } = props;
   
+  const windowDimensions = useWindowDimensions();
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [containerHeight, setContainerHeight] = useState(0);
+  const [isOrientationLandscape, setIsOrientationLandscape] = useState(false);
+  
   // Safety checks for undefined/null values
   const safeProducts = Array.isArray(products) ? products : [];
-
-  // Use the existing image utility function
+  
+  // Update orientation based on container dimensions (more reliable than window)
+  useEffect(() => {
+    if (containerWidth > 0 && containerHeight > 0) {
+      const landscape = containerWidth > containerHeight;
+      setIsOrientationLandscape(landscape);
+    } else {
+      // Fallback to window dimensions
+      const landscape = windowDimensions.width > windowDimensions.height;
+      setIsOrientationLandscape(landscape);
+    }
+  }, [containerWidth, containerHeight, windowDimensions.width, windowDimensions.height]);
+  
+  // Use 4 columns in landscape, 3 in portrait
+  const COLUMN_COUNT = isOrientationLandscape ? 4 : 3;
+  
+  // Calculate item dimensions based on actual container width
+  const containerPadding = 16; // Consistent padding
+  const gridGap = 12; // Consistent gap
+  const totalGaps = gridGap * (COLUMN_COUNT - 1);
+  const availableWidth = containerWidth > 0 ? containerWidth - containerPadding - totalGaps : 0;
+  
+  // Calculate item dimensions with dynamic aspect ratio
+  const itemWidth = containerWidth > 0 ? Math.floor(availableWidth / COLUMN_COUNT) : 80;
+  const itemHeight = Math.floor(itemWidth * 1.2); // Consistent aspect ratio
+  
+  // Handle container layout to get actual width and height
+  const handleLayout = (event: any) => {
+    const { width, height } = event.nativeEvent.layout;
+    setContainerWidth(width);
+    setContainerHeight(height);
+  };
 
   const renderProductItem = ({ item }: { item: any }) => {
     // Safety check for item
     if (!item || typeof item !== 'object') {
       return (
-        <View style={styles.productItem}>
+        <View style={[styles.productItem, { width: itemWidth, height: itemHeight }]}>
           <Text style={styles.productName}>Invalid Item</Text>
         </View>
       );
@@ -57,11 +90,11 @@ export function ProductGrid(props: ProductGridProps) {
 
       return (
         <TouchableOpacity
-          style={styles.productItem}
+          style={[styles.productItem, { width: itemWidth, height: itemHeight }]}
           onPress={() => onSelectProduct(item)}
           activeOpacity={0.7}
         >
-          <View style={styles.imageContainer}>
+          <View style={[styles.imageContainer, { height: itemWidth * 0.6 }]}>
             <Image source={imageSource} style={styles.productImage} resizeMode="contain" />
           </View>
           
@@ -78,15 +111,11 @@ export function ProductGrid(props: ProductGridProps) {
               </Text>
             )}
           </View>
-          
-          <TouchableOpacity style={styles.addButton}>
-            <Ionicons name="add" size={20} color="white" />
-          </TouchableOpacity>
         </TouchableOpacity>
       );
     } catch (error) {
       return (
-        <View style={styles.productItem}>
+        <View style={[styles.productItem, { width: itemWidth, height: itemHeight }]}>
           <Text style={styles.productName}>Error Loading Product</Text>
         </View>
       );
@@ -114,16 +143,18 @@ export function ProductGrid(props: ProductGridProps) {
   }
 
   return (
-    <View style={[styles.container, style]}>
+    <View style={[styles.container, style]} onLayout={handleLayout}>
       <FlatList
         data={safeProducts}
         renderItem={renderProductItem}
         keyExtractor={(item, index) => item?.id || `product-${index}`}
         numColumns={COLUMN_COUNT}
-        key={COLUMN_COUNT}
-        contentContainerStyle={styles.gridContent}
-        showsVerticalScrollIndicator={true}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        key={`${COLUMN_COUNT}-${containerWidth}`} // Force re-render on column count changes
+        contentContainerStyle={[styles.gridContent, { padding: containerPadding / 2 }]}
+        showsVerticalScrollIndicator={false}
+        scrollEnabled={true}
+        columnWrapperStyle={[styles.row, { gap: gridGap }]}
+        ItemSeparatorComponent={() => <View style={{ height: gridGap }} />}
       />
     </View>
   );
@@ -169,9 +200,10 @@ const styles = StyleSheet.create({
   gridContent: {
     padding: 16,
   },
+  row: {
+    justifyContent: 'flex-start',
+  },
   productItem: {
-    width: ITEM_WIDTH,
-    margin: 4,
     backgroundColor: '#f8f9fa',
     borderRadius: 8,
     padding: 8,
@@ -179,14 +211,13 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     width: '100%',
-    height: ITEM_WIDTH * 0.55,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 7,
+    marginBottom: 8,
   },
   productImage: {
-    width: '75%',
-    height: '75%',
+    width: '80%',
+    height: '80%',
   },
   placeholderImage: {
     width: '100%',
@@ -197,38 +228,24 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   productInfo: {
-    marginBottom: 7,
+    flex: 1,
   },
   productName: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 3,
+    marginBottom: 4,
     lineHeight: 14,
   },
   productPrice: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
     color: '#007AFF',
   },
   discountText: {
-    fontSize: 9,
+    fontSize: 10,
     color: '#FF3B30',
     fontWeight: '600',
-    marginTop: 1,
-  },
-  addButton: {
-    position: 'absolute',
-    bottom: 7,
-    right: 7,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#007AFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  separator: {
-    height: 8,
+    marginTop: 2,
   },
 });

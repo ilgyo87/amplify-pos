@@ -24,9 +24,6 @@ interface DashboardMenuProps {
   menuItems: MenuItem[];
 }
 
-const CONTAINER_PADDING = 40;
-const ITEM_GAP = 50;
-
 // Custom hook to get device orientation
 const useOrientation = (): 'portrait' | 'landscape' => {
   const getScreenOrientation = () => {
@@ -54,37 +51,31 @@ const useOrientation = (): 'portrait' | 'landscape' => {
 
 
 export const DashboardMenu = memo(({ menuItems }: DashboardMenuProps) => {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  
-  // Simple orientation detection
-  const isLandscape = width > 600; // Simple breakpoint for tablets
-  const itemsPerRow = isLandscape ? 3 : 2;
+  const orientation = useOrientation();
   
   const handlePress = (href: keyof Omit<RootStackParamList, 'Checkout'>) => {
     navigation.navigate(href as any);
   };
-  
 
-
-  // Calculate item dimensions with proper spacing
-  const availableWidth = width - (CONTAINER_PADDING * 2);
-  const totalGapWidth = (itemsPerRow - 1) * ITEM_GAP;
-  const itemWidth = (availableWidth - totalGapWidth) / itemsPerRow;
-  const itemHeight = itemWidth * 0.8;
+  // Simple responsive layout
+  const isLandscape = orientation === 'landscape';
+  const itemHeight = isLandscape ? 187 : 238;
 
   return (
-    <View style={[styles.container, isLandscape && styles.landscapeContainer]}>
+    <View style={styles.container}>
       <View style={styles.gridContainer}>
         {menuItems.map((item, index) => (
           <View 
             key={item.id}
-            style={{
-              width: itemWidth,
-              height: itemHeight,
-              marginRight: (index + 1) % itemsPerRow === 0 ? 0 : 0,
-              marginBottom: index < menuItems.length - itemsPerRow ? ITEM_GAP : 0
-            }}
+            style={[
+              styles.itemWrapper,
+              { 
+                flexBasis: isLandscape ? '31%' : '48%',
+                height: itemHeight,
+              }
+            ]}
           >
             <TouchableOpacity
               style={[
@@ -92,14 +83,32 @@ export const DashboardMenu = memo(({ menuItems }: DashboardMenuProps) => {
                 { backgroundColor: item.color }
               ]}
               onPress={() => handlePress(item.href)}
-              activeOpacity={0.8}
+              activeOpacity={0.7}
             >
-              <View style={styles.iconContainer}>
-                <Icon name={item.icon} size={28} color="#fff" />
+              {/* Gradient overlay for depth */}
+              <View style={styles.gradientOverlay} />
+              
+              <View style={styles.contentContainer}>
+                <View style={styles.iconContainer}>
+                  <View style={styles.iconBackground}>
+                    <Icon 
+                      name={item.icon} 
+                      size={isLandscape ? 26 : 32} 
+                      color="#fff" 
+                    />
+                  </View>
+                </View>
+                <Text 
+                  style={[
+                    styles.menuItemText, 
+                    isLandscape && styles.landscapeText
+                  ]} 
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
+                  {item.title}
+                </Text>
               </View>
-              <Text style={styles.menuItemText} numberOfLines={1}>
-                {item.title}
-              </Text>
             </TouchableOpacity>
           </View>
         ))}
@@ -111,40 +120,74 @@ export const DashboardMenu = memo(({ menuItems }: DashboardMenuProps) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: CONTAINER_PADDING,
-    paddingBottom: CONTAINER_PADDING + 30, // Extra bottom padding for categories
-  },
-
-  landscapeContainer: {
-    paddingBottom: CONTAINER_PADDING + 50, // Extra padding at the bottom in landscape mode
+    padding: 24,
+    justifyContent: 'flex-start',
+    backgroundColor: '#f8f9fa',
   },
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    width: '100%',
     justifyContent: 'space-between',
+    width: '100%',
+  },
+  itemWrapper: {
+    marginBottom: 20,
   },
   menuItem: {
     flex: 1,
-    borderRadius: 12,
-    padding: 10, // Reduced padding
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 3,
+    elevation: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  gradientOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 16,
+  },
+  contentContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
   },
   iconContainer: {
-    marginBottom: 4, // Reduced space between icon and text
+    marginBottom: 12,
+  },
+  iconBackground: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   menuItemText: {
     color: '#fff',
-    fontSize: 20, // Smaller font size
-    fontWeight: '800',
+    fontSize: 17,
+    fontWeight: '700',
     textAlign: 'center',
-    marginTop: 2, // Reduced margin
     includeFontPadding: false,
+    letterSpacing: 0.5,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  landscapeText: {
+    fontSize: 15,
   },
 });

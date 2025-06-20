@@ -9,6 +9,7 @@ import { Authenticator } from '@aws-amplify/ui-react-native';
 import { AuthenticationWrapper } from '../components/auth/AuthenticationWrapper';
 import { useEmployeeAuth } from '../context/EmployeeAuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Screens
 import Dashboard from '../screens/Dashboard';
@@ -24,6 +25,7 @@ import DataSyncScreen from '../screens/Settings/DataSyncScreen';
 import ReportsScreen from '../screens/Reports/ReportsScreen';
 import CheckoutScreen from '../screens/Checkout/CheckoutScreen';
 import EmployeeSignInScreen from '../screens/Auth/EmployeeSignInScreen';
+import { InitialSyncScreen } from '../components/sync/InitialSyncScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -33,6 +35,8 @@ const SignOutButton = () => {
 
   const handleSignOut = async () => {
     try {
+      // Clear the initial sync flag so next user gets a fresh sync
+      await AsyncStorage.removeItem('@initial_sync_complete');
       await signOut();
       navigation.navigate('Auth');
     } catch (error) {
@@ -157,10 +161,10 @@ const AppNavigator = () => {
   const { user } = useAuthenticator(context => [context.user]);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-  // Redirect to Home if user is authenticated and on Auth screen
+  // Redirect to InitialSync if user is authenticated and on Auth screen
   useEffect(() => {
     if (user) {
-      navigation.navigate('Dashboard');
+      navigation.navigate('InitialSync');
     }
   }, [user, navigation]);
 
@@ -179,6 +183,13 @@ const AppNavigator = () => {
         />
       ) : (
         <Stack.Group>
+          <Stack.Screen 
+            name="InitialSync" 
+            component={InitialSyncScreen}
+            options={{ 
+              headerShown: false
+            }}
+          />
           <Stack.Screen 
             name="Dashboard" 
             options={{ 

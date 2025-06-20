@@ -2,6 +2,7 @@ import { BaseSyncService, SyncResult, SyncStats } from './BaseSyncService';
 import { Employee } from '../../../types/employee';
 import { Employee as GraphQLEmployee } from '../../../API';
 import { getCurrentUser } from 'aws-amplify/auth';
+import { SyncNotificationBuilder } from './SyncNotification';
 
 export class EmployeeSyncService extends BaseSyncService<Employee> {
   async sync(): Promise<SyncResult> {
@@ -11,20 +12,41 @@ export class EmployeeSyncService extends BaseSyncService<Employee> {
 
     const stats: SyncStats = { total: 0, synced: 0, failed: 0, skipped: 0 };
     this.errors = [];
+    this.notificationBuilder = new SyncNotificationBuilder();
 
     try {
-      // Get all local employees that need syncing
-      const localEmployees = await this.db.employees
-        .find({ selector: { isLocalOnly: true } })
-        .exec();
+      // Get both new/updated employees and deleted employees that need syncing
+      const [localEmployees, deletedEmployees] = await Promise.all([
+        this.db.employees
+          .find({ 
+            selector: { 
+              isLocalOnly: true,
+              $or: [
+                { isDeleted: false },
+                { isDeleted: { $exists: false } }
+              ]
+            } 
+          })
+          .exec(),
+        this.db.employees
+          .find({ 
+            selector: { 
+              isDeleted: true,
+              amplifyId: { $ne: null }
+            } 
+          })
+          .exec()
+      ]);
 
-      stats.total = localEmployees.length;
+      const allEmployeesToSync = [...localEmployees, ...deletedEmployees];
+      stats.total = allEmployeesToSync.length;
+      
       // Only log if there are items to sync
       if (stats.total > 0) {
-        console.log(`[SYNC] Found ${stats.total} employees to sync`);
+        console.log(`[SYNC] Found ${stats.total} employees to sync (${deletedEmployees.length} deletions)`);
       }
 
-      for (const localEmployee of localEmployees) {
+      for (const localEmployee of allEmployeesToSync) {
         try {
           await this.syncEmployee(localEmployee);
           stats.synced++;
@@ -43,20 +65,62 @@ export class EmployeeSyncService extends BaseSyncService<Employee> {
         success: stats.failed === 0,
         stats,
         errors: this.errors,
+        notificationBuilder: this.notificationBuilder,
       };
     } catch (error) {
       console.error('[SYNC] Employee sync failed:', error);
       this.errors.push(error instanceof Error ? error.message : 'Unknown error');
+      this.notificationBuilder.addError(error instanceof Error ? error.message : 'Unknown error');
       return {
         success: false,
         stats,
         errors: this.errors,
+        notificationBuilder: this.notificationBuilder,
       };
     }
   }
 
   private async syncEmployee(localEmployee: any): Promise<void> {
     const employeeData = localEmployee.toJSON();
+    
+    // Check if this is a deletion
+    if (employeeData.isDeleted && employeeData.amplifyId) {
+      try {
+        const deleteResult = await this.client.graphql({
+          query: /* GraphQL */ `
+            mutation DeleteEmployee($input: DeleteEmployeeInput!) {
+              deleteEmployee(input: $input) {
+                id
+              }
+            }
+          `,
+          variables: { 
+            input: { 
+              id: employeeData.amplifyId || employeeData.id 
+            } 
+          },
+        });
+
+        const data = await this.handleGraphQLResult(deleteResult, 'DeleteEmployee');
+        if (data) {
+          // Remove the employee from local database after successful deletion
+          await localEmployee.remove();
+          console.log('[SYNC] Employee deleted from cloud and removed locally:', employeeData.firstName || employeeData.id);
+          this.notificationBuilder.addOperation(
+            'employees',
+            'employees',
+            'deleted',
+            'to-cloud',
+            1,
+            [`${employeeData.firstName} ${employeeData.lastName}`.trim() || employeeData.id]
+          );
+        }
+        return;
+      } catch (error: any) {
+        console.error('[SYNC] Failed to delete employee from cloud:', employeeData.id, error);
+        throw error;
+      }
+    }
     
     // Get current user's ID for cognitoId if employee doesn't have one
     let cognitoUserId = null;
@@ -88,6 +152,7 @@ export class EmployeeSyncService extends BaseSyncService<Employee> {
         long: employeeData.coordinates.long
       } : null,
       cognitoId: employeeData.cognitoId || cognitoUserId,  // Use authenticated user's ID if creating employee
+      version: employeeData.version || 1,
     };
 
     try {
@@ -115,6 +180,7 @@ export class EmployeeSyncService extends BaseSyncService<Employee> {
                 long
               }
               cognitoId
+              version
               createdAt
               updatedAt
             }
@@ -125,8 +191,19 @@ export class EmployeeSyncService extends BaseSyncService<Employee> {
 
       const data = await this.handleGraphQLResult(createResult, 'CreateEmployee');
       if (data) {
-        await localEmployee.update({ $set: { isLocalOnly: false } });
+        await localEmployee.update({ $set: { 
+          isLocalOnly: false,
+          amplifyId: employeeData.id // Store the ID used in Amplify
+        } });
         console.log('[SYNC] Employee uploaded:', `${employeeData.firstName} ${employeeData.lastName}` || employeeData.id);
+        this.notificationBuilder.addOperation(
+          'employees',
+          'employees',
+          'added',
+          'to-cloud',
+          1,
+          [`${employeeData.firstName} ${employeeData.lastName}`.trim()]
+        );
       }
     } catch (createError: any) {
       // If creation fails due to existing record, try update
@@ -167,7 +244,8 @@ export class EmployeeSyncService extends BaseSyncService<Employee> {
                     long
                   }
                   cognitoId
-                    createdAt
+                  version
+                  createdAt
                   updatedAt
                 }
               }
@@ -177,8 +255,19 @@ export class EmployeeSyncService extends BaseSyncService<Employee> {
 
           const data = await this.handleGraphQLResult(updateResult, 'UpdateEmployee');
           if (data) {
-            await localEmployee.update({ $set: { isLocalOnly: false } });
+            await localEmployee.update({ $set: { 
+              isLocalOnly: false,
+              amplifyId: employeeData.id // Store the ID used in Amplify
+            } });
             console.log('[SYNC] Employee updated:', employeeData.id, `(${employeeData.firstName} ${employeeData.lastName})`);
+            this.notificationBuilder.addOperation(
+              'employees',
+              'employees',
+              'updated',
+              'to-cloud',
+              1,
+              [`${employeeData.firstName} ${employeeData.lastName}`.trim()]
+            );
           }
         } catch (updateError: any) {
           // If update also fails, log the specific error
@@ -220,7 +309,8 @@ export class EmployeeSyncService extends BaseSyncService<Employee> {
                   long
                 }
                 cognitoId
-                  createdAt
+                version
+                createdAt
                 updatedAt
               }
             }
@@ -243,6 +333,7 @@ export class EmployeeSyncService extends BaseSyncService<Employee> {
             const employeeData = this.cleanGraphQLData(cloudEmployee);
             // Employee downloaded from cloud is not local-only
             employeeData.isLocalOnly = false;
+            employeeData.amplifyId = cloudEmployee.id; // Store the Amplify ID
             
             // Permissions should already be an array from GraphQL
             if (employeeData.permissions && !Array.isArray(employeeData.permissions)) {
@@ -250,6 +341,14 @@ export class EmployeeSyncService extends BaseSyncService<Employee> {
             }
             
             await this.db!.employees.insert(employeeData);
+            this.notificationBuilder.addOperation(
+              'employees',
+              'employees',
+              'added',
+              'from-cloud',
+              1,
+              [`${employeeData.firstName} ${employeeData.lastName}`.trim()]
+            );
             downloadedCount++;
           }
         } catch (error) {

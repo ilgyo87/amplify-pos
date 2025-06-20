@@ -335,11 +335,25 @@ export class DefaultDataService {
 
       console.log('Setting up default categories and products...');
 
+      // Get existing categories first to prevent duplicates
+      const existingCategories = await categoryService.getAllCategories();
+      const existingCategoryMap = new Map(
+        existingCategories.map(cat => [cat.name.toLowerCase(), cat])
+      );
+      
       // Create default categories
       const createdCategories: { [name: string]: string } = {};
       
       for (const categoryData of DEFAULT_CATEGORIES) {
         try {
+          // Check if category already exists
+          const existingCategory = existingCategoryMap.get(categoryData.name.toLowerCase());
+          if (existingCategory) {
+            createdCategories[categoryData.name] = existingCategory.id;
+            console.log(`[DEFAULT DATA] Category already exists: ${categoryData.name} (ID: ${existingCategory.id})`);
+            continue;
+          }
+          
           console.log(`[DEFAULT DATA] Creating category: ${categoryData.name}`);
           const categoryFormData: CategoryFormData = {
             name: categoryData.name,
@@ -358,29 +372,42 @@ export class DefaultDataService {
             console.log(`[DEFAULT DATA] ✓ Created category: ${categoryData.name} (ID: ${result.category.id})`);
           } else {
             console.error(`[DEFAULT DATA] ✗ Failed to create category ${categoryData.name}:`, result.errors || result.duplicateError);
-            // If it's a duplicate, try to find the existing category
-            if (result.duplicateError) {
-              const existingCategories = await categoryService.getAllCategories();
-              const existing = existingCategories.find(c => c.name === categoryData.name);
-              if (existing) {
-                createdCategories[categoryData.name] = existing.id;
-                console.log(`[DEFAULT DATA] ✓ Using existing category: ${categoryData.name} (ID: ${existing.id})`);
-              }
-            }
           }
         } catch (error) {
           console.error(`[DEFAULT DATA] Error creating category ${categoryData.name}:`, error);
         }
       }
 
+      // Get existing products to prevent duplicates
+      const existingProducts = await productService.getAllProducts();
+      const existingProductMap = new Map<string, Set<string>>();
+      
+      // Build a map of category -> product names for efficient lookup
+      for (const product of existingProducts) {
+        const productNameLower = product.name.toLowerCase();
+        if (!existingProductMap.has(product.categoryId)) {
+          existingProductMap.set(product.categoryId, new Set());
+        }
+        existingProductMap.get(product.categoryId)!.add(productNameLower);
+      }
+      
       // Create default products
       let productsCreated = 0;
+      let productsSkipped = 0;
       
       for (const productData of DEFAULT_PRODUCTS) {
         try {
           const categoryId = createdCategories[productData.categoryName];
           if (!categoryId) {
             console.error(`Category not found for product: ${productData.name}`);
+            continue;
+          }
+
+          // Check if product already exists in this category
+          const categoryProducts = existingProductMap.get(categoryId);
+          if (categoryProducts && categoryProducts.has(productData.name.toLowerCase())) {
+            console.log(`[DEFAULT DATA] Product already exists: ${productData.name} in category ${productData.categoryName}`);
+            productsSkipped++;
             continue;
           }
 
@@ -398,16 +425,19 @@ export class DefaultDataService {
           const result = await productService.createProduct(productFormData);
           if (result.product) {
             productsCreated++;
-            console.log(`Created product: ${productData.name}`);
+            console.log(`[DEFAULT DATA] ✓ Created product: ${productData.name}`);
           } else {
-            console.error(`Failed to create product ${productData.name}:`, result.errors || result.duplicateError);
+            console.error(`[DEFAULT DATA] ✗ Failed to create product ${productData.name}:`, result.errors || result.duplicateError);
           }
         } catch (error) {
-          console.error(`Error creating product ${productData.name}:`, error);
+          console.error(`[DEFAULT DATA] Error creating product ${productData.name}:`, error);
         }
       }
 
-      console.log(`Default data setup complete. Created ${Object.keys(createdCategories).length} categories and ${productsCreated} products.`);
+      const categoriesCreated = Object.keys(createdCategories).length - existingCategories.length;
+      console.log(`[DEFAULT DATA] Setup complete:`);
+      console.log(`[DEFAULT DATA] - Categories: ${categoriesCreated} created, ${existingCategories.length} already existed`);
+      console.log(`[DEFAULT DATA] - Products: ${productsCreated} created, ${productsSkipped} already existed`);
       return true;
 
     } catch (error) {

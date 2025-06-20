@@ -124,7 +124,18 @@ export class CategoryService {
       return { duplicateError: `A category with this name already exists` };
     }
 
-    const category = await repository.update(id, categoryData) as CategoryDocument | null;
+    // Get existing category to access current version
+    const existingCategory = await repository.findById(id);
+    if (!existingCategory) {
+      return { errors: { name: 'Category not found' } };
+    }
+    
+    // Update with incremented version
+    const category = await repository.update(id, {
+      ...categoryData,
+      version: (existingCategory.version || 1) + 1,
+      updatedAt: new Date().toISOString(),
+    }) as CategoryDocument | null;
     return { category };
   }
 

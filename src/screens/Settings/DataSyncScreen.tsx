@@ -6,12 +6,15 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { BaseScreen } from '../BaseScreen';
-import { syncService, SyncStatus, SyncResult } from '../../database/services';
+import { syncService, SyncStatus, SyncResult, SyncNotificationBuilder, SyncNotificationData } from '../../database/services';
+import { SyncConflictModal } from '../../components/sync/SyncConflictModal';
+import { SyncConflicts } from '../../database/services/sync/SyncCoordinator';
 
 export default function DataSyncScreen() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
@@ -44,6 +47,12 @@ export default function DataSyncScreen() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showConflicts, setShowConflicts] = useState(false);
+  const [conflicts, setConflicts] = useState<SyncConflicts>({
+    categories: [],
+    products: []
+  });
+  const [lastSyncNotification, setLastSyncNotification] = useState<SyncNotificationData | null>(null);
 
   useEffect(() => {
     loadSyncStatus();
@@ -82,6 +91,10 @@ export default function DataSyncScreen() {
       
       const status = await syncService.getSyncStatus();
       setSyncStatus(status);
+      
+      // Load last sync notification
+      const notification = await syncService.getLastSyncNotification();
+      setLastSyncNotification(notification);
       
       // Only log if there are unsynced items
       const totalUnsynced = status.totalUnsyncedCustomers + 
@@ -258,20 +271,32 @@ export default function DataSyncScreen() {
               setSyncStatus(prev => ({ ...prev, isUploading: true, isDownloading: true }));
               const fullResult = await syncService.fullSync();
               
-              // Convert FullSyncResult to SyncResult for showSyncResult
-              const syncResult: SyncResult = {
-                success: fullResult.success,
-                stats: {
-                  total: fullResult.summary.totalSynced + fullResult.summary.totalFailed,
-                  synced: fullResult.summary.totalSynced,
-                  failed: fullResult.summary.totalFailed,
-                  skipped: 0
-                },
-                errors: fullResult.summary.totalErrors
-              };
-              
-              await loadSyncStatus(true);
-              showSyncResult('Full Sync', syncResult, fullResult.summary.totalSynced, 0);
+              // Check for conflicts
+              if (fullResult.conflicts && 
+                  (fullResult.conflicts.categories.length > 0 || 
+                   fullResult.conflicts.products.length > 0)) {
+                setConflicts(fullResult.conflicts);
+                setShowConflicts(true);
+                Alert.alert(
+                  'Sync Conflicts Found',
+                  `Found ${fullResult.conflicts.categories.length + fullResult.conflicts.products.length} items that exist both locally and in the cloud. Please resolve the conflicts.`
+                );
+              } else {
+                // Convert FullSyncResult to SyncResult for showSyncResult
+                const syncResult: SyncResult = {
+                  success: fullResult.success,
+                  stats: {
+                    total: fullResult.summary.totalSynced + fullResult.summary.totalFailed,
+                    synced: fullResult.summary.totalSynced,
+                    failed: fullResult.summary.totalFailed,
+                    skipped: 0
+                  },
+                  errors: fullResult.summary.totalErrors
+                };
+                
+                await loadSyncStatus(true);
+                showSyncResult('Full Sync', syncResult, fullResult.summary.totalSynced, 0);
+              }
             } catch (error) {
               Alert.alert('Sync Error', error instanceof Error ? error.message : 'Unknown error');
             } finally {
@@ -367,8 +392,9 @@ export default function DataSyncScreen() {
   }
 
   return (
-    <BaseScreen title="Data Sync">
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <>
+      <BaseScreen title="Data Sync">
+        <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Cloud Synchronization</Text>
           <Text style={styles.headerSubtitle}>
@@ -428,6 +454,15 @@ export default function DataSyncScreen() {
               <Text style={styles.lastSyncLabel}>Last Sync:</Text>
               <Text style={styles.lastSyncValue}>{formatDate(syncStatus.lastSyncedAt ? new Date(syncStatus.lastSyncedAt) : undefined)}</Text>
             </View>
+
+            {/* Last Sync Details */}
+            {lastSyncNotification && (
+              <View style={styles.lastSyncDetails}>
+                {SyncNotificationBuilder.formatNotification(lastSyncNotification).map((line, index) => (
+                  <Text key={index} style={styles.lastSyncDetailText}>{line}</Text>
+                ))}
+              </View>
+            )}
           </View>
         </View>
 
@@ -492,8 +527,19 @@ export default function DataSyncScreen() {
             <Text style={styles.refreshButtonText}>Refresh Status</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
-    </BaseScreen>
+        </ScrollView>
+      </BaseScreen>
+      
+      <SyncConflictModal
+        visible={showConflicts}
+        conflicts={conflicts}
+        onClose={() => setShowConflicts(false)}
+        onResolve={async () => {
+          setShowConflicts(false);
+          await loadSyncStatus(true);
+        }}
+      />
+    </>
   );
 }
 
@@ -605,6 +651,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#333',
+  },
+  lastSyncDetails: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  lastSyncDetailText: {
+    fontSize: 13,
+    color: '#495057',
+    lineHeight: 20,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   syncCard: {
     backgroundColor: '#fff',
