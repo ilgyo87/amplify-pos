@@ -154,7 +154,8 @@ export class OrderService {
     selectedDate,
     notes,
     barcodeData,
-    employee
+    employee,
+    taxRate = 0
   }: {
     customer: SerializableCustomer;
     items: OrderItem[];
@@ -163,6 +164,7 @@ export class OrderService {
     notes?: string;
     barcodeData?: string;
     employee?: { id: string; name: string };
+    taxRate?: number;
   }): Promise<OrderDocument> {
     const repository = await this.getRepository();
     const now = new Date().toISOString();
@@ -213,7 +215,7 @@ export class OrderService {
 
     // Convert all monetary values using the cents-based approach
     const subtotal = toPreciseAmount(rawSubtotal);
-    const tax = toPreciseAmount(subtotal * 0.0875); // 8.75% tax
+    const tax = toPreciseAmount(subtotal * taxRate);
     const total = toPreciseAmount(subtotal + tax);
 
     // Initialize status history with order creation

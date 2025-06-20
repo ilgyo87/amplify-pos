@@ -8,7 +8,7 @@ import {
   Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { OrderItem, OrderSummaryData, starchShortCode, TAX_RATE } from '../../types/order';
+import { OrderItem, OrderSummaryData, starchShortCode } from '../../types/order';
 import { toPreciseAmount } from '../../utils/monetaryUtils';
 
 interface OrderSummaryProps {
@@ -20,6 +20,7 @@ interface OrderSummaryProps {
   selectedDate?: string;
   style?: any;
   disabled?: boolean;
+  taxRate?: number;
 }
 
 export function OrderSummary({
@@ -30,7 +31,8 @@ export function OrderSummary({
   onCheckout,
   selectedDate,
   style,
-  disabled = false
+  disabled = false,
+  taxRate = 0
 }: OrderSummaryProps) {
   const calculateSummary = (): OrderSummaryData => {
     const rawSubtotal = items.reduce((sum, item) => {
@@ -54,7 +56,7 @@ export function OrderSummary({
     }, 0);
 
     const subtotal = toPreciseAmount(rawSubtotal);
-    const tax = toPreciseAmount(subtotal * TAX_RATE);
+    const tax = toPreciseAmount(subtotal * taxRate);
     const total = toPreciseAmount(subtotal + tax);
     const itemCount = items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
 
@@ -236,7 +238,7 @@ export function OrderSummary({
             </View>
             
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Tax ({(TAX_RATE * 100).toFixed(2)}%):</Text>
+              <Text style={styles.summaryLabel}>Tax{taxRate > 0 ? ` (${(taxRate * 100).toFixed(2)}%)` : ''}:</Text>
               <Text style={styles.summaryValue}>${summary.tax.toFixed(2)}</Text>
             </View>
             

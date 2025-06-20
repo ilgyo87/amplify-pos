@@ -144,6 +144,27 @@ export class BusinessService {
     }
   }
 
+  async updateBusinessField(id: string, updates: Partial<BusinessDocType>): Promise<BusinessDocument | null> {
+    try {
+      await this.initialize();
+      const existingBusiness = await this.businessRepository!.getBusinessById(id);
+      if (!existingBusiness) {
+        return null;
+      }
+
+      const updatedData = {
+        ...updates,
+        version: (existingBusiness.version || 1) + 1,
+        updatedAt: new Date().toISOString()
+      };
+
+      return await this.businessRepository!.updateBusiness(id, updatedData);
+    } catch (error) {
+      console.error('Error updating business field:', error);
+      return null;
+    }
+  }
+
   async getActiveBusinesses(): Promise<BusinessDocument[]> {
     try {
       await this.initialize();

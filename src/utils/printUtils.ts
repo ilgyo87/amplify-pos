@@ -109,7 +109,8 @@ export async function generateLabelHTML({
   qrImageBase64,
   employeeName,
   starch,
-  pressOnly
+  pressOnly,
+  addOns
 }: {
   orderNumber: string,
   customerName: string,
@@ -118,7 +119,12 @@ export async function generateLabelHTML({
   qrImageBase64: string,
   employeeName?: string,
   starch?: string,
-  pressOnly?: boolean
+  pressOnly?: boolean,
+  addOns?: Array<{
+    name: string;
+    price: number;
+    quantity: number;
+  }>
 }): Promise<string> {
   // Check if qrImageBase64 is a captured image or just the QR data
   let imageUri: string;
@@ -144,6 +150,15 @@ export async function generateLabelHTML({
   }
   const optionsLine = options.length > 0 ? options.join(', ') : '';
 
+  // Format add-ons
+  let addOnsHTML = '';
+  if (addOns && addOns.length > 0) {
+    const addOnsList = addOns.map(addon => 
+      addon.quantity > 1 ? `${addon.name} (${addon.quantity}x)` : addon.name
+    ).join(', ');
+    addOnsHTML = `<div class="addon-line">Add-ons: ${addOnsList}</div>`;
+  }
+
   return `
     <div class="label-container">
       <div class="qr-container">
@@ -154,6 +169,7 @@ export async function generateLabelHTML({
         <div class="info-line">Name: ${customerName}</div>
         <div class="info-line">Garment: ${garmentType}</div>
         ${optionsLine ? `<div class="info-line">Options: ${optionsLine}</div>` : ''}
+        ${addOnsHTML}
         <div class="info-line">Notes: ${notes || 'None'}</div>
         ${employeeName ? `<div class="info-line">Served by: ${employeeName}</div>` : ''}
       </div>
@@ -183,7 +199,7 @@ export const printLabel = async (html: string) => {
               width: 100%;
               height: 100%;
               font-family: Arial, sans-serif;
-              font-size: 18px;
+              font-size: 14px;
             }
             .label-container {
               width: 29mm;
@@ -198,20 +214,20 @@ export const printLabel = async (html: string) => {
             }
             .qr-container {
               width: 100%;
-              height: 32mm;
+              height: 28mm;
               display: flex;
               justify-content: center;
               align-items: center;
               margin-bottom: 2mm;
             }
             .qr-code {
-              max-width: 70%;
-              max-height: 70%;
+              max-width: 65%;
+              max-height: 65%;
               object-fit: contain;
             }
             .order-info {
               width: 100%;
-              height: 53mm;
+              height: 57mm;
               writing-mode: vertical-rl;
               text-orientation: mixed;
               transform: rotate(180deg);
@@ -220,7 +236,7 @@ export const printLabel = async (html: string) => {
               flex-direction: column;
               justify-content: flex-start;
               align-items: flex-start;
-              gap: 1mm;
+              gap: 0.8mm;
             }
             .order-info div {
               margin: 0;
@@ -230,10 +246,15 @@ export const printLabel = async (html: string) => {
             }
             .order-number {
               font-weight: bold;
-              font-size: 15px;
+              font-size: 13px;
             }
             .info-line {
-              font-size: 15px;
+              font-size: 12px;
+            }
+            .addon-line {
+              font-size: 10px;
+              font-style: italic;
+              color: #444;
             }
           </style>
         </head>

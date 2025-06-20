@@ -65,6 +65,7 @@ const generateThermalReceiptCommands = (order: any, paymentMethod: string, selec
   const ESC = 0x1B;
   const GS = 0x1D;
   const LF = 0x0A;
+  const FS = 0x1C;
   
   const commands: number[] = [];
   
@@ -81,9 +82,27 @@ const generateThermalReceiptCommands = (order: any, paymentMethod: string, selec
     return left + ' '.repeat(rightPadding) + right;
   };
   
-  // Initialize printer
-  commands.push(ESC, 0x40); // Reset printer
+  // IMPORTANT: Exit hex dump mode and set normal printing for Munbyn ITPP047P
+  // The printer might be in hex dump or self-test mode, showing raw data
+  commands.push(0x1B, 0x3F, 0x0A, 0x00); // ESC ? n - Cancel hex dump mode
+  commands.push(0x10, 0x04, 0x02); // DLE EOT 2 - Real-time recovery from errors
+  commands.push(0x18); // CAN - Clear print buffer
+  commands.push(ESC, 0x40); // Initialize printer (reset)
+  
+  // Set normal printing mode
+  commands.push(ESC, 0x21, 0x00); // ESC ! n - Select print mode (0 = normal)
+  commands.push(ESC, 0x74, 0x00); // Select character code table (PC437 - USA)
+  commands.push(ESC, 0x4D, 0x00); // Select character font A
+  commands.push(GS, 0x21, 0x00); // Select character size (normal)
   commands.push(ESC, 0x61, 0x01); // Center alignment
+  
+  // Send form feed to clear any previous content
+  commands.push(0x0C); // FF - Form feed
+  
+  // Start with clean lines
+  addLF();
+  addLF();
+  addLF();
   
   // Business header
   commands.push(ESC, 0x45, 0x01); // Bold on
@@ -243,12 +262,33 @@ const generateThermalReceiptCommands = (order: any, paymentMethod: string, selec
 
 const sendDataToThermalPrinter = async (ip: string, port: string, data: Uint8Array): Promise<boolean> => {
   try {
-    console.log(`Sending ${data.length} bytes to thermal printer at ${ip}:${port}`);
+    console.log(`Sending ${data.length} bytes to Munbyn printer at ${ip}:${port}`);
     
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    // Munbyn ITPP047P specific approach
+    // First, send a mode switch command to ensure ESC/POS mode
+    const modeSwitch = new Uint8Array([
+      0x1B, 0x40, // ESC @ - Initialize printer
+      0x1B, 0x3D, 0x01, // ESC = n - Select peripheral device (1 = printer)
+      0x1B, 0x7B, 0x00, // ESC { n - Upside-down printing OFF
+    ]);
     
     try {
+      // Send mode switch first
+      await fetch(`http://${ip}:${port}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/octet-stream',
+        },
+        body: modeSwitch,
+      }).catch(() => {}); // Ignore errors for mode switch
+      
+      // Small delay to let printer process mode switch
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Now send the actual receipt data
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      
       const response = await fetch(`http://${ip}:${port}`, {
         method: 'POST',
         headers: {
@@ -259,20 +299,18 @@ const sendDataToThermalPrinter = async (ip: string, port: string, data: Uint8Arr
       });
       
       clearTimeout(timeoutId);
-      console.log('Printer responded with status:', response.status);
-      return response.ok;
+      console.log('Receipt data sent to printer');
+      return true;
       
     } catch (fetchError: any) {
-      clearTimeout(timeoutId);
-      
       if (fetchError.name === 'AbortError' || fetchError.message.includes('Network request failed')) {
-        console.log('Printer connection timeout - assuming print succeeded (normal for thermal printers)');
+        console.log('Printer timeout - assuming print succeeded (normal for Munbyn printers)');
         return true;
       }
       throw fetchError;
     }
   } catch (error) {
-    console.error('Failed to send data to thermal printer:', error);
+    console.error('Failed to send data to Munbyn printer:', error);
     return false;
   }
 };
@@ -312,6 +350,41 @@ const printReceiptToThermalPrinter = async (order: any, paymentMethod: string, s
   }
 };
 
+const printHistoricalReceipt = async (order: any) => {
+  try {
+    // Check for printer settings
+    const AsyncStorage = await import('@react-native-async-storage/async-storage');
+    const printerSettings = await AsyncStorage.default.getItem('printerSettings');
+    
+    if (!printerSettings) {
+      throw new Error('No printer configured. Please set up your Munbyn printer in Settings.');
+    }
+    
+    const { ip, port } = JSON.parse(printerSettings);
+    
+    if (!ip) {
+      throw new Error('No printer IP configured. Please configure your Munbyn printer in Settings.');
+    }
+    
+    console.log(`Printing historical receipt for order #${order.orderNumber} to Munbyn printer at ${ip}:${port || '9100'}`);
+    
+    // Generate thermal receipt commands using the order data
+    const escPosCommands = generateThermalReceiptCommands(order, order.paymentMethod, order.selectedDate);
+    
+    // Send to printer
+    const success = await sendDataToThermalPrinter(ip, port || '9100', escPosCommands);
+    
+    if (!success) {
+      throw new Error('Failed to send receipt to printer');
+    }
+    
+    console.log('Historical receipt printed successfully to thermal printer');
+  } catch (error) {
+    console.error('Historical receipt printing error:', error);
+    throw error;
+  }
+};
+
 export default function CheckoutScreen({ route, navigation }: CheckoutScreenProps) {
   const { customer: routeCustomer } = route.params;
   
@@ -339,6 +412,7 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
   const [blinkAnimation] = useState(new Animated.Value(1));
   const [customerHasReadyOrders, setCustomerHasReadyOrders] = useState(false);
   const [showOrderHistoryModal, setShowOrderHistoryModal] = useState(false);
+  const [isPrintingHistorical, setIsPrintingHistorical] = useState(false);
   const [showCreateEmployeeModal, setShowCreateEmployeeModal] = useState(false);
   const [showCreateBusinessModal, setShowCreateBusinessModal] = useState(false);
   const [employeeFormErrors, setEmployeeFormErrors] = useState({});
@@ -354,6 +428,7 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
   const { products, loading: productsLoading } = useProducts(selectedCategory?.id);
   const { currentEmployee } = useEmployeeAuth();
   const { 
+    businesses,
     hasBusinesses, 
     loading: businessLoading, 
     createBusiness,
@@ -762,10 +837,17 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
   // Handle order history
   const handleOrderHistory = async () => {
     try {
+      // Close the edit modal first to avoid modal conflicts
+      setShowEditCustomerModal(false);
+      
       await orderService.initialize();
       const orders = await orderService.getOrdersByCustomer(customer.id);
       setCustomerOrders(orders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-      setShowOrderHistoryModal(true);
+      
+      // Small delay to ensure modal transitions properly
+      setTimeout(() => {
+        setShowOrderHistoryModal(true);
+      }, 300);
     } catch (error) {
       console.error('Error loading customer orders:', error);
       Alert.alert('Error', 'Failed to load order history. Please try again.');
@@ -782,6 +864,20 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
       case 'cancelled': return '#ef4444';
       case 'picked_up': return '#059669';
       default: return '#6b7280';
+    }
+  };
+
+  // Handle printing historical receipt
+  const handlePrintHistoricalReceipt = async (order: any) => {
+    setIsPrintingHistorical(true);
+    try {
+      await printHistoricalReceipt(order);
+      Alert.alert('Success', 'Receipt printed successfully');
+    } catch (error: any) {
+      console.error('Print error:', error);
+      Alert.alert('Print Error', error.message || 'Failed to print receipt. Please check printer connection and try again.');
+    } finally {
+      setIsPrintingHistorical(false);
     }
   };
 
@@ -825,12 +921,14 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
         employee: currentEmployee ? {
           id: currentEmployee.id,
           name: `${currentEmployee.firstName} ${currentEmployee.lastName}`
-        } : undefined
+        } : undefined,
+        taxRate: businesses?.[0]?.taxRate || 0
       });
 
       // Calculate total for confirmation
       const orderTotal = calculateOrderTotal();
-      const tax = orderTotal * 0.0875;
+      const taxRate = businesses?.[0]?.taxRate || 0;
+      const tax = orderTotal * taxRate;
       const finalTotal = orderTotal + tax;
       
       // Format payment info for display
@@ -936,7 +1034,8 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
   };
 
   const orderTotal = calculateOrderTotal();
-  const tax = toPreciseAmount(orderTotal * 0.0875); // 8.75% tax
+  const taxRate = businesses?.[0]?.taxRate || 0;
+  const tax = toPreciseAmount(orderTotal * taxRate);
   const finalTotal = toPreciseAmount(orderTotal + tax);
 
   // Render content based on screen size
@@ -968,6 +1067,7 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
               onCheckout={handleCheckout}
               selectedDate={selectedDate}
               disabled={!allRequirementsMet}
+              taxRate={taxRate}
             />
           </View>
         </View>
@@ -999,6 +1099,7 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
               onCheckout={handleCheckout}
               selectedDate={selectedDate}
               disabled={!allRequirementsMet}
+              taxRate={taxRate}
             />
           </View>
         </View>
@@ -1055,6 +1156,7 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
         employeeName={currentEmployee ? `${currentEmployee.firstName} ${currentEmployee.lastName}` : undefined}
         onClose={() => setShowReceiptPreview(false)}
         onComplete={handleOrderComplete}
+        taxRate={taxRate}
       />
 
       {/* Edit Customer Modal */}
@@ -1109,13 +1211,26 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
       <Modal
         visible={showOrderHistoryModal}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle="fullScreen"
+        transparent={false}
+        onRequestClose={() => {
+          setShowOrderHistoryModal(false);
+          setTimeout(() => {
+            setShowEditCustomerModal(true);
+          }, 300);
+        }}
       >
         <SafeAreaView style={styles.orderHistoryContainer}>
           <View style={styles.orderHistoryHeader}>
             <TouchableOpacity 
               style={styles.orderHistoryCloseButton} 
-              onPress={() => setShowOrderHistoryModal(false)}
+              onPress={() => {
+                setShowOrderHistoryModal(false);
+                // Reopen edit modal after closing order history
+                setTimeout(() => {
+                  setShowEditCustomerModal(true);
+                }, 300);
+              }}
             >
               <Ionicons name="close" size={24} color="#333" />
             </TouchableOpacity>
@@ -1166,10 +1281,19 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
                     </View>
                     
                     <View style={styles.orderHistoryFooter}>
-                      <Text style={styles.orderHistoryTotal}>${order.total.toFixed(2)}</Text>
-                      <Text style={styles.orderHistoryPayment}>
-                        {order.paymentMethod.charAt(0).toUpperCase() + order.paymentMethod.slice(1)}
-                      </Text>
+                      <View style={styles.orderHistoryFooterLeft}>
+                        <Text style={styles.orderHistoryTotal}>${order.total.toFixed(2)}</Text>
+                        <Text style={styles.orderHistoryPayment}>
+                          {order.paymentMethod.charAt(0).toUpperCase() + order.paymentMethod.slice(1)}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.orderHistoryPrintButton, isPrintingHistorical && styles.orderHistoryPrintButtonDisabled]}
+                        onPress={() => handlePrintHistoricalReceipt(order)}
+                        disabled={isPrintingHistorical}
+                      >
+                        <Ionicons name="print-outline" size={20} color={isPrintingHistorical ? "#ccc" : "#007AFF"} />
+                      </TouchableOpacity>
                     </View>
                   </View>
                 ))}
@@ -1412,6 +1536,21 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: '#f3f4f6',
+  },
+  orderHistoryFooterLeft: {
+    flex: 1,
+  },
+  orderHistoryPrintButton: {
+    backgroundColor: '#f0f7ff',
+    borderRadius: 8,
+    padding: 10,
+    marginLeft: 12,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  orderHistoryPrintButtonDisabled: {
+    backgroundColor: '#f5f5f5',
+    borderColor: '#e0e0e0',
   },
   orderHistoryTotal: {
     fontSize: 18,

@@ -37,6 +37,9 @@ export default function OrdersScreen() {
   const [rackScanInput, setRackScanInput] = useState('');
   const [rackScanResult, setRackScanResult] = useState<string | null>(null);
   const [notificationMessage, setNotificationMessage] = useState('');
+  const [isProcessingQR, setIsProcessingQR] = useState(false);
+  const lastScannedQR = useRef<string>('');
+  const scanDebounceTimer = useRef<NodeJS.Timeout | null>(null);
   // Cancel modal state
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [orderToCancel, setOrderToCancel] = useState<OrderDocument | null>(null);
@@ -128,7 +131,7 @@ export default function OrdersScreen() {
     setNotificationMessage(message);
     setTimeout(() => {
       setNotificationMessage('');
-    }, 2000); // Hide after 2 seconds
+    }, 3000); // Hide after 3 seconds for better visibility
   };
 
   const searchForOrder = (searchTerm: string) => {
@@ -168,16 +171,59 @@ export default function OrdersScreen() {
   };
 
   const handleQRCodeScanned = ({ data }: { data: string }) => {
-    setShowScanner(false);
-    
-    // O(1) lookup using the map
-    const scannedOrder = orderLookupMap.get(data);
-    if (scannedOrder) {
-      onSelectOrder(scannedOrder); // Use the shared onSelectOrder function
-    } else {
-      console.log('❌ No order found for QR code:', data);
-      // No alert, scanner already closed
+    // Prevent processing if already processing or if it's the same QR code
+    if (isProcessingQR || data === lastScannedQR.current) {
+      return;
     }
+    
+    // Clear any existing debounce timer
+    if (scanDebounceTimer.current) {
+      clearTimeout(scanDebounceTimer.current);
+    }
+    
+    // Validate the scanned data (order numbers should be 9 digits)
+    const isValidOrderNumber = /^\d{9}$/.test(data.trim());
+    if (!isValidOrderNumber) {
+      console.log('❌ Invalid QR data format:', data);
+      showTimedNotification(`Invalid QR code: ${data}`);
+      return;
+    }
+    
+    // Set processing flag and store last scanned QR
+    setIsProcessingQR(true);
+    lastScannedQR.current = data;
+    
+    // Debounce the processing
+    scanDebounceTimer.current = setTimeout(() => {
+      setShowScanner(false);
+      
+      // Show the scanned order ID
+      showTimedNotification(`Scanned order: ${data}`);
+      
+      // O(1) lookup using the map
+      const scannedOrder = orderLookupMap.get(data);
+      if (scannedOrder) {
+        // Delay opening the modal to allow notification to be visible
+        setTimeout(() => {
+          onSelectOrder(scannedOrder); // Use the shared onSelectOrder function
+          setIsProcessingQR(false);
+          
+          // Reset last scanned QR after a delay
+          setTimeout(() => {
+            lastScannedQR.current = '';
+          }, 2000);
+        }, 500);
+      } else {
+        console.log('❌ No order found for QR code:', data);
+        showTimedNotification(`Order "${data}" not found`);
+        setIsProcessingQR(false);
+        
+        // Reset last scanned QR after a delay
+        setTimeout(() => {
+          lastScannedQR.current = '';
+        }, 2000);
+      }
+    }, 100); // 100ms debounce
   };
 
   const processItemScan = async (data: string) => {
@@ -298,8 +344,15 @@ export default function OrdersScreen() {
   };
 
   const handleItemQRScanned = ({ data }: { data: string }) => {
+    // Validate the item QR format (orderNumber-itemNumber)
+    const expectedPattern = new RegExp(`^\\d{9}-\\d+$`);
+    if (!expectedPattern.test(data.trim())) {
+      console.log('❌ Invalid item QR format:', data);
+      return;
+    }
+    
     setShowItemScanner(false);
-    processItemScan(data);
+    processItemScan(data.trim());
   };
 
   const handleManualItemScan = () => {
@@ -481,7 +534,8 @@ export default function OrdersScreen() {
           notes: orderItem.options?.notes || '',
           qrImageBase64: qrImageBase64,
           starch: orderItem.options?.starch,
-          pressOnly: orderItem.options?.pressOnly
+          pressOnly: orderItem.options?.pressOnly,
+          addOns: orderItem.addOns
         });
         
         // Add page break after each label except the last one
@@ -559,7 +613,8 @@ export default function OrdersScreen() {
         notes: item.options?.notes || '',
         qrImageBase64: qrImageBase64,
         starch: item.options?.starch,
-        pressOnly: item.options?.pressOnly
+        pressOnly: item.options?.pressOnly,
+        addOns: item.addOns
       });
       
       console.log('📋 Generated HTML, length:', html.length);
@@ -813,6 +868,7 @@ export default function OrdersScreen() {
       case 'ready': return '#10b981';
       case 'completed': return '#6b7280';
       case 'cancelled': return '#ef4444';
+      case 'picked_up': return '#059669';
       default: return '#6b7280';
     }
   };
@@ -824,6 +880,7 @@ export default function OrdersScreen() {
       case 'ready': return 'checkmark-circle-outline';
       case 'completed': return 'checkmark-done-outline';
       case 'cancelled': return 'close-circle-outline';
+      case 'picked_up': return 'bag-check-outline';
       default: return 'help-outline';
     }
   };
@@ -1011,7 +1068,7 @@ export default function OrdersScreen() {
       {notificationMessage ? (
         <View style={styles.notificationContainer}>
           <View style={styles.notificationContent}>
-            <Ionicons name="information-circle" size={20} color="#f59e0b" />
+            <Ionicons name="checkmark-circle" size={24} color="#ffffff" />
             <Text style={styles.notificationText}>{notificationMessage}</Text>
           </View>
         </View>
@@ -1044,7 +1101,14 @@ export default function OrdersScreen() {
             <View style={styles.scannerHeader}>
               <TouchableOpacity 
                 style={styles.closeButton} 
-                onPress={() => setShowScanner(false)}
+                onPress={() => {
+                  setShowScanner(false);
+                  setIsProcessingQR(false);
+                  lastScannedQR.current = '';
+                  if (scanDebounceTimer.current) {
+                    clearTimeout(scanDebounceTimer.current);
+                  }
+                }}
               >
                 <Ionicons name="close" size={24} color="white" />
               </TouchableOpacity>
@@ -1251,13 +1315,52 @@ export default function OrdersScreen() {
                       </TouchableOpacity>
                     </View>
                   ) : selectedOrder.status === 'ready' ? (
-                    <View style={styles.readyOrderContainer}>
-                      <Text style={styles.readyOrderText}>
-                        All items ({selectedOrder.items.reduce((total, item) => total + item.quantity, 0)}) have been processed.
-                      </Text>
-                      <Text style={styles.readyOrderInstructions}>
-                        Scan a rack number to complete this order and mark it for pickup.
-                      </Text>
+                    <View style={styles.readyOrderWrapper}>
+                      <View style={styles.readyOrderContainer}>
+                        <Text style={styles.readyOrderText}>
+                          All items ({selectedOrder.items.reduce((total, item) => total + item.quantity, 0)}) have been processed.
+                        </Text>
+                        <Text style={styles.readyOrderInstructions}>
+                          Scan a rack number to complete this order and mark it for pickup.
+                        </Text>
+                      </View>
+                      
+                      {/* Rack Scanning Section - moved here for ready orders */}
+                      <View style={styles.rackScanSection}>
+                        <Text style={styles.scanSectionTitle}>Scan Rack Number</Text>
+                        <Text style={styles.rackScanDescription}>Scan the rack barcode to complete the order</Text>
+                        
+                        {/* Search and scan row - same as main screen */}
+                        <View style={styles.searchScanRow}>
+                          <View style={styles.searchContainer}>
+                            <TextInput
+                              style={styles.searchInput}
+                              placeholder="Rack number (e.g. R001, A1, etc.)"
+                              value={rackScanInput}
+                              onChangeText={handleRackInputChange}
+                              onSubmitEditing={handleManualRackScan}
+                              returnKeyType="search"
+                              autoCapitalize="characters"
+                              autoCorrect={false}
+                              clearButtonMode="while-editing"
+                            />
+                            <TouchableOpacity 
+                              style={styles.searchButton} 
+                              onPress={handleManualRackScan}
+                              disabled={!rackScanInput.trim()}
+                            >
+                              <Ionicons name="search" size={20} color="#fff" />
+                            </TouchableOpacity>
+                          </View>
+                          <TouchableOpacity 
+                            style={styles.scanButton} 
+                            onPress={() => setShowRackScanner(true)}
+                          >
+                            <Ionicons name="qr-code" size={24} color="#007AFF" />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                      
                       <TouchableOpacity 
                         style={styles.undoButton}
                         onPress={async () => {
@@ -1301,44 +1404,6 @@ export default function OrdersScreen() {
                   <View style={styles.completeSection}>
                     <Ionicons name="checkmark-circle" size={48} color="#10b981" />
                     <Text style={styles.completeText}>All items scanned!</Text>
-                  </View>
-                )}
-
-                {/* Rack Scanning Section for Ready Orders only */}
-                {selectedOrder.status === 'ready' && (
-                  <View style={styles.rackScanSection}>
-                    <Text style={styles.scanSectionTitle}>Scan Rack Number</Text>
-                    <Text style={styles.rackScanDescription}>Scan the rack barcode to complete the order</Text>
-                    
-                    {/* Search and scan row - same as main screen */}
-                    <View style={styles.searchScanRow}>
-                      <View style={styles.searchContainer}>
-                        <TextInput
-                          style={styles.searchInput}
-                          placeholder="Rack number (e.g. R001, A1, etc.)"
-                          value={rackScanInput}
-                          onChangeText={handleRackInputChange}
-                          onSubmitEditing={handleManualRackScan}
-                          returnKeyType="search"
-                          autoCapitalize="characters"
-                          autoCorrect={false}
-                          clearButtonMode="while-editing"
-                        />
-                        <TouchableOpacity 
-                          style={styles.searchButton} 
-                          onPress={handleManualRackScan}
-                          disabled={!rackScanInput.trim()}
-                        >
-                          <Ionicons name="search" size={20} color="#fff" />
-                        </TouchableOpacity>
-                      </View>
-                      <TouchableOpacity 
-                        style={styles.scanButton} 
-                        onPress={() => setShowRackScanner(true)}
-                      >
-                        <Ionicons name="qr-code" size={24} color="#007AFF" />
-                      </TouchableOpacity>
-                    </View>
                   </View>
                 )}
               </View>
@@ -2149,7 +2214,7 @@ const styles = StyleSheet.create({
   
   // Rack Scanning Styles
   rackScanSection: {
-    marginTop: 16,
+    marginBottom: 16,
     padding: 16,
     backgroundColor: '#fff5f5',
     borderRadius: 8,
@@ -2188,6 +2253,9 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   // Ready order styles
+  readyOrderWrapper: {
+    flex: 1,
+  },
   readyOrderContainer: {
     padding: 20,
     backgroundColor: '#f0fdf4',
@@ -2325,29 +2393,28 @@ const styles = StyleSheet.create({
 
   // Notification styles
   notificationContainer: {
-    backgroundColor: '#fef3cd',
-    borderLeftWidth: 4,
-    borderLeftColor: '#f59e0b',
+    backgroundColor: '#007AFF',
     marginHorizontal: 16,
     marginVertical: 8,
-    borderRadius: 6,
+    borderRadius: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
   },
   notificationContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    gap: 8,
+    padding: 16,
+    gap: 12,
   },
   notificationText: {
-    fontSize: 14,
-    color: '#92400e',
-    fontWeight: '500',
+    fontSize: 16,
+    color: '#ffffff',
+    fontWeight: '600',
     flex: 1,
+    textAlign: 'center',
   },
   // Picked up order styles
   pickedUpOrderContainer: {

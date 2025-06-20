@@ -17,6 +17,7 @@ interface CustomerListProps {
   customers: CustomerDocument[];
   onEdit: (customer: CustomerDocument) => void;
   onDelete: (customer: CustomerDocument) => void;
+  onViewOrderHistory?: (customer: CustomerDocument) => void;
   loading?: boolean;
   refreshing?: boolean;
   onRefresh?: () => void;
@@ -28,13 +29,15 @@ interface CustomerItemProps {
   customer: CustomerDocument;
   onEdit: (customer: CustomerDocument) => void;
   onDelete: (customer: CustomerDocument) => void;
+  onViewOrderHistory?: (customer: CustomerDocument) => void;
   showActions: boolean;
 }
 
 function CustomerItem({ 
   customer, 
   onEdit, 
-  onDelete, 
+  onDelete,
+  onViewOrderHistory,
   showActions 
 }: CustomerItemProps) {
   const handleDelete = () => {
@@ -123,6 +126,17 @@ function CustomerItem({
 
       {showActions && (
         <View style={styles.actions}>
+          {onViewOrderHistory && (
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation();
+                onViewOrderHistory(customer);
+              }}
+              style={[styles.actionButton, styles.orderHistoryButton]}
+            >
+              <Ionicons name="receipt-outline" size={18} color="#007AFF" />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             onPress={(e) => {
               e.stopPropagation();
@@ -142,6 +156,7 @@ export function CustomerList({
   customers,
   onEdit,
   onDelete,
+  onViewOrderHistory,
   loading = false,
   refreshing = false,
   onRefresh,
@@ -153,6 +168,7 @@ export function CustomerList({
       customer={item}
       onEdit={onEdit}
       onDelete={onDelete}
+      onViewOrderHistory={onViewOrderHistory}
       showActions={showActions}
     />
   );
@@ -290,6 +306,10 @@ const styles = StyleSheet.create({
   deleteButton: {
     borderColor: '#e74c3c',
     backgroundColor: '#fdf2f2',
+  },
+  orderHistoryButton: {
+    borderColor: '#007AFF',
+    backgroundColor: '#f0f7ff',
   },
   separator: {
     height: 1,

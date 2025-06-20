@@ -6,15 +6,89 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Switch,
+  TextInput
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BaseScreen } from '../BaseScreen';
 import { StripeSettingsCard } from '../../components/settings/StripeSettingsCard';
 import { StripeTerminalSettingsCard } from '../../components/settings/StripeTerminalSettingsCard';
+import { businessService } from '../../database/services/businessService';
+import { BusinessDocument } from '../../database/schemas/business';
 
 export default function PaymentSettingsScreen() {
   const [isLoading, setIsLoading] = useState(false);
+  const [taxEnabled, setTaxEnabled] = useState(false);
+  const [taxRate, setTaxRate] = useState('0');
+  const [currentBusiness, setCurrentBusiness] = useState<BusinessDocument | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    loadBusinessSettings();
+  }, []);
+
+  const loadBusinessSettings = async () => {
+    try {
+      const businesses = await businessService.getAllBusinesses();
+      if (businesses.length > 0) {
+        const business = businesses[0];
+        setCurrentBusiness(business);
+        const rate = business.taxRate || 0;
+        setTaxEnabled(rate > 0);
+        setTaxRate(rate.toString());
+      }
+    } catch (error) {
+      console.error('Error loading business settings:', error);
+    }
+  };
+
+  const handleTaxToggle = async (value: boolean) => {
+    setTaxEnabled(value);
+    if (!value) {
+      // If disabling tax, set rate to 0
+      await saveTaxRate(0);
+    }
+  };
+
+  const saveTaxRate = async (rate: number) => {
+    if (!currentBusiness) return;
+    
+    setIsSaving(true);
+    try {
+      const updated = await businessService.updateBusinessField(currentBusiness.id, {
+        taxRate: rate
+      });
+      if (updated) {
+        Alert.alert('Success', 'Tax settings updated successfully');
+      } else {
+        Alert.alert('Error', 'Failed to update tax settings');
+      }
+    } catch (error) {
+      console.error('Error saving tax rate:', error);
+      Alert.alert('Error', 'Failed to update tax settings');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleTaxRateChange = (text: string) => {
+    // Only allow numbers and decimal point
+    const cleaned = text.replace(/[^0-9.]/g, '');
+    // Ensure only one decimal point
+    const parts = cleaned.split('.');
+    const formatted = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : cleaned;
+    setTaxRate(formatted);
+  };
+
+  const handleTaxRateSubmit = async () => {
+    const rate = parseFloat(taxRate) || 0;
+    if (rate < 0 || rate > 100) {
+      Alert.alert('Invalid Tax Rate', 'Tax rate must be between 0 and 100');
+      return;
+    }
+    await saveTaxRate(rate / 100); // Convert percentage to decimal
+  };
 
   const paymentMethods = [
     {
@@ -112,75 +186,60 @@ export default function PaymentSettingsScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Traditional Payment Methods</Text>
+          <Text style={styles.sectionTitle}>Tax Settings</Text>
           <Text style={styles.sectionSubtitle}>
-            Built-in payment options that don't require configuration
+            Configure sales tax for your business
           </Text>
           
-          {paymentMethods
-            .filter(method => method.builtin)
-            .map(method => (
-              <View key={method.id} style={styles.paymentMethodCard}>
-                <View style={styles.paymentMethodHeader}>
-                  <View style={[styles.paymentMethodIcon, { backgroundColor: `${method.color}20` }]}>
-                    <Ionicons name={method.icon as any} size={24} color={method.color} />
-                  </View>
-                  <View style={styles.paymentMethodInfo}>
-                    <Text style={styles.paymentMethodName}>{method.name}</Text>
-                    <Text style={styles.paymentMethodDescription}>{method.description}</Text>
-                  </View>
-                  <View style={[styles.statusIndicator, method.enabled && styles.statusEnabled]}>
-                    <Text style={[styles.statusText, method.enabled && styles.statusTextEnabled]}>
-                      Always Available
-                    </Text>
-                  </View>
+          <View style={styles.paymentMethodCard}>
+            <View style={styles.taxSettingsContent}>
+              <View style={styles.taxToggleRow}>
+                <View style={styles.taxToggleInfo}>
+                  <Text style={styles.taxToggleLabel}>Enable Sales Tax</Text>
+                  <Text style={styles.taxToggleDescription}>
+                    Add sales tax to customer orders
+                  </Text>
                 </View>
-                
-                <View style={styles.builtinMethodDetails}>
-                  <View style={styles.featureList}>
-                    {method.id === 'cash' && (
-                      <>
-                        <View style={styles.featureItem}>
-                          <Ionicons name="checkmark-circle" size={16} color="#28a745" />
-                          <Text style={styles.featureText}>No processing fees</Text>
-                        </View>
-                        <View style={styles.featureItem}>
-                          <Ionicons name="checkmark-circle" size={16} color="#28a745" />
-                          <Text style={styles.featureText}>Immediate settlement</Text>
-                        </View>
-                      </>
-                    )}
-                    
-                    {method.id === 'check' && (
-                      <>
-                        <View style={styles.featureItem}>
-                          <Ionicons name="checkmark-circle" size={16} color="#28a745" />
-                          <Text style={styles.featureText}>Check number tracking</Text>
-                        </View>
-                        <View style={styles.featureItem}>
-                          <Ionicons name="checkmark-circle" size={16} color="#28a745" />
-                          <Text style={styles.featureText}>Manual verification</Text>
-                        </View>
-                      </>
-                    )}
-                    
-                    {method.id === 'account' && (
-                      <>
-                        <View style={styles.featureItem}>
-                          <Ionicons name="checkmark-circle" size={16} color="#28a745" />
-                          <Text style={styles.featureText}>Customer account linking</Text>
-                        </View>
-                        <View style={styles.featureItem}>
-                          <Ionicons name="checkmark-circle" size={16} color="#28a745" />
-                          <Text style={styles.featureText}>Credit balance tracking</Text>
-                        </View>
-                      </>
-                    )}
-                  </View>
-                </View>
+                <Switch
+                  value={taxEnabled}
+                  onValueChange={handleTaxToggle}
+                  trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
+                  thumbColor={taxEnabled ? '#fff' : '#f4f3f4'}
+                />
               </View>
-            ))
-          }
+              
+              {taxEnabled && (
+                <View style={styles.taxRateSection}>
+                  <Text style={styles.taxRateLabel}>Tax Rate (%)</Text>
+                  <View style={styles.taxRateInputRow}>
+                    <TextInput
+                      style={styles.taxRateInput}
+                      value={taxRate}
+                      onChangeText={handleTaxRateChange}
+                      keyboardType="decimal-pad"
+                      placeholder="0.00"
+                      maxLength={6}
+                      editable={!isSaving}
+                    />
+                    <TouchableOpacity
+                      style={[styles.saveTaxButton, isSaving && styles.saveTaxButtonDisabled]}
+                      onPress={handleTaxRateSubmit}
+                      disabled={isSaving}
+                    >
+                      {isSaving ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Text style={styles.saveTaxButtonText}>Save</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.taxRateHelp}>
+                    Enter the tax percentage (e.g., 8.75 for 8.75%)
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
         </View>
 
         <View style={styles.infoSection}>
@@ -392,5 +451,78 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#0066cc',
     lineHeight: 20,
+  },
+  taxSettingsContent: {
+    padding: 20,
+  },
+  taxToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f3f4',
+  },
+  taxToggleInfo: {
+    flex: 1,
+    marginRight: 16,
+  },
+  taxToggleLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  taxToggleDescription: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+  },
+  taxRateSection: {
+    paddingTop: 20,
+  },
+  taxRateLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  taxRateInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  taxRateInput: {
+    flex: 1,
+    height: 48,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    backgroundColor: '#fff',
+    marginRight: 12,
+  },
+  saveTaxButton: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 24,
+    height: 48,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 80,
+  },
+  saveTaxButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  saveTaxButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  taxRateHelp: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
   },
 });

@@ -25,6 +25,7 @@ interface ReceiptPreviewModalProps {
   employeeName?: string;
   onClose: () => void;
   onComplete: (paymentInfo: PaymentInfo, qrData?: string) => void;
+  taxRate?: number;
 }
 
 export function ReceiptPreviewModal({
@@ -35,7 +36,8 @@ export function ReceiptPreviewModal({
   orderNumber,
   employeeName,
   onClose,
-  onComplete
+  onComplete,
+  taxRate = 0
 }: ReceiptPreviewModalProps) {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
@@ -68,7 +70,7 @@ export function ReceiptPreviewModal({
 
   // Convert all monetary values using the cents-based approach
   const subtotal = toPreciseAmount(rawSubtotal);
-  const tax = toPreciseAmount(subtotal * 0.0875); // 8.75% tax
+  const tax = toPreciseAmount(subtotal * taxRate);
   const total = toPreciseAmount(subtotal + tax);
 
 
@@ -280,7 +282,7 @@ export function ReceiptPreviewModal({
     // Totals
     addText(formatTwoColumns('Subtotal:', `$${subtotal.toFixed(2)}`, 32));
     addLF();
-    addText(formatTwoColumns('Tax (8.75%):', `$${tax.toFixed(2)}`, 32));
+    addText(formatTwoColumns(taxRate > 0 ? `Tax (${(taxRate * 100).toFixed(2)}%):` : 'Tax:', `$${tax.toFixed(2)}`, 32));
     addLF();
     addText('--------------------------------');
     addLF();
@@ -586,7 +588,7 @@ export function ReceiptPreviewModal({
               <Text style={styles.summaryValue}>${subtotal.toFixed(2)}</Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Tax:</Text>
+              <Text style={styles.summaryLabel}>Tax{taxRate > 0 ? ` (${(taxRate * 100).toFixed(2)}%)` : ''}:</Text>
               <Text style={styles.summaryValue}>${tax.toFixed(2)}</Text>
             </View>
             <View style={[styles.summaryRow, styles.totalRow]}>

@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, SafeAreaView, Text, FlatList, TouchableOpacity, ActivityIndicator, Animated, ScrollView } from 'react-native';
+import { View, StyleSheet, SafeAreaView, Text, FlatList, TouchableOpacity, ActivityIndicator, Animated, ScrollView, Modal, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { InputBox } from '../components/ui/InputBox';
 import { DashboardMenu, MenuItem } from '../components/ui/DashboardMenu';
 import { BusinessForm } from '../components/forms/BusinessForm';
+import { DynamicForm } from '../components/forms/DynamicForm';
 import { customerService } from '../database/services/customerService';
 import { businessService } from '../database/services/businessService';
 import { OrderService } from '../database/services/orderService';
 import { CustomerDocument } from '../database/schemas/customer';
 import { BusinessDocument } from '../database/schemas/business';
 import { BusinessFormData, BusinessValidationErrors } from '../utils/businessValidation';
+import { CustomerFormData, CustomerValidationErrors } from '../utils/customerValidation';
 import { useDebouncedCallback } from '../utils/hooks';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -26,6 +28,10 @@ export default function Dashboard() {
   const [orderService] = useState(() => new OrderService());
   const [hasReadyOrders, setHasReadyOrders] = useState(false);
   const [blinkAnimation] = useState(new Animated.Value(1));
+  const [showCreateCustomerModal, setShowCreateCustomerModal] = useState(false);
+  const [customerFormErrors, setCustomerFormErrors] = useState<CustomerValidationErrors>({});
+  const [customerDuplicateError, setCustomerDuplicateError] = useState<string>('');
+  const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   
   useEffect(() => {
@@ -229,6 +235,63 @@ export default function Dashboard() {
   const handleCreateBusinessPress = () => {
     setShowBusinessForm(true);
   };
+
+  const handleCreateCustomer = async (data: CustomerFormData): Promise<{ customer?: any; errors?: CustomerValidationErrors }> => {
+    setIsCreatingCustomer(true);
+    setCustomerFormErrors({});
+    setCustomerDuplicateError('');
+    
+    try {
+      const result = await customerService.createCustomer(data);
+      
+      if (result.customer) {
+        // Convert to serializable customer for navigation
+        const serializableCustomer = {
+          id: result.customer.id,
+          firstName: result.customer.firstName,
+          lastName: result.customer.lastName,
+          address: result.customer.address,
+          city: result.customer.city,
+          state: result.customer.state,
+          zipCode: result.customer.zipCode,
+          phone: result.customer.phone,
+          email: result.customer.email,
+          businessId: result.customer.businessId,
+          cognitoId: result.customer.cognitoId,
+          notes: result.customer.notes,
+          joinDate: result.customer.joinDate,
+          isLocalOnly: result.customer.isLocalOnly,
+          isDeleted: result.customer.isDeleted,
+          lastSyncedAt: result.customer.lastSyncedAt,
+          amplifyId: result.customer.amplifyId,
+          createdAt: result.customer.createdAt,
+          updatedAt: result.customer.updatedAt,
+        };
+        
+        setShowCreateCustomerModal(false);
+        
+        // Navigate to checkout with the new customer
+        navigation.navigate('Checkout', { 
+          customer: serializableCustomer 
+        });
+        
+        return { customer: result.customer };
+      } else if (result.errors) {
+        setCustomerFormErrors(result.errors);
+        return { errors: result.errors };
+      } else if (result.duplicateError) {
+        setCustomerDuplicateError(result.duplicateError);
+        return { errors: { phone: result.duplicateError } };
+      }
+      
+      return { errors: { phone: 'Failed to create customer' } };
+    } catch (error) {
+      console.error('Error creating customer:', error);
+      return { errors: { phone: 'Failed to create customer. Please try again.' } };
+    } finally {
+      setIsCreatingCustomer(false);
+    }
+  };
   
   const menuItems: MenuItem[] = [
     { id: '1', title: 'Customers', icon: 'people', href: 'Customers', color: '#4CAF50' },
@@ -274,6 +337,12 @@ export default function Dashboard() {
           style={styles.searchInput}
           placeholderTextColor="#999"
         />
+        <TouchableOpacity 
+          style={styles.addCustomerButton}
+          onPress={() => setShowCreateCustomerModal(true)}
+        >
+          <Ionicons name="add" size={24} color="#007AFF" />
+        </TouchableOpacity>
       </View>
       
       {showResults && (
@@ -338,6 +407,27 @@ export default function Dashboard() {
         onCancel={() => setShowBusinessForm(false)}
         title="Create Business"
       />
+
+      {/* Create Customer Modal */}
+      <Modal
+        visible={showCreateCustomerModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <DynamicForm
+          mode="create"
+          entityType="customer"
+          onSubmit={handleCreateCustomer}
+          onCancel={() => {
+            setShowCreateCustomerModal(false);
+            setCustomerFormErrors({});
+            setCustomerDuplicateError('');
+          }}
+          isLoading={isCreatingCustomer}
+          errors={customerFormErrors}
+          duplicateError={customerDuplicateError}
+        />
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -411,6 +501,15 @@ const styles = StyleSheet.create({
     marginBottom: 0,
     fontSize: 16,
     color: '#333',
+  },
+  addCustomerButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#E3F2FD',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 12,
   },
   searchResults: {
     backgroundColor: 'white',
