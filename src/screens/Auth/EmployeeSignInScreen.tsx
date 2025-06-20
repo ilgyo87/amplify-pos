@@ -1,14 +1,31 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, SafeAreaView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { PinInput } from '../../components/auth/PinInput';
 import { useEmployeeAuth } from '../../context/EmployeeAuthContext';
 import { RootStackParamList } from '../../navigation/types';
+import { employeeService } from '../../database/services/employeeService';
 
 export default function EmployeeSignInScreen() {
   const { signIn, isLoading } = useEmployeeAuth();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const [hasNoEmployees, setHasNoEmployees] = useState(false);
+
+  useEffect(() => {
+    // Check if there are any employees when the screen loads
+    const checkEmployees = async () => {
+      try {
+        await employeeService.initialize();
+        const employees = await employeeService.getAllEmployees();
+        setHasNoEmployees(employees.length === 0);
+      } catch (error) {
+        console.error('Error checking employees:', error);
+      }
+    };
+
+    checkEmployees();
+  }, []);
 
   const handlePinSubmit = async (pin: string) => {
     const result = await signIn(pin);
@@ -34,6 +51,7 @@ export default function EmployeeSignInScreen() {
           isLoading={isLoading}
           title="Employee Sign In"
           subtitle="Enter your 4-digit PIN to continue"
+          showSetupHint={hasNoEmployees}
         />
       </View>
     </SafeAreaView>
@@ -47,5 +65,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

@@ -67,7 +67,13 @@ function EmployeeItem({
   const fullAddress = formatAddress();
 
   return (
-    <View style={styles.employeeItem}>
+    <TouchableOpacity 
+      style={styles.employeeItem}
+      onPress={() => onEdit(employee)}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityHint="Tap to edit this employee"
+    >
       <View style={styles.employeeInfo}>
         <View style={styles.employeeHeader}>
           <Text style={styles.employeeName}>
@@ -115,21 +121,17 @@ function EmployeeItem({
       {showActions && (
         <View style={styles.actions}>
           <TouchableOpacity
-            onPress={() => onEdit(employee)}
-            style={[styles.actionButton, styles.editButton]}
-          >
-            <Ionicons name="pencil" size={18} color="#007AFF" />
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            onPress={handleDelete}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleDelete();
+            }}
             style={[styles.actionButton, styles.deleteButton]}
           >
             <Ionicons name="trash" size={18} color="#e74c3c" />
           </TouchableOpacity>
         </View>
       )}
-    </View>
+    </TouchableOpacity>
   );
 }
 

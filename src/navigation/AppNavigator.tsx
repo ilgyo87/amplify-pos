@@ -47,9 +47,8 @@ const SignOutButton = () => {
   );
 };
 
-const EmployeeHeaderLeft = ({ showBackButton = false }: { showBackButton?: boolean }) => {
+const EmployeeHeaderCenter = () => {
   const { currentEmployee, signOut } = useEmployeeAuth();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const handleEmployeePress = () => {
     if (currentEmployee) {
@@ -64,96 +63,92 @@ const EmployeeHeaderLeft = ({ showBackButton = false }: { showBackButton?: boole
     }
   };
 
+  if (!currentEmployee) {
+    return null;
+  }
+
+  return (
+    <TouchableOpacity 
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: currentEmployee.id === 'temp-admin' ? '#FFF3CD' : '#E3F2FD',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: currentEmployee.id === 'temp-admin' ? '#856404' : '#007AFF',
+      }}
+      onPress={handleEmployeePress}
+    >
+      <View style={{
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: currentEmployee.id === 'temp-admin' ? '#856404' : '#007AFF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 8,
+      }}>
+        <Text style={{
+          color: 'white',
+          fontSize: 12,
+          fontWeight: '600',
+        }}>
+          {currentEmployee.firstName.charAt(0)}{currentEmployee.lastName.charAt(0)}
+        </Text>
+      </View>
+      <View>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Text style={{
+            fontSize: 14,
+            fontWeight: '600',
+            color: '#333',
+          }}>
+            {currentEmployee.firstName} {currentEmployee.lastName}
+          </Text>
+          {currentEmployee.id === 'temp-admin' && (
+            <View style={{
+              backgroundColor: '#856404',
+              paddingHorizontal: 4,
+              paddingVertical: 1,
+              borderRadius: 4,
+              marginLeft: 6,
+            }}>
+              <Text style={{
+                fontSize: 8,
+                color: 'white',
+                fontWeight: '600',
+              }}>
+                TEMP
+              </Text>
+            </View>
+          )}
+        </View>
+        <Text style={{
+          fontSize: 10,
+          color: '#666',
+        }}>
+          {currentEmployee.role || 'Employee'}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+const BackButton = () => {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  
   const handleBackPress = () => {
     if (navigation.canGoBack()) {
       navigation.goBack();
     }
   };
 
-  if (!currentEmployee) {
-    return showBackButton ? (
-      <TouchableOpacity onPress={handleBackPress}>
-        <Text style={{ color: '#007AFF', fontSize: 16 }}>Back</Text>
-      </TouchableOpacity>
-    ) : null;
-  }
-
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-      {showBackButton && (
-        <TouchableOpacity 
-          style={{ marginRight: 16 }}
-          onPress={handleBackPress}
-        >
-          <Ionicons name="chevron-back" size={24} color="#007AFF" />
-        </TouchableOpacity>
-      )}
-      <TouchableOpacity 
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          backgroundColor: currentEmployee.id === 'temp-admin' ? '#FFF3CD' : '#E3F2FD',
-          paddingHorizontal: 12,
-          paddingVertical: 6,
-          borderRadius: 16,
-          borderWidth: 1,
-          borderColor: currentEmployee.id === 'temp-admin' ? '#856404' : '#007AFF',
-        }}
-        onPress={handleEmployeePress}
-      >
-        <View style={{
-          width: 28,
-          height: 28,
-          borderRadius: 14,
-          backgroundColor: currentEmployee.id === 'temp-admin' ? '#856404' : '#007AFF',
-          justifyContent: 'center',
-          alignItems: 'center',
-          marginRight: 8,
-        }}>
-          <Text style={{
-            color: 'white',
-            fontSize: 12,
-            fontWeight: '600',
-          }}>
-            {currentEmployee.firstName.charAt(0)}{currentEmployee.lastName.charAt(0)}
-          </Text>
-        </View>
-        <View>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={{
-              fontSize: 14,
-              fontWeight: '600',
-              color: '#333',
-            }}>
-              {currentEmployee.firstName} {currentEmployee.lastName}
-            </Text>
-            {currentEmployee.id === 'temp-admin' && (
-              <View style={{
-                backgroundColor: '#856404',
-                paddingHorizontal: 4,
-                paddingVertical: 1,
-                borderRadius: 4,
-                marginLeft: 6,
-              }}>
-                <Text style={{
-                  fontSize: 8,
-                  color: 'white',
-                  fontWeight: '600',
-                }}>
-                  TEMP
-                </Text>
-              </View>
-            )}
-          </View>
-          <Text style={{
-            fontSize: 10,
-            color: '#666',
-          }}>
-            {currentEmployee.role || 'Employee'}
-          </Text>
-        </View>
-      </TouchableOpacity>
-    </View>
+    <TouchableOpacity onPress={handleBackPress}>
+      <Ionicons name="chevron-back" size={24} color="#007AFF" />
+    </TouchableOpacity>
   );
 };
 
@@ -187,8 +182,8 @@ const AppNavigator = () => {
           <Stack.Screen 
             name="Dashboard" 
             options={{ 
-              title: 'Amplify POS',
-              headerLeft: () => <EmployeeHeaderLeft showBackButton={false} />,
+              title: '',
+              headerTitle: () => <EmployeeHeaderCenter />,
               headerRight: () => <SignOutButton />
             }}
           >
@@ -201,7 +196,8 @@ const AppNavigator = () => {
           <Stack.Screen 
             name="Customers"
             options={{ 
-              headerLeft: () => <EmployeeHeaderLeft showBackButton={true} />,
+              headerLeft: () => <BackButton />,
+              headerTitle: () => <EmployeeHeaderCenter />,
               headerRight: () => <SignOutButton /> 
             }}
           >
@@ -214,7 +210,8 @@ const AppNavigator = () => {
           <Stack.Screen 
             name="Products"
             options={{ 
-              headerLeft: () => <EmployeeHeaderLeft showBackButton={true} />,
+              headerLeft: () => <BackButton />,
+              headerTitle: () => <EmployeeHeaderCenter />,
               headerRight: () => <SignOutButton /> 
             }}
           >
@@ -227,7 +224,8 @@ const AppNavigator = () => {
           <Stack.Screen 
             name="Orders"
             options={{ 
-              headerLeft: () => <EmployeeHeaderLeft showBackButton={true} />,
+              headerLeft: () => <BackButton />,
+              headerTitle: () => <EmployeeHeaderCenter />,
               headerRight: () => <SignOutButton /> 
             }}
           >
@@ -240,7 +238,8 @@ const AppNavigator = () => {
           <Stack.Screen 
             name="Employees"
             options={{ 
-              headerLeft: () => <EmployeeHeaderLeft showBackButton={true} />,
+              headerLeft: () => <BackButton />,
+              headerTitle: () => <EmployeeHeaderCenter />,
               headerRight: () => <SignOutButton /> 
             }}
           >
@@ -253,7 +252,8 @@ const AppNavigator = () => {
           <Stack.Screen 
             name="Settings"
             options={{ 
-              headerLeft: () => <EmployeeHeaderLeft showBackButton={true} />,
+              headerLeft: () => <BackButton />,
+              headerTitle: () => <EmployeeHeaderCenter />,
               headerRight: () => <SignOutButton /> 
             }}
           >
@@ -267,7 +267,8 @@ const AppNavigator = () => {
             name="BusinessSettings"
             options={{ 
               title: 'Business Profile',
-              headerLeft: () => <EmployeeHeaderLeft showBackButton={true} />,
+              headerLeft: () => <BackButton />,
+              headerTitle: () => <EmployeeHeaderCenter />,
               headerRight: () => <SignOutButton /> 
             }}
           >
@@ -281,7 +282,8 @@ const AppNavigator = () => {
             name="PaymentSettings"
             options={{ 
               title: 'Payment Settings',
-              headerLeft: () => <EmployeeHeaderLeft showBackButton={true} />,
+              headerLeft: () => <BackButton />,
+              headerTitle: () => <EmployeeHeaderCenter />,
               headerRight: () => <SignOutButton /> 
             }}
           >
@@ -295,7 +297,8 @@ const AppNavigator = () => {
             name="PrinterSettings"
             options={{ 
               title: 'Printer Settings',
-              headerLeft: () => <EmployeeHeaderLeft showBackButton={true} />,
+              headerLeft: () => <BackButton />,
+              headerTitle: () => <EmployeeHeaderCenter />,
               headerRight: () => <SignOutButton /> 
             }}
           >
@@ -309,7 +312,8 @@ const AppNavigator = () => {
             name="DataSync"
             options={{ 
               title: 'Data Sync',
-              headerLeft: () => <EmployeeHeaderLeft showBackButton={true} />,
+              headerLeft: () => <BackButton />,
+              headerTitle: () => <EmployeeHeaderCenter />,
               headerRight: () => <SignOutButton /> 
             }}
           >
@@ -322,7 +326,8 @@ const AppNavigator = () => {
           <Stack.Screen 
             name="Reports"
             options={{ 
-              headerLeft: () => <EmployeeHeaderLeft showBackButton={true} />,
+              headerLeft: () => <BackButton />,
+              headerTitle: () => <EmployeeHeaderCenter />,
               headerRight: () => <SignOutButton /> 
             }}
           >
@@ -335,9 +340,7 @@ const AppNavigator = () => {
           <Stack.Screen 
             name="EmployeeSignIn"
             options={{ 
-              title: 'Employee Sign In',
-              headerLeft: () => <EmployeeHeaderLeft showBackButton={true} />,
-              headerRight: () => <SignOutButton />,
+              headerShown: false,
               presentation: 'modal'
             }}
           >
@@ -350,10 +353,10 @@ const AppNavigator = () => {
           <Stack.Screen 
             name="Checkout"
             options={{ 
-              headerLeft: () => <EmployeeHeaderLeft showBackButton={true} />,
+              headerLeft: () => <BackButton />,
+              headerTitle: () => <EmployeeHeaderCenter />,
               headerRight: () => <SignOutButton />,
-              presentation: 'fullScreenModal',
-              headerTitle: 'Checkout'
+              presentation: 'fullScreenModal'
             }}
           >
             {(props) => (

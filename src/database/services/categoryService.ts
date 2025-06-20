@@ -3,6 +3,7 @@ import { CategoryDocument, CategoryDocType } from '../schemas/category';
 import { getDatabaseInstance, DatabaseCollections } from '../config';
 import { CategoryRepository } from '../repositories/CategoryRepository';
 import { validateCategoryForm, checkForCategoryDuplicates, CategoryFormData, CategoryValidationErrors } from '../../utils/categoryValidation';
+import { productService } from './productService';
 
 /**
  * Service for handling category-related business logic
@@ -128,13 +129,28 @@ export class CategoryService {
   }
 
   /**
-   * Delete a category by ID
+   * Delete a category by ID and all its associated products
    * @param id Category ID
    * @returns True if deleted, false otherwise
    */
   async deleteCategory(id: string): Promise<boolean> {
-    const repository = this.getRepository();
-    return repository.softDelete(id);
+    try {
+      // First, delete all products in this category
+      await productService.initialize();
+      const productsInCategory = await productService.findByCategoryId(id);
+      
+      // Delete each product in the category
+      for (const product of productsInCategory) {
+        await productService.deleteProduct(product.id);
+      }
+      
+      // Then delete the category itself
+      const repository = this.getRepository();
+      return repository.softDelete(id);
+    } catch (error) {
+      console.error('Error deleting category and its products:', error);
+      throw error;
+    }
   }
 
   /**

@@ -164,42 +164,58 @@ const DEFAULT_PRODUCTS: DefaultProduct[] = [
   {
     name: 'Hem Pants',
     description: 'Hemming service for pants and trousers',
-    price: 12.00,
+    price: 10.00,
     categoryName: 'Alterations',
-    imageName: 'pants',
+    imageName: 'hem',
     notes: 'Basic hem, no rush service'
   },
   {
-    name: 'Jacket Alterations',
-    description: 'Tailoring services for jackets',
-    price: 25.00,
+    name: 'Waist Pants',
+    description: 'Waist hemming service for pants and trousers',
+    price: 10.00,
     categoryName: 'Alterations',
-    imageName: 'jacket',
-    notes: 'Includes sleeve shortening and body adjustments'
-  },
-  {
-    name: 'Dress Alterations',
-    description: 'Professional dress alterations',
-    price: 20.00,
-    categoryName: 'Alterations',
-    imageName: 'dress',
-    notes: 'Taking in, letting out, and length adjustments'
-  },
-  {
-    name: 'Button Replacement',
-    description: 'Replace missing or damaged buttons',
-    price: 3.00,
-    categoryName: 'Alterations',
-    imageName: 'buttons',
-    notes: 'Price per button, matching buttons when possible'
+    imageName: 'waist',
+    notes: 'Basic waist hem, no rush service'
   },
   {
     name: 'Zipper Repair',
     description: 'Fix or replace broken zippers',
-    price: 15.00,
+    price: 10.00,
     categoryName: 'Alterations',
-    imageName: 'jacket',
+    imageName: 'zipper',
     notes: 'Includes zipper replacement if needed'
+  },
+  {
+    name: 'Taper',
+    description: 'Take in service for alterations',
+    price: 10.00,
+    categoryName: 'Alterations',
+    imageName: 'take-in',
+    notes: 'Basic take in service, no rush service'
+  },
+  {
+    name: 'Take-In',
+    description: 'Take in service for alterations',
+    price: 10.00,
+    categoryName: 'Alterations',
+    imageName: 'shirt-cut',
+    notes: 'Basic take in service, no rush service'
+  },
+  {
+    name: 'Patch',
+    description: 'Fabric patch repair',
+    price: 5.00,
+    categoryName: 'Alterations',
+    imageName: 'patch',
+    notes: 'Price per patch, matching fabric when possible'
+  },
+  {
+    name: 'Button Replacement',
+    description: 'Replace missing or damaged buttons',
+    price: 1.00,
+    categoryName: 'Alterations',
+    imageName: 'buttons',
+    notes: 'Price per button, matching buttons when possible'
   },
 
   // Special Services Products
@@ -208,7 +224,7 @@ const DEFAULT_PRODUCTS: DefaultProduct[] = [
     description: 'Specialized cleaning for wedding dresses',
     price: 150.00,
     categoryName: 'Special Services',
-    imageName: 'dress',
+    imageName: 'wedding-dress',
     notes: 'Includes preservation boxing'
   },
   {
@@ -216,15 +232,15 @@ const DEFAULT_PRODUCTS: DefaultProduct[] = [
     description: 'Specialized leather cleaning',
     price: 35.00,
     categoryName: 'Special Services',
-    imageName: 'jacket',
+    imageName: 'leather-jacket',
     notes: 'Professional leather treatment'
   },
   {
-    name: 'Formal Suit',
+    name: 'Tuxedo',
     description: 'Premium cleaning for formal wear',
     price: 25.00,
     categoryName: 'Special Services',
-    imageName: 'suit',
+    imageName: 'tuxedo',
     notes: 'White glove service with hand pressing'
   },
   {
@@ -236,11 +252,35 @@ const DEFAULT_PRODUCTS: DefaultProduct[] = [
     notes: 'Price per panel, pickup and delivery available'
   },
   {
-    name: 'Comforter/Blanket',
+    name: 'Comforter',
     description: 'Cleaning for bedding and comforters',
-    price: 25.00,
+    price: 20.00,
+    categoryName: 'Special Services',
+    imageName: 'comforter',
+    notes: 'Large item cleaning with special care'
+  },
+  {
+    name: 'Blanket',
+    description: 'Cleaning for blankets and throws',
+    price: 15.00,
     categoryName: 'Special Services',
     imageName: 'blankets',
+    notes: 'Large item cleaning with special care'
+  },
+  {
+    name: 'Pillow',
+    description: 'Cleaning for pillows and cushions',
+    price: 10.00,
+    categoryName: 'Special Services',
+    imageName: 'pillow',
+    notes: 'Price per pillow, pickup and delivery available'
+  },
+  {
+    name: 'Rug',
+    description: 'Cleaning for rugs and carpets',
+    price: 20.00,
+    categoryName: 'Special Services',
+    imageName: 'rug',
     notes: 'Large item cleaning with special care'
   },
   {
@@ -266,41 +306,6 @@ const DEFAULT_PRODUCTS: DefaultProduct[] = [
     price: 2.00,
     categoryName: 'Add-ons',
     imageName: 'patch'
-  },
-  {
-    name: 'Starch',
-    description: 'Heavy starch treatment',
-    price: 1.50,
-    categoryName: 'Add-ons',
-    imageName: 'spray'
-  },
-  {
-    name: 'Rush Service',
-    description: 'Same day or next day service',
-    price: 5.00,
-    categoryName: 'Add-ons',
-    imageName: 'clock'
-  },
-  {
-    name: 'Mothproofing',
-    description: 'Moth protection treatment',
-    price: 3.00,
-    categoryName: 'Add-ons',
-    imageName: 'shield'
-  },
-  {
-    name: 'Deodorizing',
-    description: 'Odor removal treatment',
-    price: 2.50,
-    categoryName: 'Add-ons',
-    imageName: 'spray'
-  },
-  {
-    name: 'Water Repellent',
-    description: 'Water resistance treatment',
-    price: 4.00,
-    categoryName: 'Add-ons',
-    imageName: 'umbrella'
   },
   {
     name: 'Fabric Softener',

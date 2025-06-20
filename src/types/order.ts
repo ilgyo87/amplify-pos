@@ -9,6 +9,13 @@ export interface OrderItemOptions {
   notes?: string;
 }
 
+export interface AddOnItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+}
+
 export interface OrderItem {
   id: string;
   name: string;
@@ -33,6 +40,7 @@ export interface OrderItem {
   quantity: number;
   options?: OrderItemOptions;
   itemKey: string; // Unique identifier for items with options
+  addOns?: AddOnItem[]; // Add-on services attached to this item
 }
 
 export interface OrderSummaryData {

@@ -45,14 +45,14 @@ function CategoryItem({
   const handleDelete = () => {
     Alert.alert(
       'Delete Category',
-      `Are you sure you want to delete "${category.name}"? This action cannot be undone.`,
+      `Are you sure you want to delete "${category.name}"?\n\n⚠️ WARNING: All products in this category will also be deleted. This action cannot be undone.`,
       [
         {
           text: 'Cancel',
           style: 'cancel',
         },
         {
-          text: 'Delete',
+          text: 'Delete Category & Products',
           style: 'destructive',
           onPress: () => onDelete(category),
         },
@@ -61,7 +61,11 @@ function CategoryItem({
   };
 
   const handlePress = () => {
-    if (onSelect) {
+    if (showActions) {
+      // In edit mode, clicking the card edits the category
+      onEdit(category);
+    } else if (onSelect) {
+      // In selection mode, clicking selects the category
       onSelect(category);
     }
   };
@@ -70,10 +74,13 @@ function CategoryItem({
     <TouchableOpacity 
       style={[
         styles.categoryItem,
-        isSelected && styles.categoryItemSelected
+        isSelected && styles.categoryItemSelected,
+        showActions && styles.categoryItemClickable
       ]}
       onPress={handlePress}
       activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityHint={showActions ? "Tap to edit this category" : "Tap to select this category"}
     >
       <View style={styles.categoryContent}>
         <View style={styles.categoryHeader}>
@@ -107,13 +114,6 @@ function CategoryItem({
 
       {showActions && (
         <View style={styles.actions}>
-          <TouchableOpacity
-            onPress={() => onEdit(category)}
-            style={[styles.actionButton, styles.editButton]}
-          >
-            <Ionicons name="pencil" size={18} color="#007AFF" />
-          </TouchableOpacity>
-          
           <TouchableOpacity
             onPress={handleDelete}
             style={[styles.actionButton, styles.deleteButton]}
@@ -220,6 +220,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f7ff',
     borderLeftWidth: 4,
     borderLeftColor: '#007AFF',
+  },
+  categoryItemClickable: {
+    cursor: 'pointer',
   },
   categoryContent: {
     flex: 1,

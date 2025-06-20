@@ -26,7 +26,7 @@ const PriceText = ({ price }: { price?: number }) => {
 };
 
 const { width } = Dimensions.get('window');
-const ITEM_WIDTH = (width - 80) / 4; // 4 columns with padding
+const ITEM_WIDTH = (width - 200) / 4; // 4 columns with smaller card width
 
 interface ProductListProps {
   products: ProductDocument[];
@@ -124,7 +124,11 @@ function ProductItemContent({
   const hasAdditionalPrice = safeAdditionalPrice > 0;
   
   const handlePress = () => {
-    if (onSelect) {
+    if (showActions && onEdit) {
+      // In edit mode (products screen), clicking the card edits the product
+      onEdit(id);
+    } else if (onSelect) {
+      // In selection mode (checkout), clicking selects the product
       onSelect(id);
     }
   };
@@ -134,12 +138,13 @@ function ProductItemContent({
       <TouchableOpacity 
         style={[
           styles.gridItem,
-          isSelected && styles.gridItemSelected
+          isSelected && styles.gridItemSelected,
+          showActions && styles.gridItemClickable
         ]}
         onPress={handlePress}
         activeOpacity={0.7}
         accessibilityRole="button" 
-        accessibilityHint="Selects this product"
+        accessibilityHint={showActions ? "Tap to edit this product" : "Tap to select this product"}
       >
         <View style={styles.imageContainer}>
           <ImageDisplay 
@@ -157,17 +162,6 @@ function ProductItemContent({
 
           {showActions && (
             <View style={styles.gridActions}>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => onEdit && onEdit(id)}
-                accessibilityRole="button"
-                accessibilityHint="Edit this product"
-              >
-                <Text>
-                  <Ionicons name="pencil" size={12} color="#007AFF" />
-                </Text>
-              </TouchableOpacity>
-              
               <TouchableOpacity
                 onPress={handleDelete}
                 style={[styles.actionButton, styles.deleteButton]}
@@ -285,17 +279,6 @@ function ProductItemContent({
 
       {showActions && (
         <View style={styles.listActions}>
-          <TouchableOpacity
-            onPress={() => onEdit && onEdit(id)}
-            style={[styles.actionButton, styles.editButton]}
-            accessibilityRole="button"
-            accessibilityHint="Edit this product"
-          >
-            <Text>
-              <Ionicons name="pencil" size={18} color="#007AFF" />
-            </Text>
-          </TouchableOpacity>
-          
           <TouchableOpacity
             onPress={handleDelete}
             style={[styles.actionButton, styles.deleteButton]}
@@ -433,11 +416,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    padding: 12,
+    paddingTop: 20,
+    paddingRight: 20,
+    paddingBottom: 20,
+    paddingLeft: 6,
   },
   gridRow: {
-    justifyContent: 'space-around',
-    paddingHorizontal: 4,
+    justifyContent: 'space-evenly',
+    paddingLeft: 0,
+    paddingRight: 8,
+    marginBottom: 12,
   },
   // Grid styles
   gridItem: {
@@ -445,6 +433,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 12,
     marginBottom: 16,
+    marginHorizontal: 8,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -458,6 +447,9 @@ const styles = StyleSheet.create({
   gridItemSelected: {
     borderWidth: 2,
     borderColor: '#007AFF',
+  },
+  gridItemClickable: {
+    transform: [{ scale: 1 }],
   },
   imageContainer: {
     position: 'relative',

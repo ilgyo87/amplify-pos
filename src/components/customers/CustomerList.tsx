@@ -71,6 +71,8 @@ function CustomerItem({
       style={styles.customerItem}
       onPress={() => onEdit(customer)}
       activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityHint="Tap to edit this customer"
     >
       <View style={styles.customerInfo}>
         <View style={styles.customerHeader}>
@@ -121,16 +123,6 @@ function CustomerItem({
 
       {showActions && (
         <View style={styles.actions}>
-          <TouchableOpacity
-            onPress={(e) => {
-              e.stopPropagation();
-              onEdit(customer);
-            }}
-            style={[styles.actionButton, styles.editButton]}
-          >
-            <Ionicons name="pencil" size={18} color="#007AFF" />
-          </TouchableOpacity>
-          
           <TouchableOpacity
             onPress={(e) => {
               e.stopPropagation();

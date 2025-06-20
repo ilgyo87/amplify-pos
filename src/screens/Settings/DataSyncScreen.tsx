@@ -283,30 +283,6 @@ export default function DataSyncScreen() {
     );
   };
 
-  const handleFixCategoryRelationships = async () => {
-    Alert.alert(
-      'Fix Category Relationships',
-      'This will check and fix product-category relationships after sync.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Fix Relationships',
-          onPress: async () => {
-            try {
-              const result = await syncService.fixProductCategoryRelationships();
-              
-              Alert.alert(
-                result.success ? 'Success' : 'Error',
-                result.message
-              );
-            } catch (error) {
-              Alert.alert('Error', 'Failed to fix category relationships. Please try again.');
-            }
-          }
-        }
-      ]
-    );
-  };
 
   const showSyncResult = (operation: string, result: SyncResult, uploadedCount: number = 0, downloadedCount: number = 0) => {
     const title = `${operation} Complete`;
@@ -489,15 +465,6 @@ export default function DataSyncScreen() {
             loading={syncStatus.isDownloading}
             icon="cloud-download"
             color="#6f42c1"
-          />
-          
-          <SyncCard
-            title="Fix Category Links"
-            description="Fix product-category relationships after sync"
-            onPress={handleFixCategoryRelationships}
-            loading={false}
-            icon="link"
-            color="#fd7e14"
           />
         </View>
 

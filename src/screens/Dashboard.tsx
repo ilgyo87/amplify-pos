@@ -241,14 +241,16 @@ export default function Dashboard() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.businessName}>{businessName}</Text>
-        {businessName === 'No Business' ? (
+      {businessName === 'No Business' ? (
+        <View style={styles.createBusinessContainer}>
           <TouchableOpacity style={styles.createButton} onPress={handleCreateBusinessPress}>
             <Text style={styles.createButtonText}>Create Business</Text>
           </TouchableOpacity>
-        ) : (
-          hasReadyOrders && (
+        </View>
+      ) : (
+        <View style={styles.header}>
+          <Text style={styles.businessName}>{businessName}</Text>
+          {hasReadyOrders && (
             <TouchableOpacity
               style={styles.readyOrdersButton}
               onPress={() => navigation.navigate('Orders')}
@@ -258,18 +260,19 @@ export default function Dashboard() {
                 <Text style={styles.readyOrdersButtonText}>Ready Orders</Text>
               </Animated.View>
             </TouchableOpacity>
-          )
-        )}
-      </View>
+          )}
+        </View>
+      )}
       
       <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
+        <Ionicons name="search" size={24} color="#666" style={styles.searchIcon} />
         <InputBox
           placeholder="Search customers by name, phone, email, or order number..."
           value={searchTerm}
           onChangeText={handleSearchChange}
           onFocus={() => searchTerm.trim() && setShowResults(true)}
           style={styles.searchInput}
+          placeholderTextColor="#999"
         />
       </View>
       
@@ -345,9 +348,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    position: 'relative',
     alignItems: 'center',
+    justifyContent: 'center',
     padding: 16,
     backgroundColor: 'white',
     borderBottomWidth: 1,
@@ -357,43 +360,71 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#333',
+    textAlign: 'center',
+  },
+  createBusinessContainer: {
+    padding: 16,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   createButton: {
     backgroundColor: '#007AFF',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
     borderRadius: 8,
   },
   createButtonText: {
     color: 'white',
     fontWeight: '600',
+    fontSize: 16,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'white',
-    margin: 16,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    marginHorizontal: 16,
+    marginTop: 20,
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#e0e0e0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   searchIcon: {
-    marginRight: 8,
+    marginRight: 12,
   },
   searchInput: {
     flex: 1,
     backgroundColor: 'transparent',
     borderWidth: 0,
     paddingHorizontal: 0,
+    paddingVertical: 0,
+    marginBottom: 0,
+    fontSize: 16,
+    color: '#333',
   },
   searchResults: {
     backgroundColor: 'white',
     marginHorizontal: 16,
-    borderRadius: 8,
+    marginTop: -8,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#e0e0e0',
     maxHeight: 300,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
   },
   loadingContainer: {
     flexDirection: 'row',
@@ -477,6 +508,10 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   readyOrdersButton: {
+    position: 'absolute',
+    right: 16,
+    top: '50%',
+    transform: [{ translateY: -20 }],
     backgroundColor: '#FFF4F1',
     paddingHorizontal: 12,
     paddingVertical: 8,

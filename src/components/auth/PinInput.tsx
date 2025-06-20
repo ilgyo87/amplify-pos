@@ -14,13 +14,15 @@ interface PinInputProps {
   isLoading?: boolean;
   title?: string;
   subtitle?: string;
+  showSetupHint?: boolean;
 }
 
 export function PinInput({
   onSubmit,
   isLoading = false,
   title = 'Employee Sign In',
-  subtitle = 'Enter your 4-digit PIN'
+  subtitle = 'Enter your 4-digit PIN',
+  showSetupHint = false
 }: PinInputProps) {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
@@ -177,7 +179,7 @@ export function PinInput({
           Enter your PIN and it will auto-submit when complete
         </Text>
         
-        {error === 'No employees found. Use PIN 9999 for admin setup.' && (
+        {(showSetupHint || error === 'No employees found. Use PIN 9999 for admin setup.') && (
           <View style={styles.setupHint}>
             <Text style={styles.setupHintTitle}>First Time Setup?</Text>
             <Text style={styles.setupHintText}>
@@ -194,7 +196,7 @@ export function PinInput({
 }
 
 const { width } = Dimensions.get('window');
-const buttonSize = Math.min(width / 5, 70);
+const buttonSize = Math.min(width / 4.5, 85);
 
 const styles = StyleSheet.create({
   container: {
@@ -206,10 +208,11 @@ const styles = StyleSheet.create({
   },
   content: {
     width: '100%',
-    maxWidth: 350,
+    maxWidth: 400,
     alignItems: 'center',
   },
   header: {
+    width: '100%',
     alignItems: 'center',
     marginBottom: 40,
   },
@@ -218,6 +221,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     marginBottom: 8,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
@@ -275,31 +279,33 @@ const styles = StyleSheet.create({
   keypadContainer: {
     marginBottom: 20,
     width: '100%',
-    maxWidth: 300,
+    maxWidth: 350,
+    padding: 24,
+    paddingHorizontal: 32,
   },
   keypadRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 20,
   },
   keypadButton: {
     width: buttonSize,
     height: buttonSize,
-    borderRadius: 8,
+    borderRadius: 12,
     backgroundColor: 'white',
     borderWidth: 1,
     borderColor: '#e0e0e0',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
     elevation: 2,
   },
   keypadText: {
-    fontSize: 24,
-    fontWeight: '500',
+    fontSize: 28,
+    fontWeight: '600',
   },
   hint: {
     fontSize: 12,

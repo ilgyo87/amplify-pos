@@ -11,16 +11,9 @@ import {
   ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { OrderItem, OrderItemOptions, StarchLevel, formatStarchLevel } from '../../types/order';
+import { OrderItem, OrderItemOptions, StarchLevel, formatStarchLevel, AddOnItem } from '../../types/order';
 import { useProducts } from '../../database/hooks/useProducts';
 import { useCategories } from '../../database/hooks/useCategories';
-
-interface AddOnItem {
-  id: string;
-  name: string;
-  price: number;
-  quantity: number;
-}
 
 interface OrderItemSettingsModalProps {
   visible: boolean;
