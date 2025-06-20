@@ -20,6 +20,7 @@ import { useOrders } from '../../database/hooks/useOrders';
 import { OrderDocument, OrderDocType } from '../../database/schemas/order';
 import { generateLabelHTML, printLabel } from '../../utils/printUtils';
 import { QRCode } from '../../utils/qrUtils';
+import { rackService } from '../../database/services/rackService';
 
 type OrderItem = OrderDocument['items'][0];
 
@@ -49,8 +50,25 @@ export default function OrdersScreen() {
   const { orders, loading, updateOrderStatus, updateOrderStatusAndRack, updateOrder } = useOrders(
     selectedStatus === 'all' ? undefined : selectedStatus
   );
+
+  // Filter orders by date for completed, picked_up, and cancelled statuses
+  const filteredOrders = useMemo(() => {
+    if (selectedStatus === 'completed' || selectedStatus === 'picked_up' || selectedStatus === 'cancelled') {
+      // Get today's date at midnight
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // Filter orders to only show today's orders for completed, picked_up, and cancelled
+      return orders.filter(order => {
+        const orderDate = new Date(order.updatedAt);
+        orderDate.setHours(0, 0, 0, 0);
+        return orderDate.getTime() === today.getTime();
+      });
+    }
+    return orders;
+  }, [orders, selectedStatus]);
   
-  // Create a memoized lookup map for orders
+  // Create a memoized lookup map for orders (use all orders for scanning, not filtered)
   const orderLookupMap = useMemo(() => {
     const map = new Map<string, OrderDocument>();
     orders.forEach(order => {
@@ -379,6 +397,22 @@ export default function OrdersScreen() {
     
     if (selectedOrder.status === 'ready') {
       try {
+        // First, check if the rack exists and is active
+        await rackService.initialize();
+        const rack = await rackService.getRackByNumber(rackNumber);
+        
+        if (!rack) {
+          Alert.alert('Invalid Rack', `Rack "${rackNumber}" does not exist. Please scan a valid rack label.`);
+          setRackScanInput('');
+          return;
+        }
+        
+        if (!rack.isActive) {
+          Alert.alert('Inactive Rack', `Rack "${rackNumber}" is inactive. Please use an active rack.`);
+          setRackScanInput('');
+          return;
+        }
+        
         // Update order status to completed and save rack number
         await updateOrderStatusAndRack(selectedOrder.id, 'completed', rackNumber);
         
@@ -389,11 +423,11 @@ export default function OrdersScreen() {
         setScannedItemsState({});
       } catch (error) {
         console.error('Failed to update order status:', error);
-        // Log error but don't show alert, just clear input
+        Alert.alert('Error', 'Failed to process rack scan. Please try again.');
       }
     } else {
       console.log('❌ Invalid status for rack assignment:', selectedOrder.status, 'Expected: ready');
-      // Log error but don't show alert, just clear input
+      Alert.alert('Invalid Status', 'Order must be in "Ready" status to assign to a rack.');
     }
     
     // Always clear the rack input field after scanning
@@ -887,7 +921,7 @@ export default function OrdersScreen() {
 
   const StatusFilter = () => (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScrollView}>
-      {(['all', 'pending', 'in_progress', 'ready', 'completed', 'cancelled'] as const).map((status) => (
+      {(['all', 'pending', 'in_progress', 'ready', 'completed', 'picked_up', 'cancelled'] as const).map((status) => (
         <TouchableOpacity
           key={status}
           style={[
@@ -1034,6 +1068,12 @@ export default function OrdersScreen() {
       {/* Custom Header with Status Filters */}
       <View style={styles.customHeader}>
         <StatusFilter />
+        {(selectedStatus === 'completed' || selectedStatus === 'picked_up' || selectedStatus === 'cancelled') && (
+          <View style={styles.dateFilterIndicator}>
+            <Ionicons name="calendar-outline" size={14} color="#6b7280" />
+            <Text style={styles.dateFilterText}>Today only</Text>
+          </View>
+        )}
       </View>
       
       {/* Search and scan row */}
@@ -1074,20 +1114,22 @@ export default function OrdersScreen() {
         </View>
       ) : null}
         
-        {orders.length === 0 ? (
+        {filteredOrders.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="receipt-outline" size={64} color="#d1d5db" />
             <Text style={styles.emptyTitle}>No Orders Found</Text>
             <Text style={styles.emptyText}>
               {selectedStatus === 'all' 
                 ? 'Orders will appear here once they are created.'
+                : selectedStatus === 'completed' || selectedStatus === 'picked_up' || selectedStatus === 'cancelled'
+                ? `No ${selectedStatus.replace('_', ' ')} orders today.`
                 : `No orders with status "${selectedStatus}".`
               }
             </Text>
           </View>
         ) : (
           <FlatList
-            data={orders}
+            data={filteredOrders}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => <OrderCard order={item} />}
             contentContainerStyle={styles.listContainer}
@@ -1165,7 +1207,11 @@ export default function OrdersScreen() {
                 <View style={styles.placeholder} />
               </View>
               
-              <View style={styles.detailContent}>
+              <ScrollView 
+                style={styles.detailContent} 
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.detailContentContainer}
+              >
                 <View style={styles.orderInfoSection}>
                   <View style={styles.orderInfoRow}>
                     <Ionicons name="person-outline" size={20} color="#6b7280" />
@@ -1406,7 +1452,7 @@ export default function OrdersScreen() {
                     <Text style={styles.completeText}>All items scanned!</Text>
                   </View>
                 )}
-              </View>
+              </ScrollView>
 
               {/* Only show action bar for ready orders (rack scanning) */}
               {selectedOrder.status === 'ready' && (
@@ -1754,6 +1800,19 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 16,
     minHeight: 50,
+  },
+  dateFilterIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 8,
+    paddingBottom: 4,
+    gap: 4,
+  },
+  dateFilterText: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontStyle: 'italic',
   },
   searchScanRow: {
     flexDirection: 'row',

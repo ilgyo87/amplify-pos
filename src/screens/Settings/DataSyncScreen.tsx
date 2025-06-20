@@ -32,6 +32,8 @@ export default function DataSyncScreen() {
     totalUnsyncedCategories: 0,
     totalLocalOrders: 0,
     totalUnsyncedOrders: 0,
+    totalLocalRacks: 0,
+    totalUnsyncedRacks: 0,
     customersUploaded: 0,
     customersDownloaded: 0,
     employeesUploaded: 0,
@@ -43,7 +45,9 @@ export default function DataSyncScreen() {
     businessesUploaded: 0,
     businessesDownloaded: 0,
     ordersUploaded: 0,
-    ordersDownloaded: 0
+    ordersDownloaded: 0,
+    racksUploaded: 0,
+    racksDownloaded: 0
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -102,7 +106,8 @@ export default function DataSyncScreen() {
         (status.totalUnsyncedBusinesses || 0) +
         (status.totalUnsyncedProducts || 0) +
         (status.totalUnsyncedCategories || 0) +
-        (status.totalUnsyncedOrders || 0);
+        (status.totalUnsyncedOrders || 0) +
+        (status.totalUnsyncedRacks || 0);
         
       if (totalUnsynced > 0) {
         console.log('[DATASYNC] Unsynced items:', getUnsyncedDetails());
@@ -131,7 +136,8 @@ export default function DataSyncScreen() {
       (syncStatus.totalUnsyncedBusinesses || 0) +
       (syncStatus.totalUnsyncedProducts || 0) +
       (syncStatus.totalUnsyncedCategories || 0) +
-      (syncStatus.totalUnsyncedOrders || 0)
+      (syncStatus.totalUnsyncedOrders || 0) +
+      (syncStatus.totalUnsyncedRacks || 0)
     );
   };
 
@@ -156,6 +162,9 @@ export default function DataSyncScreen() {
     if (syncStatus.totalUnsyncedOrders > 0) {
       details.push(`${syncStatus.totalUnsyncedOrders} order${syncStatus.totalUnsyncedOrders > 1 ? 's' : ''}`);
     }
+    if (syncStatus.totalUnsyncedRacks > 0) {
+      details.push(`${syncStatus.totalUnsyncedRacks} rack${syncStatus.totalUnsyncedRacks > 1 ? 's' : ''}`);
+    }
     
     return details.join(', ');
   };
@@ -170,7 +179,8 @@ export default function DataSyncScreen() {
         categories: await syncService.uploadCategories(),
         products: await syncService.uploadProducts(),
         businesses: await syncService.uploadBusinesses(),
-        orders: await syncService.uploadOrders()
+        orders: await syncService.uploadOrders(),
+        racks: await syncService.uploadRacks()
       };
       
       const totalUploaded = results.customers.uploadedCount + 
@@ -178,7 +188,8 @@ export default function DataSyncScreen() {
                            results.categories.uploadedCount +
                            results.products.uploadedCount +
                            results.businesses.uploadedCount +
-                           results.orders.uploadedCount;
+                           results.orders.uploadedCount +
+                           results.racks.uploadedCount;
       
       const allErrors = [
         ...results.customers.errors,
@@ -186,7 +197,8 @@ export default function DataSyncScreen() {
         ...results.categories.errors,
         ...results.products.errors,
         ...results.businesses.errors,
-        ...results.orders.errors
+        ...results.orders.errors,
+        ...results.racks.errors
       ];
       
       const combinedResult: SyncResult = {
@@ -219,7 +231,8 @@ export default function DataSyncScreen() {
         categories: await syncService.downloadCategories(),
         products: await syncService.downloadProducts(),
         businesses: await syncService.downloadBusinesses(),
-        orders: await syncService.downloadOrders()
+        orders: await syncService.downloadOrders(),
+        racks: await syncService.downloadRacks()
       };
       
       const totalDownloaded = results.customers.downloadedCount + 
@@ -227,7 +240,8 @@ export default function DataSyncScreen() {
                              results.categories.downloadedCount +
                              results.products.downloadedCount +
                              results.businesses.downloadedCount +
-                             results.orders.downloadedCount;
+                             results.orders.downloadedCount +
+                             results.racks.downloadedCount;
       
       const allErrors = [
         ...results.customers.errors,
@@ -235,7 +249,8 @@ export default function DataSyncScreen() {
         ...results.categories.errors,
         ...results.products.errors,
         ...results.businesses.errors,
-        ...results.orders.errors
+        ...results.orders.errors,
+        ...results.racks.errors
       ];
       
       const combinedResult: SyncResult = {
@@ -431,6 +446,10 @@ export default function DataSyncScreen() {
               <View style={styles.statusItem}>
                 <Text style={styles.statusNumber}>{syncStatus.totalLocalBusinesses || 0}</Text>
                 <Text style={styles.statusLabel}>Businesses</Text>
+              </View>
+              <View style={styles.statusItem}>
+                <Text style={styles.statusNumber}>{syncStatus.totalLocalRacks || 0}</Text>
+                <Text style={styles.statusLabel}>Racks</Text>
               </View>
             </View>
 

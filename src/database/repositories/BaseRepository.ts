@@ -342,4 +342,21 @@ export abstract class BaseRepository<T extends SyncableDocument, C extends RxCol
       return null;
     }
   }
+
+  /**
+   * Bulk upsert documents
+   * @param documents Array of documents to upsert
+   */
+  async bulkUpsert(documents: Array<Partial<T> & { id: string }>): Promise<void> {
+    for (const document of documents) {
+      if (document.id) {
+        const existing = await this.findById(document.id);
+        if (existing) {
+          await existing.update({ $set: document });
+          continue;
+        }
+      }
+      await this.collection.insert(document as T);
+    }
+  }
 }

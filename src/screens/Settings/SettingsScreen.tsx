@@ -106,6 +106,14 @@ export default function SettingsScreen() {
       onPress: () => navigation.navigate('PrinterSettings')
     },
     {
+      id: 'rack',
+      title: 'Rack Management',
+      description: 'Create and manage rack labels',
+      icon: 'cube',
+      color: '#6f42c1',
+      onPress: () => navigation.navigate('RackManagement')
+    },
+    {
       id: 'sync',
       title: 'Data Sync',
       description: 'Cloud synchronization and backup',

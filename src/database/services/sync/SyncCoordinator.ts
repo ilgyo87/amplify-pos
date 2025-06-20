@@ -6,6 +6,7 @@ import { EmployeeSyncService } from './EmployeeSyncService';
 import { BusinessSyncService } from './BusinessSyncService';
 import { CategorySyncService, CategoryConflict } from './CategorySyncService';
 import { ProductSyncService, ProductConflict } from './ProductSyncService';
+import { RackSyncService } from './RackSyncService';
 import { SyncResult } from './BaseSyncService';
 import { BaseConflict, AllConflicts } from './conflictTypes';
 import { SyncNotificationBuilder, SyncNotificationData } from './SyncNotification';
@@ -25,6 +26,7 @@ export interface FullSyncResult {
     categories: SyncResult;
     products: SyncResult;
     orders: SyncResult;
+    racks: SyncResult;
   };
   summary: {
     totalSynced: number;
@@ -42,6 +44,7 @@ export class SyncCoordinator {
   private businessSync: BusinessSyncService;
   private categorySync: CategorySyncService;
   private productSync: ProductSyncService;
+  private rackSync: RackSyncService;
 
   constructor() {
     this.customerSync = new CustomerSyncService();
@@ -50,6 +53,7 @@ export class SyncCoordinator {
     this.businessSync = new BusinessSyncService();
     this.categorySync = new CategorySyncService();
     this.productSync = new ProductSyncService();
+    this.rackSync = new RackSyncService();
   }
 
   setDatabase(db: RxDatabase<DatabaseCollections>) {
@@ -59,6 +63,7 @@ export class SyncCoordinator {
     this.businessSync.setDatabase(db);
     this.categorySync.setDatabase(db);
     this.productSync.setDatabase(db);
+    this.rackSync.setDatabase(db);
   }
 
   async syncAll(): Promise<FullSyncResult> {
@@ -72,6 +77,7 @@ export class SyncCoordinator {
       businesses: await this.businessSync.sync(),
       categories: await this.categorySync.sync(),
       products: await this.productSync.sync(),
+      racks: await this.rackSync.sync(), // Racks are independent
       orders: await this.orderSync.sync(), // Orders depend on customers and products
     };
 
@@ -172,6 +178,8 @@ export class SyncCoordinator {
         return this.categorySync.sync();
       case 'products':
         return this.productSync.sync();
+      case 'racks':
+        return this.rackSync.sync();
       default:
         throw new Error(`Unknown entity type: ${entityType}`);
     }
@@ -185,6 +193,7 @@ export class SyncCoordinator {
       categories,
       products,
       orders,
+      racks,
     ] = await Promise.all([
       db.customers.find().exec(),
       db.employees.find().exec(),
@@ -192,6 +201,7 @@ export class SyncCoordinator {
       db.categories.find().exec(),
       db.products.find().exec(),
       db.orders.find().exec(),
+      db.racks.find().exec(),
     ]);
 
     const getUnsyncedCount = (items: any[]) => 
@@ -233,6 +243,10 @@ export class SyncCoordinator {
       orders: {
         total: getActiveCount(orders),
         unsynced: getUnsyncedCount(orders),
+      },
+      racks: {
+        total: getActiveCount(racks),
+        unsynced: getUnsyncedCount(racks),
       },
     };
   }

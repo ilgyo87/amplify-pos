@@ -204,6 +204,21 @@ const schema = a.schema({
     .identifier(["userId"])
     .authorization((allow) => [
       allow.ownerDefinedIn("userId") // Allow owner to manage their token. Backend function access will be granted via IAM policies.
+    ]),
+  Rack: a
+    .model({
+      rackNumber: a.string().required(),
+      description: a.string(),
+      location: a.string(),
+      isActive: a.boolean().default(true),
+      capacity: a.integer(),
+      currentLoad: a.integer().default(0),
+      businessId: a.string(),
+      version: a.integer().default(1),
+    })
+    .authorization((allow) => [
+      allow.authenticated().to(['read']),
+      allow.owner(),
     ])
 });
 

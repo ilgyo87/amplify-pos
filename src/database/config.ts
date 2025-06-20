@@ -27,6 +27,7 @@ import { categorySchema, CategoryCollection, CategoryDocType, CategoryDocument }
 import { productSchema, ProductCollection, ProductDocType, ProductDocument } from './schemas/product';
 import { businessSchema, BusinessCollection, BusinessDocType, BusinessDocument } from './schemas/business';
 import { orderSchema, OrderCollection, OrderDocType, OrderDocument } from './schemas/order';
+import { rackSchema, RackCollection, RackDocType, RackDocument } from './schemas/rack';
 
 export interface DatabaseCollections {
   customers: CustomerCollection;
@@ -35,6 +36,7 @@ export interface DatabaseCollections {
   products: ProductCollection;
   businesses: BusinessCollection;
   orders: OrderCollection;
+  racks: RackCollection;
 }
 
 // Extend the RxDatabase type with our collections
@@ -68,7 +70,7 @@ const createDatabase = async (): Promise<AppDatabase> => {
 
   try {
     const database = await createRxDatabase<DatabaseCollections>({
-      name: 'amplifyposdb_v7',
+      name: 'amplifyposdb_v8',
       storage,
       multiInstance: false, // Set to false in React Native
       ignoreDuplicate: true,
@@ -102,6 +104,9 @@ const createDatabase = async (): Promise<AppDatabase> => {
         },
         orders: {
           schema: orderSchema
+        },
+        racks: {
+          schema: rackSchema
         }
       });
       

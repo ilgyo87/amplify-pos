@@ -38,7 +38,7 @@ class SyncService {
     return result;
   }
 
-  async syncEntity(entityType: 'customers' | 'orders' | 'employees' | 'businesses' | 'categories' | 'products') {
+  async syncEntity(entityType: 'customers' | 'orders' | 'employees' | 'businesses' | 'categories' | 'products' | 'racks') {
     if (!this.db) {
       throw new Error('Database not initialized');
     }
@@ -85,6 +85,8 @@ class SyncService {
       totalUnsyncedCategories: stats.categories?.unsynced || 0,
       totalLocalOrders: stats.orders?.total || 0,
       totalUnsyncedOrders: stats.orders?.unsynced || 0,
+      totalLocalRacks: stats.racks?.total || 0,
+      totalUnsyncedRacks: stats.racks?.unsynced || 0,
       customersUploaded: 0,
       customersDownloaded: 0,
       employeesUploaded: 0,
@@ -97,6 +99,8 @@ class SyncService {
       businessesDownloaded: 0,
       ordersUploaded: 0,
       ordersDownloaded: 0,
+      racksUploaded: 0,
+      racksDownloaded: 0,
     };
   }
 
@@ -164,6 +168,14 @@ class SyncService {
       errors: result.errors || []
     };
   }
+  async uploadRacks() { 
+    const result = await this.syncEntity('racks');
+    return {
+      uploadedCount: result.stats?.synced || 0,
+      downloadedCount: 0,
+      errors: result.errors || []
+    };
+  }
   
   // Legacy download methods for backward compatibility  
   async downloadCustomers() { 
@@ -208,6 +220,14 @@ class SyncService {
   }
   async downloadOrders() { 
     const result = await this.syncEntity('orders');
+    return {
+      uploadedCount: 0,
+      downloadedCount: result.stats?.synced || 0,
+      errors: result.errors || []
+    };
+  }
+  async downloadRacks() { 
+    const result = await this.syncEntity('racks');
     return {
       uploadedCount: 0,
       downloadedCount: result.stats?.synced || 0,
@@ -278,6 +298,8 @@ export interface SyncStatus {
   totalUnsyncedCategories: number;
   totalLocalOrders: number;
   totalUnsyncedOrders: number;
+  totalLocalRacks: number;
+  totalUnsyncedRacks: number;
   customersUploaded: number;
   customersDownloaded: number;
   employeesUploaded: number;
@@ -290,5 +312,7 @@ export interface SyncStatus {
   businessesDownloaded: number;
   ordersUploaded: number;
   ordersDownloaded: number;
+  racksUploaded: number;
+  racksDownloaded: number;
   lastSyncedAt?: string;
 }

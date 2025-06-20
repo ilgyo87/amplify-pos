@@ -22,6 +22,7 @@ import BusinessSettingsScreen from '../screens/Settings/BusinessSettingsScreen';
 import PaymentSettingsScreen from '../screens/Settings/PaymentSettingsScreen';
 import PrinterSettingsScreen from '../screens/Settings/PrinterSettingsScreen';
 import DataSyncScreen from '../screens/Settings/DataSyncScreen';
+import RackManagementScreen from '../screens/Settings/RackManagementScreen';
 import ReportsScreen from '../screens/Reports/ReportsScreen';
 import CheckoutScreen from '../screens/Checkout/CheckoutScreen';
 import EmployeeSignInScreen from '../screens/Auth/EmployeeSignInScreen';
@@ -331,6 +332,21 @@ const AppNavigator = () => {
             {() => (
               <AuthenticationWrapper>
                 <DataSyncScreen />
+              </AuthenticationWrapper>
+            )}
+          </Stack.Screen>
+          <Stack.Screen 
+            name="RackManagement"
+            options={{ 
+              title: 'Rack Management',
+              headerLeft: () => <BackButton />,
+              headerTitle: () => <EmployeeHeaderCenter />,
+              headerRight: () => <SignOutButton /> 
+            }}
+          >
+            {() => (
+              <AuthenticationWrapper>
+                <RackManagementScreen />
               </AuthenticationWrapper>
             )}
           </Stack.Screen>

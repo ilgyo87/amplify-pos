@@ -39,6 +39,7 @@ export type RootStackParamList = {
   PaymentSettings: undefined;
   PrinterSettings: undefined;
   DataSync: undefined;
+  RackManagement: undefined;
   // Employee authentication
   EmployeeSignIn: undefined;
   // Checkout flow

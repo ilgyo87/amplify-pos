@@ -5,3 +5,5 @@ export type { SyncResult, SyncStatus, SyncNotificationData } from './syncService
 export { SyncNotificationBuilder } from './syncService';
 export { OrderService, orderService } from './orderService';
 export { syncEventEmitter } from './syncEventEmitter';
+export { rackService } from './rackService';
+export type { RackFormData, RackValidationErrors } from './rackService';
