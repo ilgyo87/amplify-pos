@@ -9,7 +9,6 @@ export class EmployeeSyncService extends BaseSyncService<Employee> {
       throw new Error('Database not initialized');
     }
 
-    console.log('[SYNC] Starting employee sync...');
     const stats: SyncStats = { total: 0, synced: 0, failed: 0, skipped: 0 };
     this.errors = [];
 
@@ -20,16 +19,20 @@ export class EmployeeSyncService extends BaseSyncService<Employee> {
         .exec();
 
       stats.total = localEmployees.length;
-      console.log(`[SYNC] Found ${stats.total} employees to sync`);
+      // Only log if there are items to sync
+      if (stats.total > 0) {
+        console.log(`[SYNC] Found ${stats.total} employees to sync`);
+      }
 
       for (const localEmployee of localEmployees) {
         try {
           await this.syncEmployee(localEmployee);
           stats.synced++;
-        } catch (error) {
-          console.error('[SYNC] Failed to sync employee:', error);
+        } catch (error: any) {
+          const errorMessage = error?.errors?.[0]?.message || error?.message || 'Unknown error';
+          console.error('[SYNC] Failed to sync employee:', localEmployee.id, errorMessage);
           stats.failed++;
-          this.errors.push(`Employee ${localEmployee.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          this.errors.push(`Employee ${localEmployee.id}: ${errorMessage}`);
         }
       }
 
@@ -123,51 +126,68 @@ export class EmployeeSyncService extends BaseSyncService<Employee> {
       const data = await this.handleGraphQLResult(createResult, 'CreateEmployee');
       if (data) {
         await localEmployee.update({ $set: { isLocalOnly: false } });
-        console.log('[SYNC] Employee created:', employeeData.id);
+        console.log('[SYNC] Employee uploaded:', `${employeeData.firstName} ${employeeData.lastName}` || employeeData.id);
       }
     } catch (createError: any) {
-      if (createError?.errors?.[0]?.message?.includes('DynamoDB:ConditionalCheckFailedException')) {
-        console.log('[SYNC] Employee exists, attempting update:', employeeData.id);
+      // If creation fails due to existing record, try update
+      const errorType = createError?.errors?.[0]?.errorType;
+      const errorMessage = createError?.errors?.[0]?.message;
+      
+      if (errorType === 'DynamoDB:ConditionalCheckFailedException' || 
+          errorMessage?.includes('conditional request failed')) {
         
-        const updateResult = await this.client.graphql({
-          query: /* GraphQL */ `
-            mutation UpdateEmployee($input: UpdateEmployeeInput!) {
-              updateEmployee(input: $input) {
-                id
-                amplifyId
-                firstName
-                lastName
-                email
-                phone
-                pin
-                role
-                isActive
-                permissions
-                businessId
-                address
-                city
-                state
-                zipCode
-                coordinates {
-                  lat
-                  long
+        // Employee exists, just update it
+        // Remove any fields that might cause issues
+        delete input._version;
+        delete input._lastChangedAt;
+        delete input._deleted;
+        
+        try {
+          const updateResult = await this.client.graphql({
+            query: /* GraphQL */ `
+              mutation UpdateEmployee($input: UpdateEmployeeInput!) {
+                updateEmployee(input: $input) {
+                  id
+                  amplifyId
+                  firstName
+                  lastName
+                  email
+                  phone
+                  pin
+                  role
+                  isActive
+                  permissions
+                  businessId
+                  address
+                  city
+                  state
+                  zipCode
+                  coordinates {
+                    lat
+                    long
+                  }
+                  cognitoId
+                    createdAt
+                  updatedAt
                 }
-                cognitoId
-                  createdAt
-                updatedAt
-                _version
               }
-            }
-          `,
-          variables: { input },
-        });
+            `,
+            variables: { input },
+          });
 
-        const data = await this.handleGraphQLResult(updateResult, 'UpdateEmployee');
-        if (data) {
-          await localEmployee.update({ $set: { isLocalOnly: false } });
-          console.log('[SYNC] Employee updated:', employeeData.id);
+          const data = await this.handleGraphQLResult(updateResult, 'UpdateEmployee');
+          if (data) {
+            await localEmployee.update({ $set: { isLocalOnly: false } });
+            console.log('[SYNC] Employee updated:', employeeData.id, `(${employeeData.firstName} ${employeeData.lastName})`);
+          }
+        } catch (updateError: any) {
+          // If update also fails, log the specific error
+          const updateErrorMessage = updateError?.errors?.[0]?.message || updateError?.message || 'Unknown update error';
+          console.error('[SYNC] Employee update failed:', employeeData.id, updateErrorMessage);
+          throw updateError;
         }
       } else {
+        console.error('[SYNC] Employee sync failed:', employeeData.id, errorMessage || 'Unknown error');
         throw createError;
       }
     }
@@ -213,7 +233,7 @@ export class EmployeeSyncService extends BaseSyncService<Employee> {
       if (!(data as any)?.listEmployees?.items) return;
 
       const cloudEmployees = (data as any).listEmployees.items.filter(Boolean) as GraphQLEmployee[];
-      console.log(`[SYNC] Found ${cloudEmployees.length} employees in cloud`);
+      let downloadedCount = 0;
 
       for (const cloudEmployee of cloudEmployees) {
         try {
@@ -230,11 +250,15 @@ export class EmployeeSyncService extends BaseSyncService<Employee> {
             }
             
             await this.db!.employees.insert(employeeData);
-            console.log('[SYNC] Downloaded new employee:', cloudEmployee.id);
+            downloadedCount++;
           }
         } catch (error) {
           console.error('[SYNC] Failed to download employee:', error);
         }
+      }
+      
+      if (downloadedCount > 0) {
+        console.log(`[SYNC] Downloaded ${downloadedCount} new employees from cloud`);
       }
     } catch (error) {
       console.error('[SYNC] Failed to download employees:', error);

@@ -9,6 +9,7 @@ export interface OrderDocType {
   businessId?: string; // Business ID for multi-tenant support
   employeeId?: string; // ID of the employee who created the order
   employeeName?: string; // Denormalized employee name for easy display
+  paymentStatus?: string; // Payment status from backend
   items: Array<{
     id: string;
     name: string;
@@ -23,6 +24,12 @@ export interface OrderDocType {
       notes?: string;
     };
     itemKey: string;
+    addOns?: Array<{
+      id: string;
+      name: string;
+      price: number;
+      quantity: number;
+    }>;
   }>;
   subtotal: number;
   tax: number;
@@ -113,7 +120,20 @@ export const orderSchema: RxJsonSchema<OrderDocType> = {
               notes: { type: 'string', maxLength: 500 }
             }
           },
-          itemKey: { type: 'string', maxLength: 100 }
+          itemKey: { type: 'string', maxLength: 100 },
+          addOns: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', maxLength: 100 },
+                name: { type: 'string', maxLength: 100 },
+                price: { type: 'number', minimum: 0, maximum: 999999.99 },
+                quantity: { type: 'number', minimum: 1, maximum: 999999, multipleOf: 1 }
+              },
+              required: ['id', 'name', 'price', 'quantity']
+            }
+          }
         },
         required: ['id', 'name', 'price', 'quantity', 'itemKey']
       }
@@ -178,6 +198,10 @@ export const orderSchema: RxJsonSchema<OrderDocType> = {
         }
       },
       required: ['method', 'amount']
+    },
+    paymentStatus: {
+      type: 'string',
+      maxLength: 50
     },
     selectedDate: {
       type: 'string',

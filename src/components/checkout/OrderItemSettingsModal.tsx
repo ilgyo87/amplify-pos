@@ -12,11 +12,20 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { OrderItem, OrderItemOptions, StarchLevel, formatStarchLevel } from '../../types/order';
+import { useProducts } from '../../database/hooks/useProducts';
+import { useCategories } from '../../database/hooks/useCategories';
+
+interface AddOnItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+}
 
 interface OrderItemSettingsModalProps {
   visible: boolean;
   item: OrderItem | null;
-  onSave: (item: OrderItem, options: OrderItemOptions) => void;
+  onSave: (item: OrderItem, options: OrderItemOptions, addOns?: AddOnItem[]) => void;
   onCancel: () => void;
 }
 
@@ -31,6 +40,12 @@ export function OrderItemSettingsModal({
   const [starch, setStarch] = useState<StarchLevel>('none');
   const [pressOnly, setPressOnly] = useState(false);
   const [notes, setNotes] = useState('');
+  const [selectedAddOns, setSelectedAddOns] = useState<AddOnItem[]>([]);
+  
+  // Get add-on products by finding the add-ons category first
+  const { categories } = useCategories();
+  const addOnsCategory = categories.find(cat => cat.name === 'Add-ons');
+  const { products: addOnProducts } = useProducts(addOnsCategory?.id);
 
   // Initialize form with current item options
   useEffect(() => {
@@ -38,8 +53,37 @@ export function OrderItemSettingsModal({
       setStarch(item.options?.starch || 'none');
       setPressOnly(item.options?.pressOnly || false);
       setNotes(item.options?.notes || '');
+      setSelectedAddOns(item.addOns || []);
     }
   }, [item, visible]);
+
+  const handleToggleAddOn = (addOnProduct: any) => {
+    setSelectedAddOns(prev => {
+      const existing = prev.find(a => a.id === addOnProduct.id);
+      if (existing) {
+        // Remove if already selected
+        return prev.filter(a => a.id !== addOnProduct.id);
+      } else {
+        // Add new add-on
+        return [...prev, {
+          id: addOnProduct.id,
+          name: addOnProduct.name,
+          price: addOnProduct.price,
+          quantity: 1
+        }];
+      }
+    });
+  };
+
+  const handleUpdateAddOnQuantity = (addOnId: string, quantity: number) => {
+    if (quantity <= 0) {
+      setSelectedAddOns(prev => prev.filter(a => a.id !== addOnId));
+    } else {
+      setSelectedAddOns(prev =>
+        prev.map(a => a.id === addOnId ? { ...a, quantity } : a)
+      );
+    }
+  };
 
   const handleSave = () => {
     if (!item) return;
@@ -50,7 +94,7 @@ export function OrderItemSettingsModal({
       notes: notes.trim()
     };
 
-    onSave(item, options);
+    onSave(item, options, selectedAddOns);
   };
 
   const handleCancel = () => {
@@ -59,6 +103,7 @@ export function OrderItemSettingsModal({
       setStarch(item.options?.starch || 'none');
       setPressOnly(item.options?.pressOnly || false);
       setNotes(item.options?.notes || '');
+      setSelectedAddOns(item.addOns || []);
     }
     onCancel();
   };
@@ -175,6 +220,49 @@ export function OrderItemSettingsModal({
               autoCapitalize="sentences"
             />
           </View>
+
+          {/* Add-ons Section */}
+          {addOnProducts.length > 0 && (
+            <View style={[styles.section, { borderBottomWidth: 0 }]}>
+              <Text style={styles.sectionTitle}>Add-on Services</Text>
+              {addOnProducts.map(addon => {
+                const selected = selectedAddOns.find(a => a.id === addon.id);
+                return (
+                  <TouchableOpacity
+                    key={addon.id}
+                    style={styles.addOnRow}
+                    onPress={() => handleToggleAddOn(addon)}
+                  >
+                    <View style={styles.addOnInfo}>
+                      <Text style={styles.addOnName}>{addon.name}</Text>
+                      <Text style={styles.addOnPrice}>+${addon.price.toFixed(2)}</Text>
+                    </View>
+                    {selected ? (
+                      <View style={styles.quantityControls}>
+                        <TouchableOpacity
+                          style={styles.quantityButton}
+                          onPress={() => handleUpdateAddOnQuantity(addon.id, selected.quantity - 1)}
+                        >
+                          <Ionicons name="remove" size={16} color="#007AFF" />
+                        </TouchableOpacity>
+                        <Text style={styles.quantityText}>{selected.quantity}</Text>
+                        <TouchableOpacity
+                          style={styles.quantityButton}
+                          onPress={() => handleUpdateAddOnQuantity(addon.id, selected.quantity + 1)}
+                        >
+                          <Ionicons name="add" size={16} color="#007AFF" />
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <View style={[styles.checkbox]}>
+                        <Ionicons name="add" size={16} color="#007AFF" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
         </ScrollView>
 
         {/* Footer Buttons */}
@@ -376,5 +464,48 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
+  },
+  addOnRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f5f5f5',
+  },
+  addOnInfo: {
+    flex: 1,
+  },
+  addOnName: {
+    fontSize: 16,
+    color: '#333',
+    marginBottom: 2,
+  },
+  addOnPrice: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '500',
+  },
+  quantityControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  quantityButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f0f7ff',
+  },
+  quantityText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+    minWidth: 20,
+    textAlign: 'center',
   },
 });

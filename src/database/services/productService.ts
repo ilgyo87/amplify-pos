@@ -91,7 +91,7 @@ export class ProductService {
    */
   async getAllProducts(): Promise<ProductDocument[]> {
     const repository = this.getRepository();
-    return repository.findAll() as Promise<ProductDocument[]>;
+    return repository.findAllOrdered() as Promise<ProductDocument[]>;
   }
 
   /**

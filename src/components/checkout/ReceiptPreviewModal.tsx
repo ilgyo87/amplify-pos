@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, Fragment } from 'react';
 import {
   Modal,
   View,
@@ -53,9 +53,16 @@ export function ReceiptPreviewModal({
     const discount = Number(item.discount) || 0;
     const quantity = Number(item.quantity) || 0;
     
+    // Calculate add-ons price
+    const addOnsPrice = item.addOns?.reduce((addOnSum, addOn) => {
+      return addOnSum + (addOn.price * addOn.quantity);
+    }, 0) || 0;
+    
+    const totalItemPrice = itemPrice + addOnsPrice;
+    
     const discountedPrice = discount > 0 
-      ? itemPrice * (1 - discount / 100)
-      : itemPrice;
+      ? totalItemPrice * (1 - discount / 100)
+      : totalItemPrice;
     return sum + (discountedPrice * quantity);
   }, 0);
 
@@ -221,7 +228,14 @@ export function ReceiptPreviewModal({
       const discount = Number(item.discount) || 0;
       const quantity = Number(item.quantity) || 0;
       
-      const discountedPrice = discount > 0 ? itemPrice * (1 - discount / 100) : itemPrice;
+      // Calculate add-ons price
+      const addOnsPrice = item.addOns?.reduce((sum, addOn) => {
+        return sum + (addOn.price * addOn.quantity);
+      }, 0) || 0;
+      
+      const totalItemPrice = itemPrice + addOnsPrice;
+      
+      const discountedPrice = discount > 0 ? totalItemPrice * (1 - discount / 100) : totalItemPrice;
       const totalPrice = toPreciseAmount(discountedPrice * quantity);
       
       let itemName = item.name;
@@ -248,6 +262,16 @@ export function ReceiptPreviewModal({
       
       addText(itemLine);
       addLF();
+      
+      // Print add-ons on separate lines, indented
+      if (item.addOns && item.addOns.length > 0) {
+        item.addOns.forEach(addOn => {
+          const addOnLine = `  + ${addOn.name}`;
+          const addOnPrice = (addOn.price * addOn.quantity).toFixed(2);
+          addText(formatTwoColumns(addOnLine, `${addOnPrice}`, 48));
+          addLF();
+        });
+      }
     });
     
     addText('--------------------------------');
@@ -460,7 +484,14 @@ export function ReceiptPreviewModal({
                 const discount = Number(item.discount) || 0;
                 const quantity = Number(item.quantity) || 0;
                 
-                const discountedPrice = discount > 0 ? itemPrice * (1 - discount / 100) : itemPrice;
+                // Calculate add-ons price
+                const addOnsPrice = item.addOns?.reduce((sum, addOn) => {
+                  return sum + (addOn.price * addOn.quantity);
+                }, 0) || 0;
+                
+                const totalItemPrice = itemPrice + addOnsPrice;
+                
+                const discountedPrice = discount > 0 ? totalItemPrice * (1 - discount / 100) : totalItemPrice;
                 const totalPrice = toPreciseAmount(discountedPrice * quantity);
                 
                 let itemName = item.name;
@@ -475,12 +506,29 @@ export function ReceiptPreviewModal({
                 }
 
                 return (
-                  <View key={item.itemKey} style={styles.tableRow}>
-                    <Text style={[styles.tableText, styles.itemColumn]} numberOfLines={2}>{itemName}</Text>
-                    <Text style={[styles.tableText, styles.qtyColumn]}>{quantity}</Text>
-                    <Text style={[styles.tableText, styles.priceColumn]}>${itemPrice.toFixed(2)}</Text>
-                    <Text style={[styles.tableText, styles.totalColumn]}>${totalPrice.toFixed(2)}</Text>
-                  </View>
+                  <React.Fragment key={item.itemKey}>
+                    <View style={styles.tableRow}>
+                      <Text style={[styles.tableText, styles.itemColumn]} numberOfLines={2}>{itemName}</Text>
+                      <Text style={[styles.tableText, styles.qtyColumn]}>{quantity}</Text>
+                      <Text style={[styles.tableText, styles.priceColumn]}>${totalItemPrice.toFixed(2)}</Text>
+                      <Text style={[styles.tableText, styles.totalColumn]}>${totalPrice.toFixed(2)}</Text>
+                    </View>
+                    {/* Display add-ons on separate lines */}
+                    {item.addOns && item.addOns.length > 0 && (
+                      item.addOns.map((addOn, index) => (
+                        <View key={`${item.itemKey}-addon-${index}`} style={styles.addOnRow}>
+                          <Text style={[styles.tableText, styles.itemColumn, styles.addOnText]}>
+                            {'  '} + {addOn.name} {addOn.quantity > 1 ? `(${addOn.quantity}x)` : ''}
+                          </Text>
+                          <Text style={[styles.tableText, styles.qtyColumn]}></Text>
+                          <Text style={[styles.tableText, styles.priceColumn, styles.addOnText]}>
+                            ${(addOn.price * addOn.quantity).toFixed(2)}
+                          </Text>
+                          <Text style={[styles.tableText, styles.totalColumn]}></Text>
+                        </View>
+                      ))
+                    )}
+                  </React.Fragment>
                 );
               })}
             </View>
@@ -852,5 +900,13 @@ const styles = StyleSheet.create({
   },
   completeButtonTextDisabled: {
     color: '#ccc',
+  },
+  addOnRow: {
+    backgroundColor: '#fafafa',
+  },
+  addOnText: {
+    fontSize: 10,
+    color: '#666',
+    fontStyle: 'italic',
   },
 });

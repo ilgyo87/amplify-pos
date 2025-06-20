@@ -125,6 +125,14 @@ class SyncService {
       errors: result.errors || []
     };
   }
+  async uploadOrders() { 
+    const result = await this.syncEntity('orders');
+    return {
+      uploadedCount: result.stats?.synced || 0,
+      downloadedCount: 0,
+      errors: result.errors || []
+    };
+  }
   
   // Legacy download methods for backward compatibility  
   async downloadCustomers() { 
@@ -161,6 +169,14 @@ class SyncService {
   }
   async downloadBusinesses() { 
     const result = await this.syncEntity('businesses');
+    return {
+      uploadedCount: 0,
+      downloadedCount: result.stats?.synced || 0,
+      errors: result.errors || []
+    };
+  }
+  async downloadOrders() { 
+    const result = await this.syncEntity('orders');
     return {
       uploadedCount: 0,
       downloadedCount: result.stats?.synced || 0,

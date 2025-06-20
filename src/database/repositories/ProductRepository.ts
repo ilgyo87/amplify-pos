@@ -321,4 +321,17 @@ export class ProductRepository extends BaseRepository<ProductDocType, ProductCol
 
     return deletedCount;
   }
+
+  /**
+   * Get all products ordered by displayOrder, then by createdAt
+   */
+  async findAllOrdered(): Promise<ProductDocument[]> {
+    const results = await this.collection.find({
+      selector: {
+        isDeleted: { $ne: true }
+      },
+      sort: [{ displayOrder: 'asc' }, { createdAt: 'asc' }]
+    }).exec();
+    return results as ProductDocument[];
+  }
 }

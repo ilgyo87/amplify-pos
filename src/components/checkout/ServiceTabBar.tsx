@@ -40,8 +40,8 @@ export function ServiceTabBar({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Individual Category Tabs */}
-        {categories.map((category) => (
+        {/* Individual Category Tabs - Filter out Add-ons category */}
+        {categories.filter(category => category.name !== 'Add-ons').map((category) => (
           <TouchableOpacity
             key={category.id}
             style={[

@@ -33,8 +33,6 @@ export abstract class BaseSyncService<T> {
     result: GraphQLResult<R>,
     operation: string
   ): Promise<R | null> {
-    console.log(`[SYNC] ${operation} full result:`, JSON.stringify(result, null, 2));
-    
     if (result.errors) {
       const errorMessages = result.errors.map(e => e.message).join(', ');
       this.errors.push(`${operation} failed: ${errorMessages}`);

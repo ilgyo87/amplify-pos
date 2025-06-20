@@ -40,9 +40,16 @@ export function OrderSummary({
       const discount = Number(item.discount) || 0;
       const quantity = Number(item.quantity) || 0;
       
+      // Calculate add-ons price
+      const addOnsPrice = item.addOns?.reduce((addOnSum, addOn) => {
+        return addOnSum + (addOn.price * addOn.quantity);
+      }, 0) || 0;
+      
+      const totalItemPrice = itemPrice + addOnsPrice;
+      
       const discountedPrice = discount > 0 
-        ? itemPrice * (1 - discount / 100)
-        : itemPrice;
+        ? totalItemPrice * (1 - discount / 100)
+        : totalItemPrice;
       return sum + (discountedPrice * quantity);
     }, 0);
 
@@ -89,9 +96,16 @@ export function OrderSummary({
     const discount = Number(item.discount) || 0;
     const quantity = Number(item.quantity) || 0;
     
+    // Calculate add-ons price
+    const addOnsPrice = item.addOns?.reduce((sum, addOn) => {
+      return sum + (addOn.price * addOn.quantity);
+    }, 0) || 0;
+    
+    const totalItemPrice = itemPrice + addOnsPrice;
+    
     const discountedPrice = discount > 0 
-      ? itemPrice * (1 - discount / 100)
-      : itemPrice;
+      ? totalItemPrice * (1 - discount / 100)
+      : totalItemPrice;
     const totalPrice = toPreciseAmount(discountedPrice * quantity);
 
     return (
@@ -102,6 +116,16 @@ export function OrderSummary({
             <Text style={styles.itemName} numberOfLines={1}>
               {item.name}
             </Text>
+            {/* Display add-ons underneath item name */}
+            {item.addOns && item.addOns.length > 0 && (
+              <View style={styles.addOnsContainer}>
+                {item.addOns.map((addOn, index) => (
+                  <Text key={index} style={styles.addOnText}>
+                    + {addOn.name} {addOn.quantity > 1 ? `(${addOn.quantity}x)` : ''} - ${(addOn.price * addOn.quantity).toFixed(2)}
+                  </Text>
+                ))}
+              </View>
+            )}
           </View>
 
           <View style={styles.actionButtons}>
@@ -519,5 +543,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     textTransform: 'uppercase',
+  },
+  addOnsContainer: {
+    marginTop: 4,
+    paddingLeft: 8,
+  },
+  addOnText: {
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
+    marginBottom: 2,
   },
 });

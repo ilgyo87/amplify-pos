@@ -8,7 +8,6 @@ export class ProductSyncService extends BaseSyncService<Product> {
       throw new Error('Database not initialized');
     }
 
-    console.log('[SYNC] Starting product sync...');
     const stats: SyncStats = { total: 0, synced: 0, failed: 0, skipped: 0 };
     this.errors = [];
 
@@ -18,7 +17,10 @@ export class ProductSyncService extends BaseSyncService<Product> {
         .exec();
 
       stats.total = localProducts.length;
-      console.log(`[SYNC] Found ${stats.total} products to sync`);
+      // Only log if there are items to sync
+      if (stats.total > 0) {
+        console.log(`[SYNC] Found ${stats.total} products to sync`);
+      }
 
       // Process in batches
       const batchSize = 10;
@@ -29,10 +31,11 @@ export class ProductSyncService extends BaseSyncService<Product> {
             try {
               await this.syncProduct(product);
               stats.synced++;
-            } catch (error) {
-              console.error('[SYNC] Failed to sync product:', error);
+            } catch (error: any) {
+              const errorMessage = error?.errors?.[0]?.message || error?.message || 'Unknown error';
+              console.error('[SYNC] Failed to sync product:', product.id, errorMessage);
               stats.failed++;
-              this.errors.push(`Product ${product.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+              this.errors.push(`Product ${product.id}: ${errorMessage}`);
             }
           })
         );
@@ -123,58 +126,74 @@ export class ProductSyncService extends BaseSyncService<Product> {
       const data = await this.handleGraphQLResult(createResult, 'CreateProduct');
       if (data) {
         await localProduct.update({ $set: { isLocalOnly: false } });
-        console.log('[SYNC] Product created:', productData.id);
+        console.log('[SYNC] Product uploaded:', productData.name || productData.id);
       }
     } catch (createError: any) {
-      if (createError?.errors?.[0]?.message?.includes('DynamoDB:ConditionalCheckFailedException')) {
-        console.log('[SYNC] Product exists, attempting update:', productData.id);
+      // If creation fails due to existing record, try update
+      const errorType = createError?.errors?.[0]?.errorType;
+      const errorMessage = createError?.errors?.[0]?.message;
+      
+      if (errorType === 'DynamoDB:ConditionalCheckFailedException' || 
+          errorMessage?.includes('conditional request failed')) {
         
-        const updateResult = await this.client.graphql({
-          query: /* GraphQL */ `
-            mutation UpdateProduct($input: UpdateProductInput!) {
-              updateProduct(input: $input) {
-                id
-                name
-                description
-                categoryId
-                price
-                sku
-                barcode
-                isActive
-                businessId
-                imageUrl
-                imageName
-                image
-                cost
-                quantity
-                trackInventory
-                inventoryCount
-                lowStockThreshold
-                variants
-                customizations
-                displayOrder
-                      createdAt
-                updatedAt
-                _version
+        // Product exists, just update it
+        // Remove any fields that might cause issues
+        delete input._version;
+        delete input._lastChangedAt;
+        delete input._deleted;
+        
+        try {
+          const updateResult = await this.client.graphql({
+            query: /* GraphQL */ `
+              mutation UpdateProduct($input: UpdateProductInput!) {
+                updateProduct(input: $input) {
+                  id
+                  name
+                  description
+                  categoryId
+                  price
+                  sku
+                  barcode
+                  isActive
+                  businessId
+                  imageUrl
+                  imageName
+                  image
+                  cost
+                  quantity
+                  trackInventory
+                  inventoryCount
+                  lowStockThreshold
+                  variants
+                  customizations
+                  displayOrder
+                        createdAt
+                  updatedAt
+                }
               }
-            }
-          `,
-          variables: { input },
-        });
+            `,
+            variables: { input },
+          });
 
-        const data = await this.handleGraphQLResult(updateResult, 'UpdateProduct');
-        if (data) {
-          await localProduct.update({ $set: { isLocalOnly: false } });
-          console.log('[SYNC] Product updated:', productData.id);
+          const data = await this.handleGraphQLResult(updateResult, 'UpdateProduct');
+          if (data) {
+            await localProduct.update({ $set: { isLocalOnly: false } });
+            console.log('[SYNC] Product updated:', productData.id, `(${productData.name})`);
+          }
+        } catch (updateError: any) {
+          // If update also fails, log the specific error
+          const updateErrorMessage = updateError?.errors?.[0]?.message || updateError?.message || 'Unknown update error';
+          console.error('[SYNC] Product update failed:', productData.id, updateErrorMessage);
+          throw updateError;
         }
       } else {
+        console.error('[SYNC] Product sync failed:', productData.id, errorMessage || 'Unknown error');
         throw createError;
       }
     }
   }
 
   private async downloadProducts(stats: SyncStats): Promise<void> {
-    console.log('[SYNC] Starting product download...');
     try {
       const listResult = await this.client.graphql({
         query: /* GraphQL */ `
@@ -211,15 +230,14 @@ export class ProductSyncService extends BaseSyncService<Product> {
       });
 
       const data = await this.handleGraphQLResult(listResult, 'ListProducts');
-      console.log('[SYNC] ListProducts raw response:', JSON.stringify(data, null, 2));
       
       if (!(data as any)?.listProducts?.items) {
-        console.log('[SYNC] No products found in response');
+        // No products in cloud
         return;
       }
 
       const cloudProducts = (data as any).listProducts.items.filter(Boolean) as GraphQLProduct[];
-      console.log(`[SYNC] Found ${cloudProducts.length} products in cloud`);
+      let downloadedCount = 0;
 
       for (const cloudProduct of cloudProducts) {
         try {
@@ -264,14 +282,17 @@ export class ProductSyncService extends BaseSyncService<Product> {
               productData.updatedAt = cloudProduct.updatedAt || new Date().toISOString();
             }
             
-            console.log('[SYNC] Inserting product data:', productData);
             await this.db!.products.insert(productData);
-            console.log('[SYNC] Downloaded new product:', cloudProduct.id);
+            downloadedCount++;
           }
         } catch (error) {
           console.error('[SYNC] Failed to download product:', error);
           console.error('[SYNC] Product data that failed:', cloudProduct);
         }
+      }
+      
+      if (downloadedCount > 0) {
+        console.log(`[SYNC] Downloaded ${downloadedCount} new products from cloud`);
       }
     } catch (error) {
       console.error('[SYNC] Failed to download products:', error);

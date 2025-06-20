@@ -9,7 +9,6 @@ export class BusinessSyncService extends BaseSyncService<Business> {
       throw new Error('Database not initialized');
     }
 
-    console.log('[SYNC] Starting business sync...');
     const stats: SyncStats = { total: 0, synced: 0, failed: 0, skipped: 0 };
     this.errors = [];
 
@@ -19,16 +18,20 @@ export class BusinessSyncService extends BaseSyncService<Business> {
         .exec();
 
       stats.total = localBusinesses.length;
-      console.log(`[SYNC] Found ${stats.total} businesses to sync`);
+      // Only log if there are items to sync
+      if (stats.total > 0) {
+        console.log(`[SYNC] Found ${stats.total} businesses to sync`);
+      }
 
       for (const localBusiness of localBusinesses) {
         try {
           await this.syncBusiness(localBusiness);
           stats.synced++;
-        } catch (error) {
-          console.error('[SYNC] Failed to sync business:', error);
+        } catch (error: any) {
+          const errorMessage = error?.errors?.[0]?.message || error?.message || 'Unknown error';
+          console.error('[SYNC] Failed to sync business:', localBusiness.id, errorMessage);
           stats.failed++;
-          this.errors.push(`Business ${localBusiness.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          this.errors.push(`Business ${localBusiness.id}: ${errorMessage}`);
         }
       }
 
@@ -126,59 +129,75 @@ export class BusinessSyncService extends BaseSyncService<Business> {
       const data = await this.handleGraphQLResult(createResult, 'CreateBusiness');
       if (data) {
         await localBusiness.update({ $set: { isLocalOnly: false } });
-        console.log('[SYNC] Business created:', businessData.id);
+        console.log('[SYNC] Business uploaded:', businessData.name || businessData.id);
       }
     } catch (createError: any) {
-      if (createError?.errors?.[0]?.message?.includes('DynamoDB:ConditionalCheckFailedException')) {
-        console.log('[SYNC] Business exists, attempting update:', businessData.id);
+      // If creation fails due to existing record, try update
+      const errorType = createError?.errors?.[0]?.errorType;
+      const errorMessage = createError?.errors?.[0]?.message;
+      
+      if (errorType === 'DynamoDB:ConditionalCheckFailedException' || 
+          errorMessage?.includes('conditional request failed')) {
         
-        const updateResult = await this.client.graphql({
-          query: /* GraphQL */ `
-            mutation UpdateBusiness($input: UpdateBusinessInput!) {
-              updateBusiness(input: $input) {
-                id
-                businessName
-                firstName
-                lastName
-                address
-                city
-                state
-                zipCode
-                phone
-                email
-                website
-                hours
-                logoUrl
-                logoSource
-                userId
-                taxRate
-                currency
-                timezone
-                isActive
-                logo
-                settings
-                createdAt
-                updatedAt
-                _version
+        // Business exists, just update it
+        // Remove any fields that might cause issues
+        delete input._version;
+        delete input._lastChangedAt;
+        delete input._deleted;
+        
+        try {
+          const updateResult = await this.client.graphql({
+            query: /* GraphQL */ `
+              mutation UpdateBusiness($input: UpdateBusinessInput!) {
+                updateBusiness(input: $input) {
+                  id
+                  businessName
+                  firstName
+                  lastName
+                  address
+                  city
+                  state
+                  zipCode
+                  phone
+                  email
+                  website
+                  hours
+                  logoUrl
+                  logoSource
+                  userId
+                  taxRate
+                  currency
+                  timezone
+                  isActive
+                  logo
+                  settings
+                  createdAt
+                  updatedAt
+                }
               }
-            }
-          `,
-          variables: { input },
-        });
+            `,
+            variables: { input },
+          });
 
-        const data = await this.handleGraphQLResult(updateResult, 'UpdateBusiness');
-        if (data) {
-          await localBusiness.update({ $set: { isLocalOnly: false } });
-          console.log('[SYNC] Business updated:', businessData.id);
+          const data = await this.handleGraphQLResult(updateResult, 'UpdateBusiness');
+          if (data) {
+            await localBusiness.update({ $set: { isLocalOnly: false } });
+            console.log('[SYNC] Business updated:', businessData.id, `(${businessData.name})`);
+          }
+        } catch (updateError: any) {
+          // If update also fails, log the specific error
+          const updateErrorMessage = updateError?.errors?.[0]?.message || updateError?.message || 'Unknown update error';
+          console.error('[SYNC] Business update failed:', businessData.id, updateErrorMessage);
+          throw updateError;
         }
       } else {
+        console.error('[SYNC] Business sync failed:', businessData.id, errorMessage || 'Unknown error');
         throw createError;
       }
     }
   }
 
   private async downloadBusinesses(stats: SyncStats): Promise<void> {
-    console.log('[SYNC] Starting business download...');
     try {
       const listResult = await this.client.graphql({
         query: /* GraphQL */ `
@@ -216,16 +235,14 @@ export class BusinessSyncService extends BaseSyncService<Business> {
       });
 
       const data = await this.handleGraphQLResult(listResult, 'ListBusinesses');
-      console.log('[SYNC] ListBusinesses raw response:', JSON.stringify(data, null, 2));
       
       if (!(data as any)?.listBusinesses?.items) {
-        console.log('[SYNC] No businesses found in response');
         return;
       }
 
       const cloudBusinesses = (data as any).listBusinesses.items.filter(Boolean) as GraphQLBusiness[];
-      console.log(`[SYNC] Found ${cloudBusinesses.length} businesses in cloud`);
-
+      
+      let downloadedCount = 0;
       for (const cloudBusiness of cloudBusinesses) {
         try {
           const exists = await this.db!.businesses.findOne(cloudBusiness.id).exec();
@@ -266,14 +283,17 @@ export class BusinessSyncService extends BaseSyncService<Business> {
               businessData.updatedAt = cloudBusiness.updatedAt || new Date().toISOString();
             }
             
-            console.log('[SYNC] Inserting business data:', businessData);
             await this.db!.businesses.insert(businessData);
-            console.log('[SYNC] Downloaded new business:', cloudBusiness.id);
+            downloadedCount++;
           }
         } catch (error) {
           console.error('[SYNC] Failed to download business:', error);
           console.error('[SYNC] Business data that failed:', cloudBusiness);
         }
+      }
+      
+      if (downloadedCount > 0) {
+        console.log(`[SYNC] Downloaded ${downloadedCount} new businesses from cloud`);
       }
     } catch (error) {
       console.error('[SYNC] Failed to download businesses:', error);

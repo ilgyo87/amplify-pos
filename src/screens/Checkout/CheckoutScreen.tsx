@@ -545,6 +545,7 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
       Alert.alert('Setup Required', 'Please complete the required setup before adding items.');
       return;
     }
+    
     setOrderItems(prevItems => {
       const orderOptions = options || {
         starch: 'none',
@@ -622,7 +623,7 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
   };
 
   // Handle item settings save
-  const handleSaveItemSettings = (item: OrderItem, options: OrderItemOptions) => {
+  const handleSaveItemSettings = (item: OrderItem, options: OrderItemOptions, addOns?: Array<{id: string; name: string; price: number; quantity: number}>) => {
     setOrderItems(prevItems => {
       return prevItems.map(orderItem => {
         if (orderItem.itemKey === item.itemKey) {
@@ -655,7 +656,8 @@ export default function CheckoutScreen({ route, navigation }: CheckoutScreenProp
           return {
             ...orderItem,
             options,
-            itemKey: newItemKey
+            itemKey: newItemKey,
+            addOns: addOns && addOns.length > 0 ? addOns : undefined
           };
         }
         return orderItem;

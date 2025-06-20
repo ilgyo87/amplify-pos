@@ -102,6 +102,12 @@ export function StripeSettingsCard() {
     try {
       setIsLoading(true);
       
+      if (!userId) {
+        Alert.alert('Error', 'User not authenticated. Please log in and try again.');
+        setIsLoading(false);
+        return;
+      }
+      
       // First, clear any existing settings to ensure clean state
       await stripeService.clearStripeSettings();
       

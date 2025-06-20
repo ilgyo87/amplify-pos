@@ -77,7 +77,7 @@ export const handler = async (
 
     // Prepare email parameters
     const emailParams = {
-      Source: process.env.FROM_EMAIL || 'dry.cleaning.services.pos@gmail.com', // You'll need to verify this domain in SES
+      Source: process.env.FROM_EMAIL || 'noreply@us-east-1.amazonses.com', // Using SES default domain
       Destination: {
         ToAddresses: [to]
       },

@@ -114,6 +114,7 @@ const schema = a.schema({
       starch: a.enum(['none', 'light', 'medium', 'heavy']),
       pressOnly: a.boolean(),
       notes: a.string().array(), // <-- Added this line for notes
+      addOns: a.string(), // JSON string of add-ons array
       order: a.belongsTo('Order', 'orderId'),
     })
     .authorization((allow) => [

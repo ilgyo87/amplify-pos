@@ -9,7 +9,6 @@ export class CustomerSyncService extends BaseSyncService<Customer> {
       throw new Error('Database not initialized');
     }
 
-    console.log('[SYNC] Starting customer sync...');
     const stats: SyncStats = { total: 0, synced: 0, failed: 0, skipped: 0 };
     this.errors = [];
 
@@ -20,16 +19,16 @@ export class CustomerSyncService extends BaseSyncService<Customer> {
         .exec();
 
       stats.total = localCustomers.length;
-      console.log(`[SYNC] Found ${stats.total} customers to sync`);
 
       for (const localCustomer of localCustomers) {
         try {
           await this.syncCustomer(localCustomer);
           stats.synced++;
-        } catch (error) {
-          console.error('[SYNC] Failed to sync customer:', error);
+        } catch (error: any) {
+          const errorMessage = error?.errors?.[0]?.message || error?.message || 'Unknown error';
+          console.error('[SYNC] Failed to sync customer:', localCustomer.id, errorMessage);
           stats.failed++;
-          this.errors.push(`Customer ${localCustomer.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          this.errors.push(`Customer ${localCustomer.id}: ${errorMessage}`);
         }
       }
 
@@ -65,7 +64,7 @@ export class CustomerSyncService extends BaseSyncService<Customer> {
     }
     
     // Map local fields to backend fields - include ALL fields!
-    const input = {
+    const input: any = {
       id: customerData.id,
       firstName: customerData.firstName || '',  // Required field
       lastName: customerData.lastName || '',    // Required field
@@ -122,52 +121,68 @@ export class CustomerSyncService extends BaseSyncService<Customer> {
       const data = await this.handleGraphQLResult(createResult, 'CreateCustomer');
       if (data) {
         await localCustomer.update({ $set: { isLocalOnly: false } });
-        console.log('[SYNC] Customer created:', customerData.id);
+        console.log('[SYNC] Customer uploaded:', customerData.id, `(${customerData.firstName} ${customerData.lastName})`);
       }
     } catch (createError: any) {
       // If creation fails due to existing record, try update
-      if (createError?.errors?.[0]?.message?.includes('DynamoDB:ConditionalCheckFailedException')) {
-        console.log('[SYNC] Customer exists, attempting update:', customerData.id);
+      const errorType = createError?.errors?.[0]?.errorType;
+      const errorMessage = createError?.errors?.[0]?.message;
+      
+      if (errorType === 'DynamoDB:ConditionalCheckFailedException' || 
+          errorMessage?.includes('conditional request failed')) {
         
-        const updateResult = await this.client.graphql({
-          query: /* GraphQL */ `
-            mutation UpdateCustomer($input: UpdateCustomerInput!) {
-              updateCustomer(input: $input) {
-                id
-                firstName
-                lastName
-                address
-                city
-                state
-                zipCode
-                phone
-                coordinates {
-                  lat
-                  long
+        // Customer exists, just update it
+        // Remove any fields that might cause issues
+        delete input._version;
+        delete input._lastChangedAt;
+        delete input._deleted;
+        
+        try {
+          const updateResult = await this.client.graphql({
+            query: /* GraphQL */ `
+              mutation UpdateCustomer($input: UpdateCustomerInput!) {
+                updateCustomer(input: $input) {
+                  id
+                  firstName
+                  lastName
+                  address
+                  city
+                  state
+                  zipCode
+                  phone
+                  coordinates {
+                    lat
+                    long
+                  }
+                  email
+                  businessId
+                  cognitoId
+                  emailNotifications
+                  textNotifications
+                  totalRefunds
+                  notes
+                  joinDate
+                  createdAt
+                  updatedAt
                 }
-                email
-                businessId
-                cognitoId
-                emailNotifications
-                textNotifications
-                totalRefunds
-                notes
-                joinDate
-                createdAt
-                updatedAt
-                _version
               }
-            }
-          `,
-          variables: { input },
-        });
+            `,
+            variables: { input },
+          });
 
-        const data = await this.handleGraphQLResult(updateResult, 'UpdateCustomer');
-        if (data) {
-          await localCustomer.update({ $set: { isLocalOnly: false } });
-          console.log('[SYNC] Customer updated:', customerData.id);
+          const data = await this.handleGraphQLResult(updateResult, 'UpdateCustomer');
+          if (data) {
+            await localCustomer.update({ $set: { isLocalOnly: false } });
+            console.log('[SYNC] Customer updated:', customerData.id, `(${customerData.firstName} ${customerData.lastName})`);
+          }
+        } catch (updateError: any) {
+          // If update also fails, log the specific error
+          const updateErrorMessage = updateError?.errors?.[0]?.message || updateError?.message || 'Unknown update error';
+          console.error('[SYNC] Customer update failed:', customerData.id, updateErrorMessage);
+          throw updateError;
         }
       } else {
+        console.error('[SYNC] Customer sync failed:', customerData.id, errorMessage || 'Unknown error');
         throw createError;
       }
     }
@@ -213,8 +228,8 @@ export class CustomerSyncService extends BaseSyncService<Customer> {
       if (!(data as any)?.listCustomers?.items) return;
 
       const cloudCustomers = (data as any).listCustomers.items.filter(Boolean) as GraphQLCustomer[];
-      console.log(`[SYNC] Found ${cloudCustomers.length} customers in cloud`);
-
+      
+      let downloadedCount = 0;
       for (const cloudCustomer of cloudCustomers) {
         try {
           const exists = await this.db!.customers.findOne(cloudCustomer.id).exec();
@@ -233,11 +248,15 @@ export class CustomerSyncService extends BaseSyncService<Customer> {
             }
             
             await this.db!.customers.insert(customerData);
-            console.log('[SYNC] Downloaded new customer:', cloudCustomer.id);
+            downloadedCount++;
           }
         } catch (error) {
           console.error('[SYNC] Failed to download customer:', error);
         }
+      }
+      
+      if (downloadedCount > 0) {
+        console.log(`[SYNC] Downloaded ${downloadedCount} new customers from cloud`);
       }
     } catch (error) {
       console.error('[SYNC] Failed to download customers:', error);

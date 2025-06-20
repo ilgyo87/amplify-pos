@@ -137,7 +137,9 @@ export abstract class BaseRepository<T extends SyncableDocument, C extends RxCol
       
       const doc = {
         ...processedData,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        // Mark as unsynced when updated locally
+        isLocalOnly: true
       };
       
       await document.update({

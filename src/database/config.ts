@@ -102,7 +102,6 @@ const createDatabase = async (): Promise<AppDatabase> => {
         },
         orders: {
           schema: orderSchema
-          // No migration strategies needed for fresh database
         }
       });
       
@@ -111,11 +110,9 @@ const createDatabase = async (): Promise<AppDatabase> => {
       databasePromise = null;
       return database;
     } catch (error) {
-      console.error('Error adding collections:', error);
       throw error;
     }
   } catch (error) {
-    console.error('Database creation error:', error);
     throw error;
   }
 };
@@ -132,7 +129,7 @@ export const closeDatabase = async () => {
       databasePromise = null;
     }
   } catch (error) {
-    console.log('Database cleanup completed');
+    // Cleanup completed
   }
 };
 
@@ -151,6 +148,6 @@ export const forceCleanup = async () => {
       databasePromise = null;
     }
   } catch (error) {
-    console.log('Database cleanup completed');
+    // Cleanup completed
   }
 };

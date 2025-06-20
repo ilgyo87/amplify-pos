@@ -52,8 +52,6 @@ export class SyncCoordinator {
   }
 
   async syncAll(): Promise<FullSyncResult> {
-    console.log('[SYNC] Starting full synchronization...');
-    
     // Sync in dependency order
     const results = {
       customers: await this.customerSync.sync(),
@@ -80,12 +78,15 @@ export class SyncCoordinator {
 
     const success = totalFailed === 0;
 
-    console.log('[SYNC] Synchronization complete:', {
-      success,
-      totalSynced,
-      totalFailed,
-      errorCount: totalErrors.length,
-    });
+    // Only log if there were actual sync operations
+    if (totalSynced > 0 || totalFailed > 0) {
+      console.log('[SYNC] Synchronization complete:', {
+        success,
+        totalSynced,
+        totalFailed,
+        errorCount: totalErrors.length,
+      });
+    }
 
     return {
       success,

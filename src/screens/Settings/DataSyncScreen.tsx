@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { BaseScreen } from '../BaseScreen';
 import { syncService, SyncStatus, SyncResult } from '../../database/services';
 
@@ -48,6 +49,23 @@ export default function DataSyncScreen() {
     loadSyncStatus();
   }, []);
 
+  // Refresh sync status when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      loadSyncStatus(true);
+      
+      // Set up interval to refresh every 30 seconds while screen is focused
+      const interval = setInterval(() => {
+        loadSyncStatus(true);
+      }, 30000);
+      
+      // Clean up interval when screen loses focus
+      return () => {
+        clearInterval(interval);
+      };
+    }, [])
+  );
+
   const loadSyncStatus = async (forceRefresh = false) => {
     try {
       if (forceRefresh) {
@@ -59,23 +77,23 @@ export default function DataSyncScreen() {
       // If this is called after a sync operation, add a small delay
       // to ensure database writes are fully committed
       if (forceRefresh) {
-        console.log('[DATASYNC] Force refreshing sync status after sync operation...');
         await new Promise(resolve => setTimeout(resolve, 200));
       }
       
       const status = await syncService.getSyncStatus();
       setSyncStatus(status);
       
-      // Log the status for debugging
-      console.log('[DATASYNC] Sync status loaded:', {
-        totalUnsyncedCustomers: status.totalUnsyncedCustomers,
-        totalUnsyncedEmployees: status.totalUnsyncedEmployees,
-        totalUnsyncedBusinesses: status.totalUnsyncedBusinesses,
-        totalUnsyncedProducts: status.totalUnsyncedProducts,
-        totalUnsyncedCategories: status.totalUnsyncedCategories,
-        totalUnsyncedOrders: status.totalUnsyncedOrders,
-        forceRefresh
-      });
+      // Only log if there are unsynced items
+      const totalUnsynced = status.totalUnsyncedCustomers + 
+        status.totalUnsyncedEmployees + 
+        (status.totalUnsyncedBusinesses || 0) +
+        (status.totalUnsyncedProducts || 0) +
+        (status.totalUnsyncedCategories || 0) +
+        (status.totalUnsyncedOrders || 0);
+        
+      if (totalUnsynced > 0) {
+        console.log('[DATASYNC] Unsynced items:', getUnsyncedDetails());
+      }
 
       // Force component to re-render by triggering state update
       if (forceRefresh) {
@@ -104,31 +122,58 @@ export default function DataSyncScreen() {
     );
   };
 
+  const getUnsyncedDetails = () => {
+    const details: string[] = [];
+    
+    if (syncStatus.totalUnsyncedCustomers > 0) {
+      details.push(`${syncStatus.totalUnsyncedCustomers} customer${syncStatus.totalUnsyncedCustomers > 1 ? 's' : ''}`);
+    }
+    if (syncStatus.totalUnsyncedEmployees > 0) {
+      details.push(`${syncStatus.totalUnsyncedEmployees} employee${syncStatus.totalUnsyncedEmployees > 1 ? 's' : ''}`);
+    }
+    if (syncStatus.totalUnsyncedBusinesses > 0) {
+      details.push(`${syncStatus.totalUnsyncedBusinesses} business${syncStatus.totalUnsyncedBusinesses > 1 ? 'es' : ''}`);
+    }
+    if (syncStatus.totalUnsyncedProducts > 0) {
+      details.push(`${syncStatus.totalUnsyncedProducts} product${syncStatus.totalUnsyncedProducts > 1 ? 's' : ''}`);
+    }
+    if (syncStatus.totalUnsyncedCategories > 0) {
+      details.push(`${syncStatus.totalUnsyncedCategories} categor${syncStatus.totalUnsyncedCategories > 1 ? 'ies' : 'y'}`);
+    }
+    if (syncStatus.totalUnsyncedOrders > 0) {
+      details.push(`${syncStatus.totalUnsyncedOrders} order${syncStatus.totalUnsyncedOrders > 1 ? 's' : ''}`);
+    }
+    
+    return details.join(', ');
+  };
+
   const handleUpload = async () => {
     try {
       setSyncStatus(prev => ({ ...prev, isUploading: true }));
       
-      console.log('[UPLOAD] Starting upload of all entity types...');
       const results = {
         customers: await syncService.uploadCustomers(),
         employees: await syncService.uploadEmployees(),
         categories: await syncService.uploadCategories(),
         products: await syncService.uploadProducts(),
-        businesses: await syncService.uploadBusinesses()
+        businesses: await syncService.uploadBusinesses(),
+        orders: await syncService.uploadOrders()
       };
       
       const totalUploaded = results.customers.uploadedCount + 
                            results.employees.uploadedCount + 
                            results.categories.uploadedCount +
                            results.products.uploadedCount +
-                           results.businesses.uploadedCount;
+                           results.businesses.uploadedCount +
+                           results.orders.uploadedCount;
       
       const allErrors = [
         ...results.customers.errors,
         ...results.employees.errors,
         ...results.categories.errors,
         ...results.products.errors,
-        ...results.businesses.errors
+        ...results.businesses.errors,
+        ...results.orders.errors
       ];
       
       const combinedResult: SyncResult = {
@@ -160,21 +205,24 @@ export default function DataSyncScreen() {
         employees: await syncService.downloadEmployees(),
         categories: await syncService.downloadCategories(),
         products: await syncService.downloadProducts(),
-        businesses: await syncService.downloadBusinesses()
+        businesses: await syncService.downloadBusinesses(),
+        orders: await syncService.downloadOrders()
       };
       
       const totalDownloaded = results.customers.downloadedCount + 
                              results.employees.downloadedCount + 
                              results.categories.downloadedCount +
                              results.products.downloadedCount +
-                             results.businesses.downloadedCount;
+                             results.businesses.downloadedCount +
+                             results.orders.downloadedCount;
       
       const allErrors = [
         ...results.customers.errors,
         ...results.employees.errors,
         ...results.categories.errors,
         ...results.products.errors,
-        ...results.businesses.errors
+        ...results.businesses.errors,
+        ...results.orders.errors
       ];
       
       const combinedResult: SyncResult = {
@@ -395,7 +443,7 @@ export default function DataSyncScreen() {
               <View style={styles.unsyncedWarning}>
                 <Ionicons name="warning" size={20} color="#ff6b35" />
                 <Text style={styles.unsyncedWarningText}>
-                  {getTotalUnsyncedCount()} items need to be synced
+                  {getUnsyncedDetails()} need to be synced
                 </Text>
               </View>
             )}
@@ -425,7 +473,7 @@ export default function DataSyncScreen() {
             description={
               getTotalUnsyncedCount() === 0
                 ? 'All local data is synchronized'
-                : `Upload ${getTotalUnsyncedCount()} local changes to the cloud`
+                : `Upload ${getUnsyncedDetails()} to the cloud`
             }
             onPress={handleUpload}
             loading={syncStatus.isUploading}

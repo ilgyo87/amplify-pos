@@ -47,6 +47,12 @@ const DEFAULT_CATEGORIES: DefaultCategory[] = [
     description: 'Specialty cleaning and treatments',
     color: '#AF52DE',
     displayOrder: 4
+  },
+  {
+    name: 'Add-ons',
+    description: 'Additional services and charges',
+    color: '#FF3B30',
+    displayOrder: 5
   }
 ];
 
@@ -54,39 +60,25 @@ const DEFAULT_CATEGORIES: DefaultCategory[] = [
 const DEFAULT_PRODUCTS: DefaultProduct[] = [
   // Dry Cleaning Products
   {
-    name: 'Dress Shirt',
-    description: 'Professional dry cleaning for dress shirts',
-    price: 3.50,
-    categoryName: 'Dry Cleaning',
-    imageName: 'shirt-cut'
-  },
-  {
-    name: 'Suit Jacket',
-    description: 'Dry cleaning for suit jackets and blazers',
-    price: 8.00,
-    categoryName: 'Dry Cleaning',
-    imageName: 'suit'
-  },
-  {
-    name: 'Dress',
-    description: 'Dry cleaning for dresses',
-    price: 12.00,
-    categoryName: 'Dry Cleaning',
-    imageName: 'dress'
-  },
-  {
-    name: 'Pants/Trousers',
+    name: 'Pants',
     description: 'Dry cleaning for dress pants and trousers',
-    price: 6.00,
+    price: 4.00,
     categoryName: 'Dry Cleaning',
     imageName: 'pants'
   },
   {
-    name: 'Winter Coat',
-    description: 'Dry cleaning for winter coats and heavy jackets',
-    price: 15.00,
+    name: 'Blazer',
+    description: 'Dry cleaning for blazers and jackets',
+    price: 6.00,
     categoryName: 'Dry Cleaning',
-    imageName: 'winter-coat'
+    imageName: 'blazer'
+  },
+  {
+    name: 'Suit',
+    description: 'Dry cleaning for suits',
+    price: 12.00,
+    categoryName: 'Dry Cleaning',
+    imageName: 'suit'
   },
   {
     name: 'Polo Shirt',
@@ -95,14 +87,56 @@ const DEFAULT_PRODUCTS: DefaultProduct[] = [
     categoryName: 'Dry Cleaning',
     imageName: 'polo'
   },
+  {
+    name: 'Shirt',
+    description: 'Dry cleaning for shirts',
+    price: 4.00,
+    categoryName: 'Dry Cleaning',
+    imageName: 't-shirt'
+  },
+  {
+    name: 'Skirt',
+    description: 'Dry cleaning for skirts',
+    price: 4.00,
+    categoryName: 'Dry Cleaning',
+    imageName: 'skirt'
+  },
+  {
+    name: 'Dress',
+    description: 'Dry cleaning for dresses',
+    price: 8.00,
+    categoryName: 'Dry Cleaning',
+    imageName: 'dress'
+  },
+  {
+    name: 'Jersey',
+    description: 'Dry cleaning for jerseys',
+    price: 6.00,
+    categoryName: 'Dry Cleaning',
+    imageName: 'jersey'
+  },
+  {
+    name: 'Jacket',
+    description: 'Dry cleaning for jackets',
+    price: 8.00,
+    categoryName: 'Dry Cleaning',
+    imageName: 'jacket'
+  },
+  {
+    name: 'Winter Coat',
+    description: 'Dry cleaning for winter coats and heavy jackets',
+    price: 10.00,
+    categoryName: 'Dry Cleaning',
+    imageName: 'winter-coat'
+  },
 
   // Laundry Products  
   {
-    name: 'T-Shirt',
-    description: 'Wash and fold service for t-shirts',
+    name: 'Dress-Shirt',
+    description: 'Wash and fold service for dress shirts',
     price: 2.50,
     categoryName: 'Laundry',
-    imageName: 't-shirt'
+    imageName: 'dress-shirt'
   },
   {
     name: 'Jeans',
@@ -112,11 +146,11 @@ const DEFAULT_PRODUCTS: DefaultProduct[] = [
     imageName: 'jeans'
   },
   {
-    name: 'Casual Shirt',
-    description: 'Wash and fold for casual shirts',
+    name: 'T-Shirt',
+    description: 'Wash and fold for t-shirts',
     price: 3.00,
     categoryName: 'Laundry',
-    imageName: 'clothes-cut'
+    imageName: 't-shirt'
   },
   {
     name: 'Kids Clothes',
@@ -216,6 +250,64 @@ const DEFAULT_PRODUCTS: DefaultProduct[] = [
     categoryName: 'Special Services',
     imageName: 'shoes',
     notes: 'Includes conditioning and waterproofing'
+  },
+
+  // Add-on Services
+  {
+    name: 'Extra Button',
+    description: 'Additional button replacement',
+    price: 1.00,
+    categoryName: 'Add-ons',
+    imageName: 'buttons'
+  },
+  {
+    name: 'Patch',
+    description: 'Fabric patch repair',
+    price: 2.00,
+    categoryName: 'Add-ons',
+    imageName: 'patch'
+  },
+  {
+    name: 'Starch',
+    description: 'Heavy starch treatment',
+    price: 1.50,
+    categoryName: 'Add-ons',
+    imageName: 'spray'
+  },
+  {
+    name: 'Rush Service',
+    description: 'Same day or next day service',
+    price: 5.00,
+    categoryName: 'Add-ons',
+    imageName: 'clock'
+  },
+  {
+    name: 'Mothproofing',
+    description: 'Moth protection treatment',
+    price: 3.00,
+    categoryName: 'Add-ons',
+    imageName: 'shield'
+  },
+  {
+    name: 'Deodorizing',
+    description: 'Odor removal treatment',
+    price: 2.50,
+    categoryName: 'Add-ons',
+    imageName: 'spray'
+  },
+  {
+    name: 'Water Repellent',
+    description: 'Water resistance treatment',
+    price: 4.00,
+    categoryName: 'Add-ons',
+    imageName: 'umbrella'
+  },
+  {
+    name: 'Fabric Softener',
+    description: 'Extra fabric softening',
+    price: 1.00,
+    categoryName: 'Add-ons',
+    imageName: 'spray'
   }
 ];
 

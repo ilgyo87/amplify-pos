@@ -197,14 +197,14 @@ export class CategoryRepository extends BaseRepository<CategoryDocType, Category
   }
 
   /**
-   * Get categories ordered by name
+   * Get categories ordered by displayOrder, then by createdAt
    */
   async findAllOrdered(): Promise<CategoryDocument[]> {
     const results = await this.collection.find({
       selector: {
         isDeleted: { $ne: true }
       },
-      sort: [{ name: 'asc' }]
+      sort: [{ displayOrder: 'asc' }, { createdAt: 'asc' }]
     }).exec();
     return results as CategoryDocument[];
   }

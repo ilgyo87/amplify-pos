@@ -8,7 +8,6 @@ export class OrderSyncService extends BaseSyncService<Order> {
       throw new Error('Database not initialized');
     }
 
-    console.log('[SYNC] Starting order sync...');
     const stats: SyncStats = { total: 0, synced: 0, failed: 0, skipped: 0 };
     this.errors = [];
 
@@ -19,7 +18,6 @@ export class OrderSyncService extends BaseSyncService<Order> {
         .exec();
 
       stats.total = localOrders.length;
-      console.log(`[SYNC] Found ${stats.total} orders to sync`);
 
       // Process in batches to avoid overwhelming the API
       const batchSize = 5;
@@ -30,10 +28,11 @@ export class OrderSyncService extends BaseSyncService<Order> {
             try {
               await this.syncOrder(order);
               stats.synced++;
-            } catch (error) {
-              console.error('[SYNC] Failed to sync order:', error);
+            } catch (error: any) {
+              const errorMessage = error?.errors?.[0]?.message || error?.message || 'Unknown error';
+              console.error('[SYNC] Failed to sync order:', order.orderNumber, errorMessage);
               stats.failed++;
-              this.errors.push(`Order ${order.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+              this.errors.push(`Order ${order.orderNumber}: ${errorMessage}`);
             }
           })
         );
@@ -150,60 +149,75 @@ export class OrderSyncService extends BaseSyncService<Order> {
       const data = await this.handleGraphQLResult(createResult, 'CreateOrder');
       if (data) {
         await localOrder.update({ $set: { isLocalOnly: false } });
-        console.log('[SYNC] Order created:', orderData.id);
+        console.log('[SYNC] Order uploaded:', orderData.orderNumber);
       }
     } catch (createError: any) {
       // If creation fails due to existing record, try update
-      if (createError?.errors?.[0]?.message?.includes('DynamoDB:ConditionalCheckFailedException')) {
-        console.log('[SYNC] Order exists, attempting update:', orderData.id);
+      const errorType = createError?.errors?.[0]?.errorType;
+      const errorMessage = createError?.errors?.[0]?.message;
+      
+      if (errorType === 'DynamoDB:ConditionalCheckFailedException' || 
+          errorMessage?.includes('conditional request failed')) {
         
-        const updateResult = await this.client.graphql({
-          query: /* GraphQL */ `
-            mutation UpdateOrder($input: UpdateOrderInput!) {
-              updateOrder(input: $input) {
-                id
-                orderNumber
-                customerId
-                customerName
-                customerPhone
-                customerEmail
-                status
-                subtotal
-                tax
-                total
-                paymentMethod
-                paymentStatus
-                cardLast4
-                checkNumber
-                accountId
-                stripePaymentIntentId
-                stripeChargeId
-                refundAmount
-                refundReason
-                notes
-                employeeId
-                employeeName
-                businessId
-                paymentInfo
-                selectedDate
-                statusHistory
-                barcodeData
-                rackNumber
-                cancellationReason
-                refundDate
-                createdAt
-                updatedAt
-                _version
+        // Order exists, just update it
+        // Remove any fields that might cause issues
+        delete input._version;
+        delete input._lastChangedAt;
+        delete input._deleted;
+        
+        try {
+          const updateResult = await this.client.graphql({
+            query: /* GraphQL */ `
+              mutation UpdateOrder($input: UpdateOrderInput!) {
+                updateOrder(input: $input) {
+                  id
+                  orderNumber
+                  customerId
+                  customerName
+                  customerPhone
+                  customerEmail
+                  status
+                  subtotal
+                  tax
+                  total
+                  paymentMethod
+                  paymentStatus
+                  cardLast4
+                  checkNumber
+                  accountId
+                  stripePaymentIntentId
+                  stripeChargeId
+                  refundAmount
+                  refundReason
+                  notes
+                  employeeId
+                  employeeName
+                  businessId
+                  paymentInfo
+                  selectedDate
+                  statusHistory
+                  barcodeData
+                  rackNumber
+                  cancellationReason
+                  refundDate
+                  createdAt
+                  updatedAt
+                }
               }
-            }
-          `,
-          variables: { input },
-        });
+            `,
+            variables: { input },
+          });
 
-        const data = await this.handleGraphQLResult(updateResult, 'UpdateOrder');
-        if (data) {
-          await localOrder.update({ $set: { isLocalOnly: false } });
-          console.log('[SYNC] Order updated:', orderData.id);
+          const data = await this.handleGraphQLResult(updateResult, 'UpdateOrder');
+          if (data) {
+            await localOrder.update({ $set: { isLocalOnly: false } });
+            console.log('[SYNC] Order updated:', orderData.orderNumber);
+          }
+        } catch (updateError: any) {
+          // If update also fails, log the specific error
+          const updateErrorMessage = updateError?.errors?.[0]?.message || updateError?.message || 'Unknown update error';
+          console.error('[SYNC] Order update failed:', orderData.orderNumber, updateErrorMessage);
+          throw updateError;
         }
       } else {
         throw createError;
@@ -232,6 +246,7 @@ export class OrderSyncService extends BaseSyncService<Order> {
           starch: item.starch || null,
           pressOnly: item.pressOnly || false,
           notes: item.notes ? (Array.isArray(item.notes) ? item.notes : [item.notes]) : null,  // Backend expects array of strings
+          addOns: item.addOns ? JSON.stringify(item.addOns) : null,  // Store add-ons as JSON string
         };
 
         const createResult = await this.client.graphql({
@@ -242,6 +257,7 @@ export class OrderSyncService extends BaseSyncService<Order> {
                 orderId
                 name
                 price
+                addOns
               }
             }
           `,
@@ -315,8 +331,8 @@ export class OrderSyncService extends BaseSyncService<Order> {
       if (!(data as any)?.listOrders?.items) return;
 
       const cloudOrders = (data as any).listOrders.items.filter(Boolean) as GraphQLOrder[];
-      console.log(`[SYNC] Found ${cloudOrders.length} orders in cloud`);
-
+      
+      let downloadedCount = 0;
       for (const cloudOrder of cloudOrders) {
         try {
           const exists = await this.db!.orders.findOne(cloudOrder.id).exec();
@@ -348,11 +364,15 @@ export class OrderSyncService extends BaseSyncService<Order> {
             }
             
             await this.db!.orders.insert(orderData);
-            console.log('[SYNC] Downloaded new order:', cloudOrder.id);
+            downloadedCount++;
           }
         } catch (error) {
           console.error('[SYNC] Failed to download order:', error);
         }
+      }
+      
+      if (downloadedCount > 0) {
+        console.log(`[SYNC] Downloaded ${downloadedCount} new orders from cloud`);
       }
     } catch (error) {
       console.error('[SYNC] Failed to download orders:', error);
@@ -364,7 +384,7 @@ export class OrderSyncService extends BaseSyncService<Order> {
     try {
       const listResult = await this.client.graphql({
         query: /* GraphQL */ `
-          query ListOrderItemsByOrder($orderId: ID!) {
+          query ListOrderItemsByOrder($orderId: String!) {
             listOrderItems(filter: { orderId: { eq: $orderId } }) {
               items {
                 id
@@ -381,6 +401,7 @@ export class OrderSyncService extends BaseSyncService<Order> {
                 starch
                 pressOnly
                 notes
+                addOns
                 createdAt
                 updatedAt
               }
@@ -406,6 +427,14 @@ export class OrderSyncService extends BaseSyncService<Order> {
             cleaned.notes = cleaned.notes[0];
           } else if (Array.isArray(cleaned.notes)) {
             cleaned.notes = null;
+          }
+          // Parse add-ons if they exist
+          if (cleaned.addOns) {
+            try {
+              cleaned.addOns = JSON.parse(cleaned.addOns);
+            } catch {
+              cleaned.addOns = null;
+            }
           }
           if (cleaned.customizations) {
             try {

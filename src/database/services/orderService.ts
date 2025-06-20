@@ -198,9 +198,16 @@ export class OrderService {
       const discount = Number(item.discount) || 0;
       const quantity = Number(item.quantity) || 0;
       
+      // Calculate add-ons price
+      const addOnsPrice = item.addOns?.reduce((addOnSum, addOn) => {
+        return addOnSum + (addOn.price * addOn.quantity);
+      }, 0) || 0;
+      
+      const totalItemPrice = itemPrice + addOnsPrice;
+      
       const discountedPrice = discount > 0 
-        ? itemPrice * (1 - discount / 100)
-        : itemPrice;
+        ? totalItemPrice * (1 - discount / 100)
+        : totalItemPrice;
       return sum + (discountedPrice * quantity);
     }, 0);
 
@@ -231,7 +238,8 @@ export class OrderService {
         categoryId: item.categoryId, // Preserve categoryId for sync purposes
         discount: Number(item.discount) || 0, // Preserve discount for sync purposes
         options: item.options,
-        itemKey: item.itemKey
+        itemKey: item.itemKey,
+        addOns: item.addOns // Preserve add-ons
       })),
       // Store the exact values calculated with our cents-based approach
       // This ensures they're precisely what the schema expects (multiples of 0.01)
@@ -245,7 +253,7 @@ export class OrderService {
       statusHistory: initialStatusHistory,
       notes,
       barcodeData,
-      isLocalOnly: (customer as any).isLocalOnly !== undefined ? (customer as any).isLocalOnly : true,
+      isLocalOnly: true, // New orders should always be marked as local-only until synced
       createdAt: now,
       updatedAt: now
     };
