@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -10,7 +10,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { BaseScreen } from '../BaseScreen';
 import { syncService, SyncStatus } from '../../database/services';
-import { useNavigation } from '@react-navigation/native';
+import { syncEventEmitter } from '../../database/services/syncEventEmitter';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 // Test notification button removed during cleanup
@@ -28,21 +29,42 @@ interface SettingsOption {
 export default function SettingsScreen() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const isLoadingStatus = useRef(false);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   useEffect(() => {
     loadSyncStatus();
+    
+    // Listen for sync complete events
+    const unsubscribe = syncEventEmitter.onSyncComplete(() => {
+      loadSyncStatus();
+    });
+    
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
+  // Refresh sync status when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadSyncStatus();
+    }, [])
+  );
+
   const loadSyncStatus = async () => {
+    // Prevent concurrent loads
+    if (isLoadingStatus.current) return;
+    
     try {
-      setIsLoading(true);
+      isLoadingStatus.current = true;
       const status = await syncService.getSyncStatus();
       setSyncStatus(status);
     } catch (error) {
       console.error('Failed to load sync status:', error);
     } finally {
       setIsLoading(false);
+      isLoadingStatus.current = false;
     }
   };
 

@@ -3,6 +3,7 @@ import { DatabaseCollections } from '../schema';
 import { SyncCoordinator, SyncConflicts } from './sync/SyncCoordinator';
 import { SyncNotificationData } from './sync/SyncNotification';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { syncEventEmitter } from './syncEventEmitter';
 
 const LAST_SYNC_NOTIFICATION_KEY = '@last_sync_notification';
 
@@ -31,6 +32,9 @@ class SyncService {
       await this.saveLastSyncNotification(result.notification);
     }
     
+    // Emit sync complete event
+    syncEventEmitter.emitSyncComplete();
+    
     return result;
   }
 
@@ -39,7 +43,12 @@ class SyncService {
       throw new Error('Database not initialized');
     }
 
-    return this.coordinator.syncEntity(entityType);
+    const result = await this.coordinator.syncEntity(entityType);
+    
+    // Emit sync complete event
+    syncEventEmitter.emitSyncComplete();
+    
+    return result;
   }
   
   getConflicts(): SyncConflicts {
