@@ -12,6 +12,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { getDatabaseInstance } from '../../database';
+import { checkAndClearUserData } from '../../utils/userDataManager';
 
 export const InitialSyncScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -24,6 +25,16 @@ export const InitialSyncScreen: React.FC = () => {
 
   const performInitialSync = async () => {
     try {
+      // Check if the user has changed and clear data if necessary
+      const dataWasCleared = await checkAndClearUserData();
+      
+      if (dataWasCleared) {
+        console.log('[InitialSync] User data was cleared due to user change');
+        // Force a fresh sync after clearing data
+        setSyncStatus('Setting up your fresh workspace...');
+        setProgress(10);
+      }
+      
       // Check if we need to sync (either first launch or no local data)
       const needsSync = await checkIfSyncNeeded();
       

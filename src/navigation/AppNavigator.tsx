@@ -10,6 +10,8 @@ import { AuthenticationWrapper } from '../components/auth/AuthenticationWrapper'
 import { useEmployeeAuth } from '../context/EmployeeAuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { closeDatabase } from '../database/config';
+import { clearStoredUserId } from '../utils/userDataManager';
 
 // Screens
 import Dashboard from '../screens/Dashboard';
@@ -38,6 +40,23 @@ const SignOutButton = () => {
     try {
       // Clear the initial sync flag so next user gets a fresh sync
       await AsyncStorage.removeItem('@initial_sync_complete');
+      
+      // Close and clear the local database to prevent data leakage between users
+      await closeDatabase();
+      
+      // Clear any other user-specific data from AsyncStorage
+      const keysToRemove = [
+        '@initial_sync_complete',
+        '@last_sync_notification',
+        'printerSettings',
+        // Add any other user-specific keys here
+      ];
+      
+      await AsyncStorage.multiRemove(keysToRemove);
+      
+      // Clear the stored user ID to ensure proper detection of user changes
+      await clearStoredUserId();
+      
       await signOut();
       navigation.navigate('Auth');
     } catch (error) {

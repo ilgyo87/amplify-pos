@@ -56,7 +56,16 @@ export const getDatabaseInstance = async (): Promise<AppDatabase> => {
   if (!databasePromise) {
     databasePromise = createDatabase();
   }
-  return databasePromise;
+  
+  try {
+    const db = await databasePromise;
+    return db;
+  } catch (error) {
+    // If database creation failed, reset and try again
+    databasePromise = null;
+    databaseInstance = null;
+    throw error;
+  }
 };
 
 const createDatabase = async (): Promise<AppDatabase> => {
