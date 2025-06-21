@@ -75,14 +75,14 @@ export default function PrinterSettingsScreen() {
 
     setTestingConnection(true);
     try {
-      console.log(`Testing connection to Munbyn printer at ${printerIP}:${printerPort}`);
+      console.log(`Testing connection to thermal printer at ${printerIP}:${printerPort}`);
       
       const testCommands = generateTestPrintCommands();
       const success = await sendTestDataToPrinter(printerIP, printerPort, testCommands);
       
       if (success) {
         setPrinterConnected(true);
-        Alert.alert('Success', 'Successfully connected to Munbyn ITPP047P printer! A test receipt should have printed.');
+        Alert.alert('Success', 'Successfully connected to thermal printer! A test receipt should have printed.');
       } else {
         setPrinterConnected(false);
         Alert.alert('Connection Failed', 'Could not connect to printer. Please check the IP address and ensure the printer is powered on and connected to the network.');
@@ -129,7 +129,7 @@ export default function PrinterSettingsScreen() {
     addText(`Time: ${new Date().toLocaleTimeString()}`);
     addLF();
     addLF();
-    addText('Munbyn ITPP047P Ready');
+    addText('Thermal Printer Ready');
     addLF();
     addLF();
     addLF();
@@ -197,7 +197,7 @@ export default function PrinterSettingsScreen() {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Receipt Printer</Text>
           <Text style={styles.headerSubtitle}>
-            Configure your thermal printer for receipt printing
+            Configure your network-enabled thermal printer for fast, direct receipt printing
           </Text>
         </View>
 
@@ -205,11 +205,11 @@ export default function PrinterSettingsScreen() {
           <View style={styles.printerCard}>
             <View style={styles.printerHeader}>
               <View style={styles.printerIconContainer}>
-                <Ionicons name="print" size={32} color="#20c997" />
+                <Ionicons name="print-outline" size={36} color="#20c997" />
               </View>
               <View style={styles.printerInfo}>
-                <Text style={styles.printerName}>Munbyn ITPP047P</Text>
-                <Text style={styles.printerModel}>Thermal Receipt Printer</Text>
+                <Text style={styles.printerName}>Network Thermal Printer</Text>
+                <Text style={styles.printerModel}>80mm Receipt Printer</Text>
               </View>
             </View>
 
@@ -282,7 +282,7 @@ export default function PrinterSettingsScreen() {
               </View>
               <View style={styles.featureItem}>
                 <Ionicons name="wifi" size={20} color="#28a745" />
-                <Text style={styles.featureText}>Ethernet network connectivity</Text>
+                <Text style={styles.featureText}>Network connectivity (Ethernet/WiFi)</Text>
               </View>
               <View style={styles.featureItem}>
                 <Ionicons name="cut" size={20} color="#28a745" />
@@ -328,12 +328,12 @@ export default function PrinterSettingsScreen() {
 
               <ScrollView style={styles.modalContent}>
                 <View style={styles.printerInfoSection}>
-                  <View style={styles.printerIconContainer}>
-                    <Ionicons name="print" size={48} color="#20c997" />
+                  <View style={[styles.printerIconContainer, { width: 80, height: 80, marginRight: 0, marginBottom: 16 }]}>
+                    <Ionicons name="print-outline" size={48} color="#20c997" />
                   </View>
-                  <Text style={styles.printerModelTitle}>Munbyn ITPP047P</Text>
+                  <Text style={styles.printerModelTitle}>Thermal Receipt Printer</Text>
                   <Text style={styles.printerDescription}>
-                    Configure your thermal printer's network settings for direct receipt printing.
+                    Configure your network-enabled thermal printer for seamless receipt printing without system dialogs.
                   </Text>
                 </View>
 
@@ -371,7 +371,7 @@ export default function PrinterSettingsScreen() {
 
                 <View style={styles.setupInstructions}>
                   <Text style={styles.instructionsTitle}>Setup Instructions:</Text>
-                  <Text style={styles.instructionText}>1. Connect your Munbyn ITPP047P to your network via Ethernet</Text>
+                  <Text style={styles.instructionText}>1. Connect your thermal printer to your network</Text>
                   <Text style={styles.instructionText}>2. Print a network configuration page from the printer menu</Text>
                   <Text style={styles.instructionText}>3. Find the IP address and enter it above</Text>
                   <Text style={styles.instructionText}>4. Save settings and test the connection</Text>
@@ -406,6 +406,8 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
     backgroundColor: '#fff',
     marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
   headerTitle: {
     fontSize: 28,
@@ -424,13 +426,15 @@ const styles = StyleSheet.create({
   },
   printerCard: {
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 20,
+    padding: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: '#f5f5f5',
   },
   printerHeader: {
     flexDirection: 'row',
@@ -438,13 +442,15 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   printerIconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 16,
-    backgroundColor: '#e8f8f5',
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: 'rgba(32, 201, 151, 0.12)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(32, 201, 151, 0.2)',
   },
   printerInfo: {
     flex: 1,
@@ -536,8 +542,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#20c997',
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingVertical: 15,
+    borderRadius: 14,
+    shadowColor: '#20c997',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   primaryButtonText: {
     color: '#fff',
@@ -550,10 +561,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 2,
+    backgroundColor: 'rgba(32, 201, 151, 0.08)',
+    paddingVertical: 15,
+    borderRadius: 14,
+    borderWidth: 1.5,
     borderColor: '#20c997',
   },
   secondaryButtonText: {
@@ -577,13 +588,15 @@ const styles = StyleSheet.create({
   },
   featureCard: {
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 20,
+    padding: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: '#f5f5f5',
   },
   featureList: {
     gap: 16,
@@ -602,13 +615,13 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   infoCard: {
-    backgroundColor: '#f0f7ff',
+    backgroundColor: 'rgba(0, 122, 255, 0.06)',
     borderRadius: 16,
     padding: 20,
     flexDirection: 'row',
     alignItems: 'flex-start',
     borderWidth: 1,
-    borderColor: '#b3d9ff',
+    borderColor: 'rgba(0, 122, 255, 0.15)',
   },
   infoContent: {
     flex: 1,

@@ -45,6 +45,7 @@ export function ProductForm({
     price: initialData?.price || 0,
     categoryId: initialData?.categoryId || '',
     imageName: initialData?.imageName || '',
+    imageUrl: (initialData as any)?.imageUrl || '',
     discount: initialData?.discount || 0,
     additionalPrice: initialData?.additionalPrice || 0,
     notes: initialData?.notes || '',
@@ -220,6 +221,7 @@ export function ProductForm({
           <ImageField
             label="Product Image"
             imageKey={formData.imageName}
+            imageUrl={formData.imageUrl}
             onPress={() => setShowImagePicker(true)}
             error={errors.imageName}
           />
@@ -335,13 +337,15 @@ export function ProductForm({
         <ImagePicker
           visible={showImagePicker}
           selectedImageKey={formData.imageName}
-          onSelect={(imageKey) => {
+          onSelect={(imageKey, imageUrl) => {
             updateField('imageName', imageKey);
+            updateField('imageUrl', imageUrl || '');
             setShowImagePicker(false);
           }}
           onCancel={() => setShowImagePicker(false)}
           onClear={() => {
             updateField('imageName', '');
+            updateField('imageUrl', '');
             setShowImagePicker(false);
           }}
           title="Select Product Image"

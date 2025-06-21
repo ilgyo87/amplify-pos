@@ -62,6 +62,7 @@ interface ProductItemContentProps {
   discount?: number;
   additionalPrice?: number;
   imageName?: string;
+  imageUrl?: string;
   isLocalOnly?: boolean;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
@@ -80,6 +81,7 @@ function ProductItemContent({
   discount,
   additionalPrice,
   imageName,
+  imageUrl,
   isLocalOnly,
   onEdit,
   onDelete,
@@ -149,6 +151,7 @@ function ProductItemContent({
         <View style={styles.imageContainer}>
           <ImageDisplay 
             imageKey={imageName}
+            imageUrl={imageUrl}
             size={80}
             style={styles.productImage}
             showPlaceholder={true}
@@ -226,6 +229,7 @@ function ProductItemContent({
       <View style={styles.listImageContainer}>
         <ImageDisplay 
           imageKey={imageName}
+          imageUrl={imageUrl}
           size={60}
           style={styles.listProductImage}
           showPlaceholder={true}
@@ -308,6 +312,7 @@ function ProductItem({ product, onEdit, onDelete, onSelect, showActions = false,
       discount={product.discount}
       additionalPrice={product.additionalPrice}
       imageName={product.imageName}
+      imageUrl={product.imageUrl}
       isLocalOnly={product.isLocalOnly}
       onEdit={onEdit ? (id) => onEdit(product) : undefined}
       onDelete={onDelete ? (id) => onDelete(product) : undefined}

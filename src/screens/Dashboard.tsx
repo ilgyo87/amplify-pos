@@ -11,7 +11,7 @@ import { OrderService } from '../database/services/orderService';
 import { CustomerDocument } from '../database/schemas/customer';
 import { BusinessDocument } from '../database/schemas/business';
 import { BusinessFormData, BusinessValidationErrors } from '../utils/businessValidation';
-import { CustomerFormData, CustomerValidationErrors } from '../utils/customerValidation';
+import { CustomerFormData, ValidationErrors } from '../utils/customerValidation';
 import { useDebouncedCallback } from '../utils/hooks';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -29,7 +29,7 @@ export default function Dashboard() {
   const [hasReadyOrders, setHasReadyOrders] = useState(false);
   const [blinkAnimation] = useState(new Animated.Value(1));
   const [showCreateCustomerModal, setShowCreateCustomerModal] = useState(false);
-  const [customerFormErrors, setCustomerFormErrors] = useState<CustomerValidationErrors>({});
+  const [customerFormErrors, setCustomerFormErrors] = useState<ValidationErrors>({});
   const [customerDuplicateError, setCustomerDuplicateError] = useState<string>('');
   const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -236,7 +236,7 @@ export default function Dashboard() {
     setShowBusinessForm(true);
   };
 
-  const handleCreateCustomer = async (data: CustomerFormData): Promise<{ customer?: any; errors?: CustomerValidationErrors }> => {
+  const handleCreateCustomer = async (data: CustomerFormData): Promise<{ customer?: any; errors?: ValidationErrors }> => {
     setIsCreatingCustomer(true);
     setCustomerFormErrors({});
     setCustomerDuplicateError('');
@@ -609,8 +609,7 @@ const styles = StyleSheet.create({
   readyOrdersButton: {
     position: 'absolute',
     right: 16,
-    top: '50%',
-    transform: [{ translateY: -20 }],
+    bottom: 0,
     backgroundColor: '#FFF4F1',
     paddingHorizontal: 12,
     paddingVertical: 8,

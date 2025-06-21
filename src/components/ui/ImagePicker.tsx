@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,17 +7,33 @@ import {
   TouchableOpacity,
   Modal,
   Image,
+  TextInput,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GARMENT_IMAGES, getGarmentImageByKey, getDefaultGarmentImage } from '../../database/assets/garmentImages';
+import { ENV } from '../../config/environment';
 
 interface ImagePickerProps {
   visible: boolean;
   selectedImageKey?: string;
-  onSelect: (imageKey: string) => void;
+  onSelect: (imageKey: string, imageUrl?: string) => void;
   onCancel: () => void;
   onClear?: () => void;
   title?: string;
+}
+
+interface OnlineImage {
+  id: string;
+  urls: {
+    small: string;
+    regular: string;
+  };
+  alt_description: string;
+  user: {
+    name: string;
+  };
 }
 
 export function ImagePicker({
@@ -28,6 +44,46 @@ export function ImagePicker({
   onClear,
   title = 'Select Image',
 }: ImagePickerProps) {
+  const [activeTab, setActiveTab] = useState<'local' | 'online'>('local');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [onlineImages, setOnlineImages] = useState<OnlineImage[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedOnlineImage, setSelectedOnlineImage] = useState<string | null>(null);
+
+  const searchImages = async () => {
+    if (!searchQuery.trim()) return;
+
+    setIsSearching(true);
+    try {
+      // Using Unsplash API
+      const response = await fetch(
+        `https://api.unsplash.com/search/photos?query=${encodeURIComponent(searchQuery)}&per_page=20`,
+        {
+          headers: {
+            Authorization: `Client-ID ${ENV.UNSPLASH_ACCESS_KEY}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setOnlineImages(data.results);
+      } else {
+        Alert.alert('Error', 'Failed to search images. Please try again.');
+      }
+    } catch (error) {
+      console.error('Image search error:', error);
+      Alert.alert('Error', 'Failed to search images. Please check your connection.');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleOnlineImageSelect = (imageUrl: string) => {
+    setSelectedOnlineImage(imageUrl);
+    onSelect(`online_${Date.now()}`, imageUrl);
+  };
+
   return (
     <Modal 
       visible={visible} 
@@ -48,39 +104,136 @@ export function ImagePicker({
           {!onClear && <View style={styles.spacer} />}
         </View>
         
-        <ScrollView style={styles.content}>
-          <View style={styles.imageGrid}>
-            {GARMENT_IMAGES.map((image) => (
-              <TouchableOpacity
-                key={image.key}
-                style={[
-                  styles.imageOption,
-                  image.key === selectedImageKey && styles.imageOptionSelected
-                ]}
-                onPress={() => onSelect(image.key)}
+        {/* Tab Navigation */}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'local' && styles.activeTab]}
+            onPress={() => setActiveTab('local')}
+          >
+            <Text style={[styles.tabText, activeTab === 'local' && styles.activeTabText]}>
+              Local Images
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'online' && styles.activeTab]}
+            onPress={() => setActiveTab('online')}
+          >
+            <Text style={[styles.tabText, activeTab === 'online' && styles.activeTabText]}>
+              Search Online
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {activeTab === 'local' ? (
+          <ScrollView style={styles.content}>
+            <View style={styles.imageGrid}>
+              {GARMENT_IMAGES.map((image) => (
+                <TouchableOpacity
+                  key={image.key}
+                  style={[
+                    styles.imageOption,
+                    image.key === selectedImageKey && styles.imageOptionSelected
+                  ]}
+                  onPress={() => onSelect(image.key)}
+                >
+                  <Image 
+                    source={image.source} 
+                    style={styles.imagePreview}
+                    resizeMode="contain"
+                  />
+                  <Text style={[
+                    styles.imageText,
+                    image.key === selectedImageKey && styles.imageTextSelected
+                  ]}>
+                    {image.name}
+                  </Text>
+                  {image.key === selectedImageKey && (
+                    <View style={styles.checkmark}>
+                      <Text>
+                        <Ionicons name="checkmark" size={16} color="white" />
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
+        ) : (
+          <View style={styles.content}>
+            <View style={styles.searchContainer}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search for garment images..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                onSubmitEditing={searchImages}
+                returnKeyType="search"
+              />
+              <TouchableOpacity 
+                style={styles.searchButton}
+                onPress={searchImages}
+                disabled={isSearching}
               >
-                <Image 
-                  source={image.source} 
-                  style={styles.imagePreview}
-                  resizeMode="contain"
-                />
-                <Text style={[
-                  styles.imageText,
-                  image.key === selectedImageKey && styles.imageTextSelected
-                ]}>
-                  {image.name}
-                </Text>
-                {image.key === selectedImageKey && (
-                  <View style={styles.checkmark}>
-                    <Text>
-                      <Ionicons name="checkmark" size={16} color="white" />
+                {isSearching ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Ionicons name="search" size={20} color="white" />
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {isSearching ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#007AFF" />
+                <Text style={styles.loadingText}>Searching images...</Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.onlineContent}>
+                <View style={styles.imageGrid}>
+                  {onlineImages.map((image) => (
+                    <TouchableOpacity
+                      key={image.id}
+                      style={[
+                        styles.imageOption,
+                        selectedOnlineImage === image.urls.regular && styles.imageOptionSelected
+                      ]}
+                      onPress={() => handleOnlineImageSelect(image.urls.regular)}
+                    >
+                      <Image 
+                        source={{ uri: image.urls.small }} 
+                        style={styles.imagePreview}
+                        resizeMode="cover"
+                      />
+                      <Text style={[
+                        styles.imageText,
+                        selectedOnlineImage === image.urls.regular && styles.imageTextSelected
+                      ]}
+                      numberOfLines={2}
+                      >
+                        {image.alt_description || 'Garment Image'}
+                      </Text>
+                      {selectedOnlineImage === image.urls.regular && (
+                        <View style={styles.checkmark}>
+                          <Text>
+                            <Ionicons name="checkmark" size={16} color="white" />
+                          </Text>
+                        </View>
+                      )}
+                      <Text style={styles.imageCredit}>by {image.user.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                {onlineImages.length === 0 && searchQuery && !isSearching && (
+                  <View style={styles.noResults}>
+                    <Text style={styles.noResultsText}>
+                      No images found. Try a different search term.
                     </Text>
                   </View>
                 )}
-              </TouchableOpacity>
-            ))}
+              </ScrollView>
+            )}
           </View>
-        </ScrollView>
+        )}
       </View>
     </Modal>
   );
@@ -88,6 +241,7 @@ export function ImagePicker({
 
 interface ImageDisplayProps {
   imageKey?: string;
+  imageUrl?: string;
   style?: any;
   size?: number;
   showPlaceholder?: boolean;
@@ -95,12 +249,24 @@ interface ImageDisplayProps {
 
 export function ImageDisplay({
   imageKey,
+  imageUrl,
   style,
   size = 40,
   showPlaceholder = true,
 }: ImageDisplayProps) {
   const getImageSource = () => {
+    // If we have an online image URL, use it
+    if (imageUrl) {
+      return { uri: imageUrl };
+    }
+    
     if (!imageKey) return showPlaceholder ? getDefaultGarmentImage() : null;
+    
+    // Check if this is an online image key
+    if (imageKey.startsWith('online_')) {
+      return showPlaceholder ? getDefaultGarmentImage() : null;
+    }
+    
     const imageSource = getGarmentImageByKey(imageKey);
     return imageSource || (showPlaceholder ? getDefaultGarmentImage() : null);
   };
@@ -125,6 +291,7 @@ export function ImageDisplay({
 interface ImageFieldProps {
   label: string;
   imageKey?: string;
+  imageUrl?: string;
   onPress: () => void;
   error?: string;
   required?: boolean;
@@ -133,11 +300,13 @@ interface ImageFieldProps {
 export function ImageField({
   label,
   imageKey,
+  imageUrl,
   onPress,
   error,
   required = false,
 }: ImageFieldProps) {
   const getImageName = () => {
+    if (imageUrl) return 'Online Image';
     if (!imageKey) return 'Default Image';
     const image = GARMENT_IMAGES.find(img => img.key === imageKey);
     return image ? image.name : 'Custom Image';
@@ -152,7 +321,7 @@ export function ImageField({
         style={[styles.fieldButton, error && styles.fieldError]}
         onPress={onPress}
       >
-        <ImageDisplay imageKey={imageKey} size={40} />
+        <ImageDisplay imageKey={imageKey} imageUrl={imageUrl} size={40} />
         <View style={styles.fieldInfo}>
           <Text style={styles.fieldText}>{getImageName()}</Text>
           <Text style={styles.fieldSubtext}>Tap to change image</Text>
@@ -196,9 +365,85 @@ const styles = StyleSheet.create({
   spacer: {
     width: 50,
   },
+  // Tab Navigation
+  tabContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  activeTab: {
+    borderBottomColor: '#007AFF',
+  },
+  tabText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '500',
+  },
+  activeTabText: {
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  // Search
+  searchContainer: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
+  searchInput: {
+    flex: 1,
+    height: 40,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 16,
+    backgroundColor: '#f9f9f9',
+  },
+  searchButton: {
+    width: 40,
+    height: 40,
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
+  },
+  noResults: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  noResultsText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+  },
   content: {
     flex: 1,
     padding: 16,
+  },
+  onlineContent: {
+    flex: 1,
+    paddingHorizontal: 16,
   },
   imageGrid: {
     flexDirection: 'row',
@@ -244,6 +489,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#007AFF',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  imageCredit: {
+    fontSize: 10,
+    color: '#999',
+    fontStyle: 'italic',
+    marginTop: 4,
   },
   // Image Display
   displayImage: {

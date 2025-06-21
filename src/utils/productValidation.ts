@@ -4,6 +4,7 @@ export interface ProductFormData {
   price: number;
   categoryId: string;
   imageName?: string;
+  imageUrl?: string;
   discount?: number;
   additionalPrice?: number;
   notes?: string;

@@ -377,7 +377,7 @@ export function ReceiptPreviewModal({
         }
       } else {
         // No printer settings, show error
-        Alert.alert('Printer Not Set Up', 'Please set up your Munbyn ITPP047P printer in Settings before printing.');
+        Alert.alert('Printer Not Set Up', 'Please set up your thermal printer in Settings before printing.');
         setIsPrinting(false);
         return;
       }
@@ -386,7 +386,7 @@ export function ReceiptPreviewModal({
       onComplete(paymentInfo, qrData);
     } catch (error) {
       console.error('Print error:', error);
-      Alert.alert('Print Error', 'Failed to print to Munbyn printer. Please check printer connection and try again.');
+      Alert.alert('Print Error', 'Failed to print to thermal printer. Please check printer connection and try again.');
       // Still complete the order
       onComplete(paymentInfo, qrData);
     } finally {
